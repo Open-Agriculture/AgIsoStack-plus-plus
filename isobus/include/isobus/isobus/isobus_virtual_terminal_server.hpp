@@ -340,6 +340,26 @@ namespace isobus
 		/// @param[in] workingSet The working set whose object pool was deleted
 		virtual void object_pool_deleted(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
 
+		/// @brief This function is called when a client sends a valid Control Audio Signal command
+		/// @details Override it to play the tone. The server answers the command as successful in any case.
+		/// An activation count of 0 means the client wants the current audio signal to stop.
+		/// @param[in] activations The number of times the tone shall be played, 0 to stop the current signal
+		/// @param[in] frequencyHz The tone frequency in Hz
+		/// @param[in] onTimeMs How long each tone is played, in ms
+		/// @param[in] offTimeMs The pause between two tones, in ms
+		/// @param[in] source The control function that sent the command
+		virtual void control_audio_signal(std::uint8_t activations,
+		                                  std::uint16_t frequencyHz,
+		                                  std::uint16_t onTimeMs,
+		                                  std::uint16_t offTimeMs,
+		                                  std::shared_ptr<ControlFunction> source);
+
+		/// @brief This function is called when a client sends a Set Audio Volume command
+		/// @details Override it to apply the volume to subsequent audio signals. The server answers the command in any case.
+		/// @param[in] volumePercent The requested volume in percent, 0 to 100. A larger value in the command is passed on as 100.
+		/// @param[in] source The control function that sent the command
+		virtual void set_audio_volume(std::uint8_t volumePercent, std::shared_ptr<ControlFunction> source);
+
 		//-------------- Callbacks/Event driven interface ---------------------
 
 		/// @brief Returns the event dispatcher for repaint events
@@ -387,6 +407,14 @@ namespace isobus
 		{
 			ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject = 0,
 			TargetObjectDoesNotExistOrIsNotApplicable = 1,
+			AnyOtherError = 4
+		};
+
+		/// @brief Enumerates the bit indices of the error fields that can be set in a change end point response
+		enum class ChangeEndPointErrorBit : std::uint8_t
+		{
+			InvalidObjectID = 0,
+			InvalidLineDirection = 1,
 			AnyOtherError = 4
 		};
 
@@ -526,6 +554,13 @@ namespace isobus
 			InvalidObjectID = 0,
 			InvalidPointIndex = 1,
 			AnyOtherError = 2
+		};
+
+		/// @brief Enumerates the bit indices of the error fields that can be set in a change polygon scale response
+		enum class ChangePolygonScaleErrorBit : std::uint8_t
+		{
+			InvalidObjectID = 0,
+			AnyOtherError = 4
 		};
 
 		/// @brief Enumerates the bit indices of the error fields that can be set in a delete object pool response
@@ -682,6 +717,13 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_child_location_response(std::uint16_t parentObjectID, std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
+		/// @brief Sends a response to a change end point command
+		/// @param[in] objectID The object ID of the output line
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent, otherwise false
+		bool send_change_end_point_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
+
 		/// @brief Sends a response to a change child position command
 		/// @param[in] parentObjectID The object ID for the parent of the object to move
 		/// @param[in] objectID The object ID for the object to move
@@ -734,6 +776,15 @@ namespace isobus
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_polygon_point_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
+
+		/// @brief Sends a response to a change polygon scale command
+		/// @param[in] objectID The object ID of the output polygon
+		/// @param[in] width The new width attribute from the command
+		/// @param[in] height The new height attribute from the command
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent, otherwise false
+		bool send_change_polygon_scale_response(std::uint16_t objectID, std::uint16_t width, std::uint16_t height, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to a change size command
 		/// @param[in] objectID The object ID for the object whose size was meant to be changed

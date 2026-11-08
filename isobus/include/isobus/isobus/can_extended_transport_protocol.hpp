@@ -15,6 +15,7 @@
 #include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_network_configuration.hpp"
 #include "isobus/isobus/can_transport_protocol_base.hpp"
+#include "isobus/utility/thread_synchronization.hpp"
 
 namespace isobus
 {
@@ -176,8 +177,8 @@ namespace isobus
 
 		/// @brief Gets all the active transport protocol sessions that are currently active
 		/// @note The list returns pointers to the transport protocol sessions, but they can disappear at any time
-		/// @returns A list of all the active transport protocol sessions
-		const std::vector<std::shared_ptr<ExtendedTransportProtocolSession>> &get_sessions() const;
+		/// @returns A copy of the list of all the active transport protocol sessions
+		std::vector<std::shared_ptr<ExtendedTransportProtocolSession>> get_sessions() const;
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
@@ -300,6 +301,7 @@ namespace isobus
 		/// @param[in] session The session to update
 		void update_state_machine(std::shared_ptr<ExtendedTransportProtocolSession> &session);
 
+		mutable Mutex activeSessionsMutex; ///< Synchronizes access to @ref activeSessions
 		std::vector<std::shared_ptr<ExtendedTransportProtocolSession>> activeSessions; ///< A list of all active ETP sessions
 		const CANMessageFrameCallback sendCANFrameCallback; ///< A callback for sending a CAN frame
 		const CANMessageCallback canMessageReceivedCallback; ///< A callback for when a complete CAN message is received using the ETP protocol

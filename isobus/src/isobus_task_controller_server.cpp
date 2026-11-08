@@ -270,6 +270,12 @@ namespace isobus
 			{
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData):
 				{
+					if (CAN_DATA_LENGTH > rxMessage.get_data_length())
+					{
+						LOG_WARNING("[TC Server]: Process data message received with invalid DLC. DLC must be at least 8.");
+						break;
+					}
+
 					switch (static_cast<ProcessDataCommands>(rxData[0] & 0x0F))
 					{
 						case ProcessDataCommands::TechnicalCapabilities:

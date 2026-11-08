@@ -164,6 +164,7 @@ namespace isobus
 
 			LockFreeQueue<CANMessageFrame> messagesToBeTransmittedQueue; ///< Transmit message queue for a CAN channel
 			LockFreeQueue<CANMessageFrame> receivedMessagesQueue; ///< Receive message queue for a CAN channel
+			const std::size_t maxFramesReceivedPerUpdate; ///< Most frames update() takes from the driver in one call when there are no threads
 		};
 
 		/// @brief Singleton instance of the CANHardwareInterface class

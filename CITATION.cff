@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below. Please also include the commit hash or release version you used."
+title: "AgIsoStack++"
+abstract: "A free, open-source C++ ISOBUS (ISO 11783) and SAE J1939 CAN stack."
+authors:
+  - name: "The Open-Agriculture Developers"
+    website: "https://github.com/Open-Agriculture/AgIsoStack-plus-plus/graphs/contributors"
+repository-code: "https://github.com/Open-Agriculture/AgIsoStack-plus-plus"
+url: "https://agisostack.com/"
+license: MIT
+keywords:
+  - AgIsoStack
+  - AgIsoStack-plus-plus
+  - ISOBUS
+  - ISO 11783
+  - SAE J1939
+  - CAN

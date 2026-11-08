@@ -40,6 +40,14 @@ namespace isobus
 		return retVal;
 	}
 
+	/// @brief Reads a 16-bit value, such as an object ID, from an object pool, which stores values low byte first
+	/// @param[in] data The low byte, followed by the high byte
+	/// @returns The value
+	static std::uint16_t read_little_endian_uint16(const std::uint8_t *data)
+	{
+		return static_cast<std::uint16_t>(data[0] | (data[1] << 8));
+	}
+
 	/// @brief Validates preferred assignments for a single auxiliary input device
 	/// @param[in] assignments Assignments to check for valid counts, object IDs, function types, and unique function IDs
 	/// @returns true if all assignments are valid, false otherwise
@@ -77,6 +85,20 @@ namespace isobus
 
 	void VirtualTerminalClient::initialize(bool spawnThread)
 	{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		if (std::this_thread::get_id() == workerThreadId.load())
+		{
+			LOG_ERROR("[VT]: initialize() cannot be called from the client's own worker thread.");
+			return;
+		}
+		LOCK_GUARD(Mutex, workerThreadMutex);
+		if (shouldTerminate)
+		{
+			// A worker that terminated the client from one of its own callbacks has been told to exit,
+			// and is joined before a new one starts, so the old one cannot carry on beside it.
+			join_worker_thread();
+		}
+#endif
 		if (shouldTerminate)
 		{
 			shouldTerminate = false;
@@ -119,7 +141,30 @@ namespace isobus
 		return (StateMachineState::Connected == state);
 	}
 
+	VirtualTerminalClient::StateMachineState VirtualTerminalClient::get_state() const
+	{
+		return state;
+	}
+
 	void VirtualTerminalClient::terminate()
+	{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		if (std::this_thread::get_id() == workerThreadId.load())
+		{
+			// From the worker itself (a callback it runs). It cannot join itself, nor wait for
+			// workerThreadMutex, which an owner joining it may hold. It exits after this update, and the
+			// owner's terminate() or initialize(), or the destructor, joins it.
+			stop(false);
+			return;
+		}
+		// Held through the whole call, so a second caller waits until the first has finished: it cannot
+		// return to an owner that destroys the client while the first is still inside.
+		LOCK_GUARD(Mutex, workerThreadMutex);
+#endif
+		stop(true);
+	}
+
+	void VirtualTerminalClient::stop(bool joinWorker)
 	{
 		if (initialized)
 		{
@@ -135,22 +180,38 @@ namespace isobus
 				CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message, this);
 				CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal), process_rx_message, this);
 			}
-
 			shouldTerminate = true;
+		}
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			if (nullptr != workerThread)
-			{
-				workerThread->join();
-				delete workerThread;
-				workerThread = nullptr;
-			}
+		if (joinWorker)
+		{
+			// Also a worker that terminated the client from one of its own callbacks earlier.
+			join_worker_thread();
+		}
+#else
+		(void)joinWorker;
 #endif
+		if (initialized)
+		{
 			initialized = false;
 			set_state(StateMachineState::Disconnected);
 			LOG_INFO("[VT]: VT Client connection has been terminated.");
 		}
 		store_pending_auxiliary_preferences();
 	}
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+	void VirtualTerminalClient::join_worker_thread()
+	{
+		std::thread *thread = workerThread.exchange(nullptr);
+		if (nullptr != thread)
+		{
+			thread->join();
+			delete thread;
+			workerThreadId = std::thread::id();
+		}
+	}
+#endif
 
 	void VirtualTerminalClient::restart_communication()
 	{
@@ -1174,7 +1235,7 @@ namespace isobus
 
 	bool VirtualTerminalClient::get_font_style_supported(FontStyleBits value) const
 	{
-		return (0 != (static_cast<std::uint8_t>(value) & fontStylesBitfield));
+		return (0 != ((1 << static_cast<std::uint8_t>(value)) & fontStylesBitfield));
 	}
 
 	VirtualTerminalClient::GraphicMode VirtualTerminalClient::get_graphic_mode() const
@@ -1704,6 +1765,7 @@ namespace isobus
 							if (!scale_object_pools())
 							{
 								set_state(StateMachineState::Failed);
+								break;
 							}
 						}
 					}
@@ -1754,9 +1816,9 @@ namespace isobus
 							}
 							else if (CurrentObjectPoolUploadState::Failed == currentObjectPoolState)
 							{
-								currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized;
 								LOG_ERROR("[VT]: An object pool failed to upload. Resetting connection to VT.");
 								set_state(StateMachineState::Disconnected);
+								break;
 							}
 							else
 							{
@@ -1772,7 +1834,7 @@ namespace isobus
 						}
 					}
 
-					if (allPoolsProcessed)
+					if (allPoolsProcessed && (StateMachineState::UploadObjectPool == state))
 					{
 						set_state(StateMachineState::SendEndOfObjectPool);
 					}
@@ -2553,6 +2615,10 @@ namespace isobus
 
 		if (value != state)
 		{
+			if (StateMachineState::UploadObjectPool == state)
+			{
+				currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized;
+			}
 			firstTimeInState = true;
 			if ((StateMachineState::WaitForEndOfObjectPoolResponse == value) ||
 			    (StateMachineState::WaitForLoadVersionResponse == value))
@@ -4000,13 +4066,167 @@ namespace isobus
 		return retVal;
 	}
 
+	std::vector<std::uint16_t> VirtualTerminalClient::get_soft_key_scaled_object_ids(const std::vector<std::vector<std::uint8_t> *> &pools)
+	{
+		constexpr std::size_t OBJECT_ID_LENGTH = 2;
+		constexpr std::size_t OBJECT_TYPE_OFFSET = 2; // ID
+		constexpr std::size_t KEY_NUMBER_OF_OBJECTS_OFFSET = 5; // ID, type, background colour, key code
+		constexpr std::size_t KEY_CHILDREN_OFFSET = 7; // ID, type, background colour, key code, number of objects, number of macros
+		constexpr std::size_t CONTAINER_NUMBER_OF_OBJECTS_OFFSET = 8; // ID, type, width, height, hidden
+		constexpr std::size_t CONTAINER_CHILDREN_OFFSET = 10; // ID, type, width, height, hidden, number of objects, number of macros
+		constexpr std::size_t CHILD_REFERENCE_LENGTH = 6; // ID, X, Y
+		constexpr std::size_t FONT_ATTRIBUTES_OFFSET = 8; // Output and input strings and numbers: ID, type, width, height, background colour
+		constexpr std::size_t OBJECT_POINTER_VALUE_OFFSET = 3; // ID, type
+
+		auto read_id = [](const ObjectPoolEntry &object, std::size_t relativeOffset) {
+			return read_little_endian_uint16(&(*object.pool)[object.offset + relativeOffset]);
+		};
+		auto uses_font = [](VirtualTerminalObjectType type) {
+			return (VirtualTerminalObjectType::OutputString == type) ||
+			  (VirtualTerminalObjectType::OutputNumber == type) ||
+			  (VirtualTerminalObjectType::InputString == type) ||
+			  (VirtualTerminalObjectType::InputNumber == type);
+		};
+
+		// Index every pool of the working set by object ID, and start from the children of every key.
+		// A key in one pool may show objects from another, so the search has to see all of them.
+		std::map<std::uint16_t, ObjectPoolEntry> objects;
+		std::vector<std::uint16_t> pending;
+
+		for (auto pool : pools)
+		{
+			if (nullptr == pool)
+			{
+				continue;
+			}
+			std::size_t offset = 0;
+
+			while ((offset + OBJECT_TYPE_OFFSET) < pool->size())
+			{
+				const std::uint32_t objectSize = get_number_bytes_in_object(&(*pool)[offset], static_cast<std::uint32_t>(pool->size() - offset));
+
+				if ((0 == objectSize) || ((offset + objectSize) > pool->size()))
+				{
+					break;
+				}
+				const ObjectPoolEntry object{ pool, offset, objectSize, static_cast<VirtualTerminalObjectType>((*pool)[offset + OBJECT_TYPE_OFFSET]) };
+				objects.emplace(read_id(object, 0), object);
+
+				if ((VirtualTerminalObjectType::Key == object.type) && (objectSize > KEY_NUMBER_OF_OBJECTS_OFFSET))
+				{
+					for (std::size_t i = 0; i < (*pool)[offset + KEY_NUMBER_OF_OBJECTS_OFFSET]; i++)
+					{
+						const std::size_t childOffset = KEY_CHILDREN_OFFSET + (CHILD_REFERENCE_LENGTH * i);
+
+						if ((childOffset + OBJECT_ID_LENGTH) <= objectSize)
+						{
+							pending.push_back(read_id(object, childOffset));
+						}
+					}
+				}
+				offset += objectSize;
+			}
+		}
+
+		// Follow the key children down through containers and object pointers, collecting the fonts they use
+		std::set<std::uint16_t> shownOnKeys;
+		std::set<std::uint16_t> fontsOnKeys;
+
+		while (!pending.empty())
+		{
+			const std::uint16_t objectID = pending.back();
+			pending.pop_back();
+
+			auto location = objects.find(objectID);
+			if ((objects.end() == location) || (!shownOnKeys.insert(objectID).second))
+			{
+				// Not an object in any pool (such as the null ID), or already visited
+				continue;
+			}
+			const ObjectPoolEntry &object = location->second;
+
+			switch (object.type)
+			{
+				case VirtualTerminalObjectType::Container:
+				{
+					if (object.size > CONTAINER_NUMBER_OF_OBJECTS_OFFSET)
+					{
+						for (std::size_t i = 0; i < (*object.pool)[object.offset + CONTAINER_NUMBER_OF_OBJECTS_OFFSET]; i++)
+						{
+							const std::size_t childOffset = CONTAINER_CHILDREN_OFFSET + (CHILD_REFERENCE_LENGTH * i);
+
+							if ((childOffset + OBJECT_ID_LENGTH) <= object.size)
+							{
+								pending.push_back(read_id(object, childOffset));
+							}
+						}
+					}
+				}
+				break;
+
+				case VirtualTerminalObjectType::ObjectPointer:
+				{
+					if ((OBJECT_POINTER_VALUE_OFFSET + OBJECT_ID_LENGTH) <= object.size)
+					{
+						pending.push_back(read_id(object, OBJECT_POINTER_VALUE_OFFSET));
+					}
+				}
+				break;
+
+				case VirtualTerminalObjectType::OutputString:
+				case VirtualTerminalObjectType::OutputNumber:
+				{
+					if ((FONT_ATTRIBUTES_OFFSET + OBJECT_ID_LENGTH) <= object.size)
+					{
+						fontsOnKeys.insert(read_id(object, FONT_ATTRIBUTES_OFFSET));
+					}
+				}
+				break;
+
+				default:
+					break;
+			}
+		}
+
+		// A font that is also used off the keys, in any pool, keeps the data mask factor
+		for (const auto &entry : objects)
+		{
+			const ObjectPoolEntry &object = entry.second;
+
+			if (uses_font(object.type) &&
+			    ((FONT_ATTRIBUTES_OFFSET + OBJECT_ID_LENGTH) <= object.size) &&
+			    (0 == shownOnKeys.count(entry.first)))
+			{
+				const std::uint16_t fontID = read_id(object, FONT_ATTRIBUTES_OFFSET);
+
+				if (0 != fontsOnKeys.erase(fontID))
+				{
+					LOG_DEBUG("[VT]: Font attributes " + isobus::to_string(static_cast<int>(fontID)) +
+					          " are used on a soft key and by object " + isobus::to_string(static_cast<int>(entry.first)) +
+					          " outside the soft keys, so they keep the data mask scale factor");
+				}
+			}
+		}
+
+		// Only fonts that exist in a pool are reported
+		for (const auto fontID : fontsOnKeys)
+		{
+			if (objects.end() != objects.find(fontID))
+			{
+				shownOnKeys.insert(fontID);
+			}
+		}
+		return std::vector<std::uint16_t>(shownOnKeys.begin(), shownOnKeys.end());
+	}
+
 	bool VirtualTerminalClient::scale_object_pools()
 	{
 		bool retVal = true;
 
+		// Step 1: Make a read/write copy of every pool, including the ones that are not auto-scaled,
+		// because the pools are uploaded as one working set and may reference each other's objects
 		for (auto &objectPool : objectPools)
 		{
-			// Step 1: Make a read/write copy of the pool
 			if (nullptr != objectPool.objectPoolDataPointer)
 			{
 				objectPool.scaledObjectPool.resize(objectPool.objectPoolSize);
@@ -4028,17 +4248,41 @@ namespace isobus
 
 				if (!retVal)
 				{
-					break;
+					return false;
 				}
 			}
+		}
 
-			// Step 2, Parse the pool and resize each object as we iterate through it
+		// Step 2, Find the objects drawn on soft keys across the whole working set, which scale like the keys
+		std::vector<std::vector<std::uint8_t> *> allPools;
+		allPools.reserve(objectPools.size());
+		for (auto &objectPool : objectPools)
+		{
+			allPools.push_back(&objectPool.scaledObjectPool);
+		}
+		const std::vector<std::uint16_t> softKeyObjectIDs = get_soft_key_scaled_object_ids(allPools);
+
+		// Step 3, Parse each auto-scaled pool and resize each object with that pool's factors
+		for (auto &objectPool : objectPools)
+		{
+			if ((0 == objectPool.autoScaleDataMaskOriginalDimension) ||
+			    (0 == objectPool.autoScaleSoftKeyDesignatorOriginalHeight))
+			{
+				// Not auto-scaled: the pool is uploaded as given, the copy was only needed for the search above
+				objectPool.scaledObjectPool.clear();
+				objectPool.scaledObjectPool.shrink_to_fit();
+				continue;
+			}
+
 			auto poolIterator = objectPool.scaledObjectPool.begin();
 
 			while ((poolIterator != objectPool.scaledObjectPool.end()) &&
 			       retVal)
 			{
-				if (VirtualTerminalObjectType::Key == static_cast<VirtualTerminalObjectType>(poolIterator[2]))
+				const std::uint16_t objectID = read_little_endian_uint16(&poolIterator[0]);
+
+				if ((VirtualTerminalObjectType::Key == static_cast<VirtualTerminalObjectType>(poolIterator[2])) ||
+				    std::binary_search(softKeyObjectIDs.begin(), softKeyObjectIDs.end(), objectID))
 				{
 					retVal &= resize_object(&poolIterator[0],
 					                        static_cast<float>(get_softkey_x_axis_pixels()) / static_cast<float>(objectPool.autoScaleSoftKeyDesignatorOriginalHeight),
@@ -4058,7 +4302,7 @@ namespace isobus
 					if (get_is_object_scalable(static_cast<VirtualTerminalObjectType>(*(poolIterator + 2))))
 					{
 						LOG_DEBUG("[VT]: Resized an object: " +
-						          isobus::to_string(static_cast<int>((*poolIterator)) | (static_cast<int>((*poolIterator + 1))) << 8) +
+						          isobus::to_string(static_cast<int>(objectID)) +
 						          " with type " +
 						          isobus::to_string(static_cast<int>((*(poolIterator + 2)))) +
 						          " with size " +
@@ -4068,9 +4312,9 @@ namespace isobus
 				else
 				{
 					LOG_ERROR("[VT]: Failed to resize an object: " +
-					          isobus::to_string(static_cast<int>((*poolIterator)) | (static_cast<int>((*poolIterator + 1))) << 8) +
+					          isobus::to_string(static_cast<int>(objectID)) +
 					          " with type " +
-					          isobus::to_string(static_cast<int>((*poolIterator + 2))) +
+					          isobus::to_string(static_cast<int>((*(poolIterator + 2)))) +
 					          " with size " +
 					          isobus::to_string(static_cast<int>(objectSize)));
 				}
@@ -4137,9 +4381,32 @@ namespace isobus
 
 		while ((!get_font_size_supported(retVal)) && (FontSize::Size6x8 != retVal))
 		{
-			retVal = static_cast<FontSize>(static_cast<std::uint8_t>(originalFont) - 1);
+			retVal = static_cast<FontSize>(static_cast<std::uint8_t>(retVal) - 1);
 		}
 		return retVal;
+	}
+
+	std::uint8_t VirtualTerminalClient::scale_proportional_font_height(std::uint8_t originalHeight, float scaleFactor) const
+	{
+		// A proportional font can be any height from 8 pixels up to the height of the VT's largest font (ISO 11783-6 4.6.19.4)
+		static constexpr std::uint8_t MIN_PROPORTIONAL_FONT_HEIGHT = 8;
+		static constexpr std::array<std::uint8_t, 15> FONT_HEIGHTS = { 8, 8, 12, 16, 16, 24, 32, 32, 48, 64, 64, 96, 128, 128, 192 };
+		std::uint8_t maxHeight = MIN_PROPORTIONAL_FONT_HEIGHT;
+
+		for (std::uint8_t i = 0; i < FONT_HEIGHTS.size(); i++)
+		{
+			if (get_font_size_supported(static_cast<FontSize>(i)))
+			{
+				maxHeight = std::max(maxHeight, FONT_HEIGHTS[i]);
+			}
+		}
+
+		const float scaledHeight = (originalHeight * scaleFactor) + 0.5f;
+		if (scaledHeight >= maxHeight)
+		{
+			return maxHeight;
+		}
+		return std::max(MIN_PROPORTIONAL_FONT_HEIGHT, static_cast<std::uint8_t>(scaledHeight));
 	}
 
 	VirtualTerminalClient::FontSize VirtualTerminalClient::remap_font_to_scale(FontSize originalFont, float scaleFactor)
@@ -4344,11 +4611,19 @@ namespace isobus
 						break;
 					}
 				}
-			}
 
-			if (retVal == originalFont)
+				// Most tables go from their lowest upscale entry straight to their first downscale entry,
+				// so a factor between the fudge and that upscale entry would pick a smaller font.
+				// Scaling up never returns a smaller font, and scaling down never a larger one.
+				if (((scaleFactor > 1.0f) && (retVal < originalFont)) ||
+				    ((scaleFactor < 1.0f) && (retVal > originalFont)))
+				{
+					retVal = originalFont;
+				}
+			}
+			else
 			{
-				// Unknown font? Newer version than we support of the ISO standard? Or scaling factor out of range?
+				// Unknown font? Newer version than we support of the ISO standard?
 				LOG_ERROR("[VT]: Unable to scale font type " + isobus::to_string(static_cast<int>(originalFont)) +
 				          " with scale factor " + isobus::to_string(scaleFactor) + ". Returning original font.");
 			}
@@ -5054,7 +5329,15 @@ namespace isobus
 
 				case VirtualTerminalObjectType::FontAttributes:
 				{
-					buffer[4] = static_cast<std::uint8_t>(get_font_or_next_smallest_font(remap_font_to_scale(static_cast<FontSize>(buffer[4]), scaleFactor)));
+					if (0 != (buffer[6] & (1 << static_cast<std::uint8_t>(FontStyleBits::ProportionalFontRendering))))
+					{
+						// The font size is a height in pixels, not one of the FontSize values
+						buffer[4] = scale_proportional_font_height(buffer[4], scaleFactor);
+					}
+					else
+					{
+						buffer[4] = static_cast<std::uint8_t>(get_font_or_next_smallest_font(remap_font_to_scale(static_cast<FontSize>(buffer[4]), scaleFactor)));
+					}
 					retVal = true;
 				}
 				break;
@@ -5330,6 +5613,7 @@ namespace isobus
 	void VirtualTerminalClient::worker_thread_function()
 	{
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		workerThreadId = std::this_thread::get_id();
 		for (;;)
 		{
 			if (shouldTerminate)

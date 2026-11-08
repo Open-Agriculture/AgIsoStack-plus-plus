@@ -6,6 +6,7 @@
 ///
 /// @copyright 2023 Adrian Del Grosso
 //================================================================================================
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 #include "isobus/isobus/isobus_virtual_terminal_server.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_message.hpp"
@@ -247,6 +248,14 @@ namespace isobus
 	}
 
 	void VirtualTerminalServer::object_pool_deleted(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>)
+	{
+	}
+
+	void VirtualTerminalServer::control_audio_signal(std::uint8_t, std::uint16_t, std::uint16_t, std::uint16_t, std::shared_ptr<ControlFunction>)
+	{
+	}
+
+	void VirtualTerminalServer::set_audio_volume(std::uint8_t, std::shared_ptr<ControlFunction>)
 	{
 	}
 
@@ -1916,6 +1925,27 @@ namespace isobus
 			}
 			break;
 
+			case Function::PreferredAssignmentCommand:
+			{
+				const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+					static_cast<std::uint8_t>(Function::PreferredAssignmentCommand),
+					0x00,
+					get_low_byte(NULL_OBJECT_ID),
+					get_high_byte(NULL_OBJECT_ID),
+					0xFF,
+					0xFF,
+					0xFF,
+					0xFF
+				};
+				CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+				                                               buffer.data(),
+				                                               CAN_DATA_LENGTH,
+				                                               serverInternalControlFunction,
+				                                               message.get_source_control_function(),
+				                                               get_priority());
+			}
+			break;
+
 			case Function::ExecuteMacroCommand:
 			{
 				auto objectID = static_cast<std::uint16_t>(data[1]);
@@ -2029,6 +2059,7 @@ namespace isobus
 						if (polygon->change_point(polygonPointIndex, newXValue, newYValue))
 						{
 							LOG_DEBUG("[VT Server]: Client %u change polygon id %u point index %u. X = %u, Y = %u", managedWorkingSet->get_control_function()->get_address(), objectID, polygonPointIndex, newXValue, newYValue);
+							onRepaintEventDispatcher.call(managedWorkingSet);
 							send_change_polygon_point_response(objectID, 0, message.get_source_control_function());
 						}
 						else
@@ -2051,14 +2082,129 @@ namespace isobus
 			}
 			break;
 
+			case Function::ChangePolygonScaleCommand:
+			{
+				auto objectID = get_little_endian_uint16(data, 1);
+				const std::uint16_t newWidth = get_little_endian_uint16(data, 3);
+				const std::uint16_t newHeight = get_little_endian_uint16(data, 5);
+				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
+
+				if (nullptr != targetObject)
+				{
+					if (VirtualTerminalObjectType::OutputPolygon == targetObject->get_object_type())
+					{
+						auto polygon = std::static_pointer_cast<OutputPolygon>(targetObject);
+						const std::uint32_t oldWidth = polygon->get_width();
+						const std::uint32_t oldHeight = polygon->get_height();
+
+						const auto scale = [](std::uint16_t value, std::uint32_t newSize, std::uint32_t oldSize) {
+							return ((static_cast<std::uint32_t>(value) * newSize) + (oldSize / 2)) / oldSize;
+						};
+						bool pointsFit = ((0 != oldWidth) && (0 != oldHeight));
+
+						// Points may lie outside the enclosing area, so a scaled point can exceed 16 bits
+						for (std::uint8_t i = 0; pointsFit && (i < polygon->get_number_of_points()); i++)
+						{
+							const auto point = polygon->get_point(i);
+							pointsFit = (std::numeric_limits<std::uint16_t>::max() >= scale(point.xValue, newWidth, oldWidth)) &&
+							  (std::numeric_limits<std::uint16_t>::max() >= scale(point.yValue, newHeight, oldHeight));
+						}
+
+						if (pointsFit)
+						{
+							for (std::uint8_t i = 0; i < polygon->get_number_of_points(); i++)
+							{
+								const auto point = polygon->get_point(i);
+								polygon->change_point(i,
+								                      static_cast<std::uint16_t>(scale(point.xValue, newWidth, oldWidth)),
+								                      static_cast<std::uint16_t>(scale(point.yValue, newHeight, oldHeight)));
+							}
+							polygon->set_width(newWidth);
+							polygon->set_height(newHeight);
+							LOG_DEBUG("[VT Server]: Client %u change polygon scale id %u. Width = %u, Height = %u", managedWorkingSet->get_control_function()->get_address(), objectID, newWidth, newHeight);
+							onRepaintEventDispatcher.call(managedWorkingSet);
+							send_change_polygon_scale_response(objectID, newWidth, newHeight, 0, message.get_source_control_function());
+						}
+						else
+						{
+							LOG_WARNING("[VT Server]: Client %u change polygon scale: object %u has a zero width or height, or a point that would not fit in 16 bits after scaling", managedWorkingSet->get_control_function()->get_address(), objectID);
+							send_change_polygon_scale_response(objectID, newWidth, newHeight, get_bit(static_cast<std::uint8_t>(ChangePolygonScaleErrorBit::AnyOtherError)), message.get_source_control_function());
+						}
+					}
+					else
+					{
+						LOG_WARNING("[VT Server]: Client %u change polygon scale: object id %u is not an output polygon", managedWorkingSet->get_control_function()->get_address(), objectID);
+						send_change_polygon_scale_response(objectID, newWidth, newHeight, get_bit(static_cast<std::uint8_t>(ChangePolygonScaleErrorBit::AnyOtherError)), message.get_source_control_function());
+					}
+				}
+				else
+				{
+					LOG_WARNING("[VT Server]: Client %u change polygon scale: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+					send_change_polygon_scale_response(objectID, newWidth, newHeight, get_bit(static_cast<std::uint8_t>(ChangePolygonScaleErrorBit::InvalidObjectID)), message.get_source_control_function());
+				}
+			}
+			break;
+
+			case Function::ChangeEndPointCommand:
+			{
+				auto objectID = get_little_endian_uint16(data, 1);
+				const std::uint16_t newWidth = get_little_endian_uint16(data, 3);
+				const std::uint16_t newHeight = get_little_endian_uint16(data, 5);
+				const std::uint8_t newLineDirection = data[7];
+				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
+
+				if (nullptr != targetObject)
+				{
+					if (VirtualTerminalObjectType::OutputLine == targetObject->get_object_type())
+					{
+						auto line = std::static_pointer_cast<OutputLine>(targetObject);
+
+						if (static_cast<std::uint8_t>(OutputLine::LineDirection::BottomLeftToTopRight) >= newLineDirection)
+						{
+							line->set_width(newWidth);
+							line->set_height(newHeight);
+							line->set_line_direction(static_cast<OutputLine::LineDirection>(newLineDirection));
+							LOG_DEBUG("[VT Server]: Client %u change end point id %u. Width = %u, Height = %u, Direction = %u", managedWorkingSet->get_control_function()->get_address(), objectID, newWidth, newHeight, newLineDirection);
+							onRepaintEventDispatcher.call(managedWorkingSet);
+							send_change_end_point_response(objectID, 0, message.get_source_control_function());
+							process_macro(targetObject, EventID::OnChangeEndpoint, VirtualTerminalObjectType::OutputLine, managedWorkingSet);
+						}
+						else
+						{
+							LOG_WARNING("[VT Server]: Client %u change end point: the line direction of %u is not valid for object %u", managedWorkingSet->get_control_function()->get_address(), newLineDirection, objectID);
+							send_change_end_point_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeEndPointErrorBit::InvalidLineDirection)), message.get_source_control_function());
+						}
+					}
+					else
+					{
+						LOG_WARNING("[VT Server]: Client %u change end point: object id %u is not an output line", managedWorkingSet->get_control_function()->get_address(), objectID);
+						send_change_end_point_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeEndPointErrorBit::AnyOtherError)), message.get_source_control_function());
+					}
+				}
+				else
+				{
+					LOG_WARNING("[VT Server]: Client %u change end point: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+					send_change_end_point_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeEndPointErrorBit::InvalidObjectID)), message.get_source_control_function());
+				}
+			}
+			break;
+
 			case Function::ControlAudioSignalCommand:
 			{
+				control_audio_signal(data[1],
+				                     get_little_endian_uint16(data, 2),
+				                     get_little_endian_uint16(data, 4),
+				                     get_little_endian_uint16(data, 6),
+				                     message.get_source_control_function());
 				send_audio_signal_successful(message.get_source_control_function());
 			}
 			break;
 
 			case Function::SetAudioVolumeCommand:
 			{
+				// The volume is a percentage, so a larger value is passed on as 100 %
+				constexpr std::uint8_t MAX_AUDIO_VOLUME_PERCENT = 100;
+				set_audio_volume(std::min(data[1], MAX_AUDIO_VOLUME_PERCENT), message.get_source_control_function());
 				send_audio_volume_response(message.get_source_control_function());
 			}
 			break;
@@ -2084,13 +2230,58 @@ namespace isobus
 			case Function::VTChangeActiveMaskMessage:
 			case Function::VTChangeStringValueMessage:
 			case Function::VTControlAudioSignalTerminationMessage:
+			case Function::VTChangeSoftKeyMaskMessage:
+			case Function::VTOnUserLayoutHideShowMessage:
+			case Function::AuxiliaryAssignmentTypeOneCommand:
+			case Function::AuxiliaryAssignmentTypeTwoCommand:
+			case Function::AuxiliaryInputStatusTypeTwoEnableCommand:
+			case Function::AuxiliaryInputTypeTwoStatusMessage:
 			{
 				// Todo, do something with the responses
 			}
 			break;
 
-			default:
+			// Already answered by process_stateless_messages, and a received 0xFD must never be answered
+			case Function::GetSupportedWidecharsMessage:
+			case Function::GetNumberOfSoftKeysMessage:
+			case Function::GetTextFontDataMessage:
+			case Function::GetWindowMaskDataMessage:
+			case Function::GetHardwareMessage:
+			case Function::UnsupportedVTFunctionMessage:
 				break;
+
+			// TODO: implement these, until then they are answered as unsupported
+			case Function::LockUnlockMaskCommand:
+			case Function::ChangeObjectLabelCommand:
+			case Function::GetAttributeValueMessage:
+			case Function::SelectColourMapCommand:
+			case Function::GraphicsContextCommand:
+			case Function::AuxiliaryCapabilitiesRequest:
+			case Function::SelectActiveWorkingSet:
+			default:
+			{
+				// A VT before version 5 had no defined response to an unknown function
+				if ((5 <= get_vt_version_byte(get_version())) && (!message.is_broadcast()))
+				{
+					const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+						static_cast<std::uint8_t>(Function::UnsupportedVTFunctionMessage),
+						data.at(0),
+						0xFF,
+						0xFF,
+						0xFF,
+						0xFF,
+						0xFF,
+						0xFF
+					};
+					CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+					                                               buffer.data(),
+					                                               CAN_DATA_LENGTH,
+					                                               serverInternalControlFunction,
+					                                               message.get_source_control_function(),
+					                                               get_priority());
+				}
+			}
+			break;
 		}
 	}
 
@@ -2260,6 +2451,33 @@ namespace isobus
 			buffer[5] = errorBitfield;
 			buffer[6] = 0xFF;
 			buffer[7] = 0xFF;
+
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        serverInternalControlFunction,
+			                                                        destination,
+			                                                        get_priority());
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalServer::send_change_end_point_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
+	{
+		bool retVal = false;
+
+		if (nullptr != destination)
+		{
+			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+				static_cast<std::uint8_t>(Function::ChangeEndPointCommand),
+				get_low_byte(objectID),
+				get_high_byte(objectID),
+				errorBitfield,
+				0xFF,
+				0xFF,
+				0xFF,
+				0xFF
+			};
 
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 			                                                        buffer.data(),
@@ -2659,6 +2877,33 @@ namespace isobus
 			buffer[5] = 0xFF;
 			buffer[6] = 0xFF;
 			buffer[7] = 0xFF;
+
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        serverInternalControlFunction,
+			                                                        destination,
+			                                                        get_priority());
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalServer::send_change_polygon_scale_response(std::uint16_t objectID, std::uint16_t width, std::uint16_t height, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
+	{
+		bool retVal = false;
+
+		if (nullptr != destination)
+		{
+			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+				static_cast<std::uint8_t>(Function::ChangePolygonScaleCommand),
+				get_low_byte(objectID),
+				get_high_byte(objectID),
+				get_low_byte(width),
+				get_high_byte(width),
+				get_low_byte(height),
+				get_high_byte(height),
+				errorBitfield
+			};
 
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 			                                                        buffer.data(),
@@ -3230,3 +3475,4 @@ namespace isobus
 		}
 	}
 }
+#endif // !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO

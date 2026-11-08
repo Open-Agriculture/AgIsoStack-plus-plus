@@ -266,6 +266,9 @@ namespace isobus
 		/// @brief Constructor for the network manager. Sets default values for members
 		CANNetworkManager();
 
+		/// @brief Unregisters every internal control function's PGN request protocol while the callback list still exists, since a protocol can outlive this object
+		~CANNetworkManager();
+
 		/// @brief Factory function to create an external control function, also automatically assigns it to the lookup table.
 		/// @param[in] desiredName The NAME of the control function
 		/// @param[in] address The address of the control function
@@ -389,7 +392,7 @@ namespace isobus
 		std::list<std::shared_ptr<ControlFunction>> inactiveControlFunctions; ///< A list of the control function that currently don't have a valid address
 		std::list<std::shared_ptr<InternalControlFunction>> internalControlFunctions; ///< A list of the internal control functions
 		std::list<std::shared_ptr<PartneredControlFunction>> partneredControlFunctions; ///< A list of the partnered control functions
-		mutable Mutex controlFunctionsMutex; ///< Mutex to protect access to controlFunctionTable, internalControlFunctions, and partneredControlFunctions.
+		mutable RecursiveMutex controlFunctionsMutex; ///< Mutex to protect access to controlFunctionTable, internalControlFunctions, and partneredControlFunctions. Recursive, because the address claiming that runs under it looks up the table through get_control_function().
 
 		std::list<ParameterGroupNumberCallbackData> protocolPGNCallbacks; ///< A list of PGN callback registered by CAN protocols
 		Queue<std::shared_ptr<CANMessage>> receivedMessageQueue; ///< A queue of received messages to process
