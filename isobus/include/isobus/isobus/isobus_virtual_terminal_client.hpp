@@ -1773,8 +1773,8 @@ namespace isobus
 		std::vector<std::uint8_t> scale_command(const std::vector<std::uint8_t> &command) const;
 
 		/// @brief Finds the objects drawn on soft keys, so they can be scaled with the soft key factor
-		/// @details Starts from the children of every Key and follows Containers and Object Pointers,
-		/// but not Output Lists, Animations or Working Set objects. Fonts also used outside the keys
+		/// @details Starts from the children of every Key and follows Containers, Animations and Object Pointers,
+		/// but not Output Lists or Working Set objects. Fonts also used outside the keys
 		/// are left out, so data mask text keeps its size. Other objects shown both on and off the keys,
 		/// such as a Picture Graphic, get the soft key factor everywhere.
 		/// @param[in] pools Every pool of the working set, including the ones that are not auto-scaled
@@ -1800,10 +1800,10 @@ namespace isobus
 		/// @returns The scaled value, limited to what the command can carry
 		static std::uint16_t scale_command_coordinate(std::uint16_t value, float scaleFactor);
 
-		/// @brief Scales a child position for a command, which the pool holds as a signed value
+		/// @brief Scales a child position, which the pool and the commands hold as a signed value
 		/// @param[in] value The position to scale (px)
 		/// @param[in] scaleFactor The factor to scale with
-		/// @returns The scaled position, limited to what the command can carry
+		/// @returns The scaled position, limited to -32768 to +32767 px
 		static std::uint16_t scale_command_position(std::uint16_t value, float scaleFactor);
 
 		/// @brief Scales a relative position change for the change child location command

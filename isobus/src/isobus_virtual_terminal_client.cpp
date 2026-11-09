@@ -4094,6 +4094,8 @@ namespace isobus
 		constexpr std::size_t KEY_CHILDREN_OFFSET = 7; // ID, type, background colour, key code, number of objects, number of macros
 		constexpr std::size_t CONTAINER_NUMBER_OF_OBJECTS_OFFSET = 8; // ID, type, width, height, hidden
 		constexpr std::size_t CONTAINER_CHILDREN_OFFSET = 10; // ID, type, width, height, hidden, number of objects, number of macros
+		constexpr std::size_t ANIMATION_NUMBER_OF_OBJECTS_OFFSET = 15; // ID, type, width, height, refresh interval, value, enabled, first, last and default child index, options
+		constexpr std::size_t ANIMATION_CHILDREN_OFFSET = 17; // As above, then number of objects, number of macros
 		constexpr std::size_t CHILD_REFERENCE_LENGTH = 6; // ID, X, Y
 		constexpr std::size_t FONT_ATTRIBUTES_OFFSET = 8; // Output and input strings and numbers: ID, type, width, height, background colour
 		constexpr std::size_t OBJECT_POINTER_VALUE_OFFSET = 3; // ID, type
@@ -4148,7 +4150,7 @@ namespace isobus
 			}
 		}
 
-		// Follow the key children down through containers and object pointers, collecting the fonts they use
+		// Follow the key children down through containers, animations and object pointers, collecting the fonts they use
 		std::set<std::uint16_t> shownOnKeys;
 		std::set<std::uint16_t> fontsOnKeys;
 
@@ -4174,6 +4176,23 @@ namespace isobus
 						for (std::size_t i = 0; i < (*object.pool)[object.offset + CONTAINER_NUMBER_OF_OBJECTS_OFFSET]; i++)
 						{
 							const std::size_t childOffset = CONTAINER_CHILDREN_OFFSET + (CHILD_REFERENCE_LENGTH * i);
+
+							if ((childOffset + OBJECT_ID_LENGTH) <= object.size)
+							{
+								pending.push_back(read_id(object, childOffset));
+							}
+						}
+					}
+				}
+				break;
+
+				case VirtualTerminalObjectType::Animation:
+				{
+					if (object.size > ANIMATION_NUMBER_OF_OBJECTS_OFFSET)
+					{
+						for (std::size_t i = 0; i < (*object.pool)[object.offset + ANIMATION_NUMBER_OF_OBJECTS_OFFSET]; i++)
+						{
+							const std::size_t childOffset = ANIMATION_CHILDREN_OFFSET + (CHILD_REFERENCE_LENGTH * i);
 
 							if ((childOffset + OBJECT_ID_LENGTH) <= object.size)
 							{
@@ -4599,6 +4618,7 @@ namespace isobus
 			case VirtualTerminalObjectType::OutputLinearBarGraph:
 			case VirtualTerminalObjectType::OutputArchedBarGraph:
 			case VirtualTerminalObjectType::PictureGraphic:
+			case VirtualTerminalObjectType::Animation:
 			case VirtualTerminalObjectType::AuxiliaryFunctionType1:
 			case VirtualTerminalObjectType::AuxiliaryInputType1:
 			case VirtualTerminalObjectType::AuxiliaryFunctionType2:
@@ -5543,12 +5563,13 @@ namespace isobus
 					// Iterate over the list of children and move them proportionally to the new size
 					for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
 					{
-						auto childX = static_cast<std::int16_t>((static_cast<std::int16_t>(buffer[20 + (6 * i)]) | (static_cast<std::int16_t>(buffer[21 + (6 * i)]) << 8)) * scaleFactor);
-						auto childY = static_cast<std::int16_t>((static_cast<std::int16_t>(buffer[22 + (6 * i)]) | (static_cast<std::int16_t>(buffer[23 + (6 * i)]) << 8)) * scaleFactor);
-						buffer[20 + (6 * i)] = (childX & 0xFF);
-						buffer[21 + (6 * i)] = (childX >> 8);
-						buffer[22 + (6 * i)] = (childY & 0xFF);
-						buffer[23 + (6 * i)] = (childY >> 8);
+						// The children follow the 17 byte header: ID, then X at 19 and Y at 21, both signed
+						const std::uint16_t childX = scale_command_position(read_little_endian_uint16(&buffer[19 + (6 * i)]), scaleFactor);
+						const std::uint16_t childY = scale_command_position(read_little_endian_uint16(&buffer[21 + (6 * i)]), scaleFactor);
+						buffer[19 + (6 * i)] = static_cast<std::uint8_t>(childX & 0xFF);
+						buffer[20 + (6 * i)] = static_cast<std::uint8_t>(childX >> 8);
+						buffer[21 + (6 * i)] = static_cast<std::uint8_t>(childY & 0xFF);
+						buffer[22 + (6 * i)] = static_cast<std::uint8_t>(childY >> 8);
 					}
 					retVal = true;
 				}
