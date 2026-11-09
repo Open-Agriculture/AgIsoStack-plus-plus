@@ -2155,6 +2155,56 @@ TEST_F(VirtualTerminalTest, AutoScaledCommandsAfterTheVtLoadsTheVersion)
 	EXPECT_EQ(ValuePair(120, 48), command_values(client.test_wrapper_take_queued_command(), 3));
 }
 
+// Both ways a command reaches the bus scale it: from the queue once connected, and straight away
+// when sent while connected.
+TEST_F(VirtualTerminalTest, AutoScaledCommandsAreScaledOnTheBus)
+{
+	AuxiliaryTestCAN can(time_source);
+	DerivedTestVTClient client(can.partner, can.ecu);
+
+	std::vector<std::uint8_t> pool;
+	append_output_rectangle(pool, 400);
+	append_data_mask(pool, 500, { 400 });
+	client.set_object_pool(0, &pool);
+	client.set_object_pool_scaling(0, 200, 60);
+	client.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	client.test_wrapper_set_screen(480, 90);
+	client.initialize(false);
+	ASSERT_TRUE(client.test_wrapper_scale_object_pools());
+	auxiliary_frames(can.vt);
+
+	// The Change Size commands sent on the bus since the last call
+	auto sent_change_sizes = [&can]() {
+		std::vector<std::vector<std::uint8_t>> commands;
+		for (const auto &frame : auxiliary_frames(can.vt))
+		{
+			if ((CANIdentifier(frame.identifier).get_parameter_group_number() == 0xE700) && (frame.data[0] == 0xA6))
+			{
+				commands.emplace_back(frame.data, frame.data + frame.dataLength);
+			}
+		}
+		return commands;
+	};
+
+	// Queued while not connected, then sent from the queue
+	EXPECT_TRUE(client.send_change_size_command(400, 50, 20, true));
+	EXPECT_TRUE(sent_change_sizes().empty());
+	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
+	client.test_wrapper_process_command_queue();
+	auto commands = sent_change_sizes();
+	ASSERT_EQ(1u, commands.size());
+	EXPECT_EQ(ValuePair(120, 48), command_values(commands.front(), 3));
+
+	// Once the VT has answered, a command sent while connected goes out straight away
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(
+	  6, 0xE600, can.ecu, can.partner, { 0xA6, 0x90, 0x01, 0, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_TRUE(client.send_change_size_command(400, 60, 10, true));
+	commands = sent_change_sizes();
+	ASSERT_EQ(1u, commands.size());
+	EXPECT_EQ(ValuePair(144, 24), command_values(commands.front(), 3));
+}
+
 // Autoscaling leaves a Working Set and an Animation alone, so commands on them aren't scaled either
 TEST_F(VirtualTerminalTest, AutoScaledCommandsLeaveObjectsTheUploadDoesNotScale)
 {
