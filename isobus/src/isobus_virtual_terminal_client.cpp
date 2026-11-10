@@ -1504,6 +1504,7 @@ namespace isobus
 				case StateMachineState::Disconnected:
 				{
 					sendWorkingSetMaintenance = false;
+					objectPoolRejected = false;
 					unsupportedFunctions.clear();
 					{
 						LOCK_GUARD(Mutex, commandQueueMutex);
@@ -1757,8 +1758,9 @@ namespace isobus
 				{
 					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
-						set_state(StateMachineState::Failed);
-						LOG_ERROR("[VT]: Store Version Response Timeout");
+						// The pool is already in use, only storing it may have failed
+						LOG_WARNING("[VT]: Store Version Response Timeout");
+						set_state(StateMachineState::Connected);
 					}
 				}
 				break;
@@ -1878,8 +1880,9 @@ namespace isobus
 					constexpr std::uint32_t VT_STATE_MACHINE_RETRY_TIMEOUT_MS = 5000;
 					sendWorkingSetMaintenance = false;
 
-					// Retry connecting after a while
-					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATE_MACHINE_RETRY_TIMEOUT_MS))
+					// The same VT would reject the same pool again, so wait until it goes away (ISO 11783-6 C.2.5)
+					const bool retry = objectPoolRejected ? SystemTiming::time_expired_ms(lastVTStatusTimestamp_ms, VT_STATUS_TIMEOUT_MS) : SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATE_MACHINE_RETRY_TIMEOUT_MS);
+					if (retry)
 					{
 						LOG_INFO("[VT]: Resetting Failed VT Connection");
 						set_state(StateMachineState::Disconnected);
@@ -2888,7 +2891,8 @@ namespace isobus
 					if (AcknowledgementType::Negative == static_cast<AcknowledgementType>(message.get_uint8_at(0)))
 					{
 						std::uint32_t targetParameterGroupNumber = message.get_uint24_at(5);
-						if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == targetParameterGroupNumber)
+						if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == targetParameterGroupNumber) &&
+						    (StateMachineState::Failed != parentVT->state))
 						{
 							LOG_ERROR("[VT]: The VT Server is NACK-ing our VT messages. Disconnecting.");
 							parentVT->set_state(StateMachineState::Disconnected);
@@ -3739,6 +3743,7 @@ namespace isobus
 								}
 								else
 								{
+									parentVT->objectPoolRejected = true;
 									parentVT->set_state(StateMachineState::Failed);
 									LOG_ERROR("[VT]: Error in end of object pool message." +
 									          std::string("Faulty Object ") +
