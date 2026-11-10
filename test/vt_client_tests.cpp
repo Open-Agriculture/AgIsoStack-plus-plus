@@ -2334,9 +2334,9 @@ TEST_F(VirtualTerminalTest, AutoScaledCommandsKeepSizesAboveZero)
 	EXPECT_EQ(127 - 4, command[6]);
 }
 
-// Autoscaling keeps an Input Boolean's width as designed (ResizeInputBoolean), so a Change Size on
-// one is sent as given too: scaling it would make a 30 px box uploaded at 30 px grow to 72 px.
-TEST_F(VirtualTerminalTest, AutoScaledCommandsKeepInputBooleansAsUploaded)
+// Autoscaling scales an Input Boolean's width (ResizeInputBoolean), so a Change Size on one is
+// scaled too: otherwise a 30 px box uploaded at 72 px would shrink back to 30 px.
+TEST_F(VirtualTerminalTest, AutoScaledCommandsScaleInputBooleansLikeTheUpload)
 {
 	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
 
@@ -2359,10 +2359,10 @@ TEST_F(VirtualTerminalTest, AutoScaledCommandsKeepInputBooleansAsUploaded)
 
 	const std::vector<std::uint8_t> &scaled = clientUnderTest.test_wrapper_get_scaled_pool(0);
 	ASSERT_GE(scaled.size(), 6u);
-	EXPECT_EQ(30, scaled[4] | (scaled[5] << 8));
-	EXPECT_FLOAT_EQ(1.0f, clientUnderTest.get_object_scale_factor(700));
+	EXPECT_EQ(72, scaled[4] | (scaled[5] << 8));
+	EXPECT_FLOAT_EQ(2.4f, clientUnderTest.get_object_scale_factor(700));
 	EXPECT_TRUE(clientUnderTest.send_change_size_command(700, 30, 30, true));
-	EXPECT_EQ(ValuePair(30, 30), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+	EXPECT_EQ(ValuePair(72, 72), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
 }
 
 // When pools share an object ID, the VT keeps the object it got last (4.6.10.3), so its pool's factor applies

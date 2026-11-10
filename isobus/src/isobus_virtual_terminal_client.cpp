@@ -4313,8 +4313,7 @@ namespace isobus
 				const std::uint16_t objectID = read_little_endian_uint16(&pool[offset]);
 				const auto type = static_cast<VirtualTerminalObjectType>(pool[offset + 2]);
 				scaling.objectIDs.push_back(objectID);
-				// resize_object() keeps an Input Boolean's width as designed (it is a maximum), so its size isn't scaled either
-				if ((!get_is_object_scalable(type)) || (VirtualTerminalObjectType::InputBoolean == type))
+				if (!get_is_object_scalable(type))
 				{
 					scaling.unscaledObjectIDs.push_back(objectID);
 				}
