@@ -2306,7 +2306,8 @@ namespace isobus
 
 				bool responseSent = parentServer->process_stateless_messages(message);
 				bool isManaged = parentServer->check_if_source_is_managed(message);
-				if (!isManaged && !responseSent)
+				// Broadcasts are not answered, an input unit sends its maintenance before it connects (ISO 11783-6 J.7.10)
+				if (!isManaged && !responseSent && !message.is_broadcast())
 				{
 					// Whomever this is has probably timed out. Send them a NACK
 					LOG_WARNING("[VT Server]: Received a non-status message from a client at address %u, but they are not connected to this VT.", message.get_identifier().get_source_address());
