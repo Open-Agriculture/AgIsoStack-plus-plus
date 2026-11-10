@@ -2155,6 +2155,75 @@ TEST_F(VirtualTerminalTest, AutoScaledCommandsAfterTheVtLoadsTheVersion)
 	EXPECT_EQ(ValuePair(120, 48), command_values(client.test_wrapper_take_queued_command(), 3));
 }
 
+namespace
+{
+	std::vector<std::uint8_t> slowPool;
+	test_helpers::TestTimeSource *slowPoolClock = nullptr;
+	constexpr std::uint32_t SLOW_POOL_MS_PER_CALL = 200;
+
+	// Serves the pool like a slow medium would
+	bool read_slow_pool(std::uint32_t, std::uint32_t bytesOffset, std::uint32_t numberOfBytesNeeded, std::uint8_t *chunkBuffer, void *)
+	{
+		memcpy(chunkBuffer, &slowPool[bytesOffset], numberOfBytesNeeded);
+		slowPoolClock->simulate_delay_ms(SLOW_POOL_MS_PER_CALL);
+		return true;
+	}
+} // namespace
+
+// Reading the pools for the factors can take longer than Send Load Version may wait for the VT,
+// with a large pool served byte by byte through the data callback. That time doesn't count.
+TEST_F(VirtualTerminalTest, AutoScaledCommandsAfterTheVtLoadsAPoolThatIsSlowToRead)
+{
+	AuxiliaryTestCAN can(time_source);
+	DerivedTestVTClient client(can.partner, can.ecu);
+
+	slowPool.clear();
+	append_output_rectangle(slowPool, 400);
+	append_data_mask(slowPool, 500, { 400 });
+	slowPoolClock = &time_source;
+	ASSERT_GT(slowPool.size() * SLOW_POOL_MS_PER_CALL, 3000u); // Longer than VT_STATUS_TIMEOUT_MS
+	client.register_object_pool_data_chunk_callback(0, static_cast<std::uint32_t>(slowPool.size()), read_slow_pool, "TEST");
+	client.set_object_pool_scaling(0, 200, 60);
+	client.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	client.test_wrapper_set_screen(480, 90);
+	client.initialize(false);
+
+	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::SendLoadVersion);
+	update_auxiliary_client(client);
+
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::WaitForLoadVersionResponse, client.get_state());
+	EXPECT_FLOAT_EQ(2.4f, client.get_object_scale_factor(400));
+	slowPoolClock = nullptr;
+}
+
+// A pool whose last object claims more bytes than are left ends the search there, instead of
+// reading past the end of the pool.
+TEST_F(VirtualTerminalTest, AutoScaledCommandsAfterTheVtLoadsATruncatedPool)
+{
+	AuxiliaryTestCAN can(time_source);
+	DerivedTestVTClient client(can.partner, can.ecu);
+
+	std::vector<std::uint8_t> pool;
+	append_output_rectangle(pool, 400);
+	append_u16(pool, 500);
+	pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::DataMask));
+	pool.push_back(0); // Background colour
+	append_u16(pool, 0xFFFF); // No soft key mask
+	pool.push_back(2); // Number of objects, which are missing
+	pool.push_back(0); // Number of macros
+	client.set_object_pool(0, &pool, "TEST");
+	client.set_object_pool_scaling(0, 200, 60);
+	client.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	client.test_wrapper_set_screen(480, 90);
+	client.initialize(false);
+
+	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::SendLoadVersion);
+	update_auxiliary_client(client);
+
+	EXPECT_FLOAT_EQ(2.4f, client.get_object_scale_factor(400));
+	EXPECT_FLOAT_EQ(1.0f, client.get_object_scale_factor(500));
+}
+
 // Both ways a command reaches the bus scale it: from the queue once connected, and straight away
 // when sent while connected.
 TEST_F(VirtualTerminalTest, AutoScaledCommandsAreScaledOnTheBus)

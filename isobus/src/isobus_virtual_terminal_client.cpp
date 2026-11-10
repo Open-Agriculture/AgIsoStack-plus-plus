@@ -1676,6 +1676,10 @@ namespace isobus
 					{
 						// The VT loads the scaled pools from its memory, so they are not scaled again: set the factors for the commands
 						prepare_command_scaling_for_loaded_pools();
+
+						// Reading a large pool through the data callback takes time, which mustn't count towards the timeout
+						LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+						stateMachineTimestamp_ms = SystemTiming::get_timestamp_ms();
 					}
 
 					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
@@ -4296,9 +4300,9 @@ namespace isobus
 			while ((pool.size() - offset) > 2)
 			{
 				const std::uint32_t objectSize = get_number_bytes_in_object(&pool[offset], static_cast<std::uint32_t>(pool.size() - offset));
-				if (0 == objectSize)
+				if ((0 == objectSize) || ((offset + objectSize) > pool.size()))
 				{
-					break; // A broken pool, which scale_object_pools() or the VT reports
+					break; // A broken or truncated pool, which scale_object_pools() or the VT reports
 				}
 
 				const std::uint16_t objectID = read_little_endian_uint16(&pool[offset]);
