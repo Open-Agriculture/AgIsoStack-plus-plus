@@ -136,12 +136,7 @@ namespace isobus
 		{
 			if ((nullptr != frameHandler) && frameHandler->get_is_valid())
 			{
-				if (receivedMessagesQueue.is_full())
-				{
-					// Let the update thread drain the queue. Yielding here starves lower priority FreeRTOS tasks.
-					std::this_thread::sleep_for(std::chrono::milliseconds(1));
-				}
-				else if (!receive_can_frame())
+				if (!receive_can_frame())
 				{
 					// There was no frame to receive, so if any other thread wants to do something, let it.
 					std::this_thread::yield();
