@@ -2868,3 +2868,84 @@ TEST_F(VirtualTerminalTest, ObjectPoolParsingWaitsForThreeConsecutiveIdleStatusM
 	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
+
+TEST_F(VirtualTerminalTest, RejectedObjectPoolIsNotSentAgainUntilTheVTGoesAway)
+{
+	using State = VirtualTerminalClient::StateMachineState;
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(NAME(0), 0, 0x26);
+	std::vector<NAMEFilter> vtNameFilters = { NAMEFilter(NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(NAME::Function::VirtualTerminal)) };
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+
+	const auto receive_status = [&]() {
+		CANIdentifier identifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), CANIdentifier::CANPriority::PriorityDefault6, 0xFF, 0x27);
+		CANMessage message(CANMessage::Type::Receive, identifier, { 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xFF }, vtPartner, nullptr, 0);
+		clientUnderTest.test_wrapper_process_rx_message(message, &clientUnderTest);
+	};
+
+	receive_status();
+	clientUnderTest.test_wrapper_set_state(State::WaitForEndOfObjectPoolResponse);
+	clientUnderTest.test_wrapper_process_rx_message(create_vt_to_ecu_message({ 0x12, 0x01, 0xE8, 0x03, 0xE9, 0x03, 0x02, 0xFF }), &clientUnderTest);
+	EXPECT_EQ(State::Failed, clientUnderTest.state);
+
+	// Well past the usual 5 s retry, but the VT that rejected the pool is still there
+	for (int seconds = 0; seconds < 10; ++seconds)
+	{
+		time_source.simulate_delay_ms(1000);
+		receive_status();
+		clientUnderTest.update();
+		EXPECT_EQ(State::Failed, clientUnderTest.state);
+	}
+
+	// The VT may NACK our auxiliary input maintenance now that it has dropped the working set
+	CANIdentifier nackIdentifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge), CANIdentifier::CANPriority::PriorityDefault6, 0x26, 0x27);
+	clientUnderTest.test_wrapper_process_rx_message(CANMessage(CANMessage::Type::Receive, nackIdentifier, { 1, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xE7, 0x00 }, vtPartner, internalECU, 0), &clientUnderTest);
+	clientUnderTest.update();
+	EXPECT_EQ(State::Failed, clientUnderTest.state);
+
+	time_source.simulate_delay_ms(3001);
+	clientUnderTest.update();
+	EXPECT_EQ(State::Disconnected, clientUnderTest.state);
+
+	// A plain failure still retries after 5 s
+	clientUnderTest.update();
+	clientUnderTest.test_wrapper_set_state(State::Failed);
+	time_source.simulate_delay_ms(5001);
+	receive_status();
+	clientUnderTest.update();
+	EXPECT_EQ(State::Disconnected, clientUnderTest.state);
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+TEST_F(VirtualTerminalTest, StoreVersionTimeoutKeepsTheUploadedPool)
+{
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(NAME(0), 0, 0x26);
+	std::vector<NAMEFilter> vtNameFilters = { NAMEFilter(NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(NAME::Function::VirtualTerminal)) };
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+
+	const auto receive_status = [&]() {
+		CANIdentifier identifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), CANIdentifier::CANPriority::PriorityDefault6, 0xFF, 0x27);
+		CANMessage message(CANMessage::Type::Receive, identifier, { 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xFF }, vtPartner, nullptr, 0);
+		clientUnderTest.test_wrapper_process_rx_message(message, &clientUnderTest);
+	};
+
+	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::WaitForStoreVersionResponse);
+	for (int seconds = 0; seconds < 6; ++seconds)
+	{
+		time_source.simulate_delay_ms(1000);
+		receive_status();
+		clientUnderTest.update();
+	}
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::Connected, clientUnderTest.state);
+
+	// A late response is ignored, the pool stays in use
+	clientUnderTest.test_wrapper_process_rx_message(create_vt_to_ecu_message({ 0xD4, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xFF, 0xFF }), &clientUnderTest);
+	clientUnderTest.update();
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::Connected, clientUnderTest.state);
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
