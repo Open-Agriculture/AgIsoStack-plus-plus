@@ -640,6 +640,82 @@ TEST_F(CoreTest, PartnerCreatedWhileTwoMatchingDevicesAreOfflineGetsTheOneThatRe
 	CANNetworkManager::CANNetwork.deactivate_control_function(partner);
 }
 
+TEST_F(CoreTest, OfflinePartnerTakesTheNextMatchingName)
+{
+	constexpr std::uint8_t TEST_CHANNEL = 3;
+	constexpr std::uint8_t FIRST_ADDRESS = 0x9B;
+	constexpr std::uint8_t SECOND_ADDRESS = 0x9C;
+	constexpr std::uint16_t MANUFACTURER_CODE = 1234;
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(250); // A request timestamp of 0 would mean "no request pending"
+
+	const std::vector<NAMEFilter> nameFilters{
+		NAMEFilter(NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(NAME::Function::VirtualTerminal)),
+		NAMEFilter(NAME::NAMEParameters::ManufacturerCode, MANUFACTURER_CODE)
+	};
+	auto partner = CANNetworkManager::CANNetwork.create_partnered_control_function(TEST_CHANNEL, nameFilters);
+
+	// Two VTs match the partner's filters
+	NAME firstName(0);
+	firstName.set_function_code(static_cast<std::uint8_t>(NAME::Function::VirtualTerminal));
+	firstName.set_manufacturer_code(MANUFACTURER_CODE);
+	firstName.set_identity_number(1);
+	NAME secondName = firstName;
+	secondName.set_identity_number(2);
+
+	// The first becomes the partner, the second an external CF
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, FIRST_ADDRESS, firstName));
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, SECOND_ADDRESS, secondName));
+	CANNetworkManager::CANNetwork.update();
+	ASSERT_TRUE(partner->get_address_valid());
+	ASSERT_EQ(firstName, partner->get_NAME());
+	auto secondCF = CANNetworkManager::CANNetwork.get_control_function(TEST_CHANNEL, SECOND_ADDRESS);
+	ASSERT_NE(nullptr, secondCF);
+	ASSERT_EQ(ControlFunction::Type::External, secondCF->get_type());
+
+	// The first goes offline
+	CANMessageFrame request = test_helpers::create_message_frame_pgn_request(0xEE00, nullptr, nullptr);
+	request.channel = TEST_CHANNEL;
+	for (std::uint8_t i = 0; i < 2; i++)
+	{
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(request);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, SECOND_ADDRESS, secondName));
+		CANNetworkManager::CANNetwork.update();
+		time_source.update_for_ms(1500);
+		CANNetworkManager::CANNetwork.update();
+	}
+	ASSERT_FALSE(partner->get_address_valid());
+	ASSERT_EQ(secondCF, CANNetworkManager::CANNetwork.get_control_function(TEST_CHANNEL, SECOND_ADDRESS));
+
+	// The second's next claim makes it the partner
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, SECOND_ADDRESS, secondName));
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_TRUE(partner->get_address_valid());
+	EXPECT_EQ(SECOND_ADDRESS, partner->get_address());
+	EXPECT_EQ(secondName, partner->get_NAME());
+	EXPECT_EQ(partner, CANNetworkManager::CANNetwork.get_control_function(TEST_CHANNEL, SECOND_ADDRESS));
+	EXPECT_FALSE(secondCF->get_address_valid());
+
+	// It stays the partner
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(request);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, SECOND_ADDRESS, secondName));
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(1500);
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_TRUE(partner->get_address_valid());
+	EXPECT_EQ(partner, CANNetworkManager::CANNetwork.get_control_function(TEST_CHANNEL, SECOND_ADDRESS));
+
+	// An online partner isn't taken over
+	NAME thirdName = firstName;
+	thirdName.set_identity_number(3);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, FIRST_ADDRESS, thirdName));
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_EQ(secondName, partner->get_NAME());
+	EXPECT_EQ(SECOND_ADDRESS, partner->get_address());
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(partner);
+}
+
 TEST_F(CoreTest, SimilarControlFunctions)
 {
 	CANNetworkManager::CANNetwork.update();

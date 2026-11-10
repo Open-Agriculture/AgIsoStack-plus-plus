@@ -791,15 +791,35 @@ namespace isobus
 				}
 			}
 
-			if (nullptr == foundControlFunction)
+			// An offline partner takes the next matching NAME, even one known as an external CF
+			if ((nullptr == foundControlFunction) || (ControlFunction::Type::External == foundControlFunction->get_type()))
 			{
 				// If we still haven't found it, it might be a partner. Check the list of partners.
 				for (const auto &partner : partneredControlFunctions)
 				{
 					if ((partner->get_can_port() == rxFrame.channel) &&
 					    (partner->check_matches_name(NAME(claimedNAME))) &&
-					    (0 == partner->get_NAME().get_full_name()))
+					    ((0 == partner->get_NAME().get_full_name()) || (!partner->get_address_valid())))
 					{
+						if (nullptr != foundControlFunction)
+						{
+							inactiveControlFunctions.remove(foundControlFunction);
+							for (auto &tableEntry : controlFunctionTable[rxFrame.channel])
+							{
+								if (tableEntry == foundControlFunction)
+								{
+									tableEntry = nullptr;
+								}
+							}
+							foundControlFunction->address = NULL_CAN_ADDRESS;
+						}
+						if (0 != partner->get_NAME().get_full_name())
+						{
+							LOG_INFO("[NM]: Offline partner %016llx replaced by %016llx on channel %u.",
+							         partner->get_NAME().get_full_name(),
+							         claimedNAME,
+							         rxFrame.channel);
+						}
 						partner->controlFunctionNAME = NAME(claimedNAME);
 						foundControlFunction = partner;
 						controlFunctionTable[rxFrame.channel][claimedAddress] = foundControlFunction;
