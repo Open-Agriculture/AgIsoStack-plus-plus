@@ -4313,8 +4313,7 @@ namespace isobus
 				const std::uint16_t objectID = read_little_endian_uint16(&pool[offset]);
 				const auto type = static_cast<VirtualTerminalObjectType>(pool[offset + 2]);
 				scaling.objectIDs.push_back(objectID);
-				// resize_object() keeps an Input Boolean's width as designed (it is a maximum), so its size isn't scaled either
-				if ((!get_is_object_scalable(type)) || (VirtualTerminalObjectType::InputBoolean == type))
+				if (!get_is_object_scalable(type))
 				{
 					scaling.unscaledObjectIDs.push_back(objectID);
 				}
@@ -5452,7 +5451,7 @@ namespace isobus
 				case VirtualTerminalObjectType::InputBoolean:
 				{
 					// The width is the maximum width and height of the box (B.8.1), so it scales like a Container's maximum size
-					auto width = static_cast<std::uint16_t>((static_cast<std::uint16_t>(buffer[4]) | (static_cast<std::uint16_t>(buffer[5]) << 8)) * scaleFactor);
+					auto width = static_cast<std::uint16_t>(static_cast<float>(read_little_endian_uint16(&buffer[4])) * scaleFactor);
 
 					// Modify the object in memory
 					buffer[4] = (width & 0xFF);
