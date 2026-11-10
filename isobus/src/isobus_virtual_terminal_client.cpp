@@ -5451,8 +5451,7 @@ namespace isobus
 
 				case VirtualTerminalObjectType::InputBoolean:
 				{
-					// The width is the maximum width and height of the box (B.8.1), so it scales like a Container's maximum size
-					auto width = static_cast<std::uint16_t>((static_cast<std::uint16_t>(buffer[4]) | (static_cast<std::uint16_t>(buffer[5]) << 8)) * scaleFactor);
+					auto width = static_cast<std::uint16_t>((static_cast<std::uint16_t>(buffer[4]) | (static_cast<std::uint16_t>(buffer[5]) << 8)));
 
 					// Modify the object in memory
 					buffer[4] = (width & 0xFF);

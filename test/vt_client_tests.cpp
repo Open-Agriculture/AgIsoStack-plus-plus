@@ -2855,47 +2855,9 @@ TEST_F(VirtualTerminalTest, ResizeInputBoolean)
 	testObject[12] = 1;
 	EXPECT_EQ(15, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject, sizeof(testObject)));
 
-	// The width is the box's maximum width and height, which scales like any other size
-	const std::vector<std::uint8_t> original(testObject, testObject + sizeof(testObject));
-	EXPECT_EQ(true, clientUnderTest.test_wrapper_resize_object(testObject, 0.5f, VirtualTerminalObjectType::InputBoolean));
-	EXPECT_EQ(testWidth / 2, static_cast<std::uint16_t>(testObject[4]) | (static_cast<std::uint16_t>(testObject[5]) << 8));
-
+	// Cant really resize these since the width is a max value. Should remain the same.
 	EXPECT_EQ(true, clientUnderTest.test_wrapper_resize_object(testObject, 2.0f, VirtualTerminalObjectType::InputBoolean));
 	EXPECT_EQ(testWidth, static_cast<std::uint16_t>(testObject[4]) | (static_cast<std::uint16_t>(testObject[5]) << 8));
-
-	// Nothing else changes
-	EXPECT_TRUE(std::equal(original.begin(), original.begin() + 4, testObject));
-	EXPECT_TRUE(std::equal(original.begin() + 6, original.end(), testObject + 6));
-}
-
-// A checkbox drawn 30 px wide for a 200 px mask is uploaded 72 px wide to a 480 px mask, like the
-// objects around it, instead of staying 30 px.
-TEST_F(VirtualTerminalTest, AutoscalingScalesInputBooleans)
-{
-	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
-
-	std::vector<std::uint8_t> pool;
-	append_u16(pool, 700);
-	pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::InputBoolean));
-	pool.push_back(0); // Background colour
-	append_u16(pool, 30); // Width
-	append_u16(pool, 0xFFFF); // No foreground colour
-	append_u16(pool, 0xFFFF); // No variable reference
-	pool.push_back(0); // Value
-	pool.push_back(1); // Enabled
-	pool.push_back(0); // Number of macros
-	append_output_string(pool, 701, 60, 0xFFFF);
-
-	clientUnderTest.set_object_pool(0, &pool);
-	clientUnderTest.set_object_pool_scaling(0, 200, 60);
-	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
-	clientUnderTest.test_wrapper_set_screen(480, 90);
-	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
-
-	const std::vector<std::uint8_t> &scaled = clientUnderTest.test_wrapper_get_scaled_pool(0);
-	ASSERT_GE(scaled.size(), 6u);
-	EXPECT_EQ(72, scaled[4] | (scaled[5] << 8));
-	EXPECT_EQ(144, width_of(scaled, 701, clientUnderTest));
 }
 
 TEST_F(VirtualTerminalTest, NumberBytesInExtendedInputAttributes)
