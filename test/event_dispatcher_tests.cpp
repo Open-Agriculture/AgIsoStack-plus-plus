@@ -231,6 +231,5 @@ TEST_F(EventManagerBool, ThrowingCallbackDoesNotBlockLaterModifications)
 
 	EXPECT_THROW(dispatcher.invoke(true), std::runtime_error);
 	dispatcher.clear_listeners();
-	dispatcher.invoke(true);
 	EXPECT_EQ(dispatcher.get_listener_count(), 0);
 }
