@@ -249,12 +249,16 @@ namespace isobus
 
 	void TaskControllerServer::process_rx_messages()
 	{
-#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		const std::lock_guard<std::mutex> lock(messagesMutex);
-#endif
-		while (!rxMessageQueue.empty())
+		// Processed on a local queue, unlocked, so that the network manager can queue messages while the virtual functions run.
+		std::deque<CANMessage> rxMessages;
 		{
-			const auto &rxMessage = rxMessageQueue.front();
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+			const std::lock_guard<std::mutex> lock(messagesMutex);
+#endif
+			rxMessages.swap(rxMessageQueue);
+		}
+		for (const auto &rxMessage : rxMessages)
+		{
 			auto &rxData = rxMessage.get_data();
 
 			switch (rxMessage.get_identifier().get_parameter_group_number())
@@ -804,7 +808,6 @@ namespace isobus
 				}
 				break;
 			}
-			rxMessageQueue.pop_front();
 		}
 	}
 
