@@ -1593,14 +1593,19 @@ namespace isobus
 			callbacks = requestValueCallbacks;
 		}
 
+		// A callback can restart the client, which clears these lists under the loop, so each answer checks the state under the lock it is sent with and stops there.
 		for (auto &measurementTimeCommand : measurementTimeIntervalCommands)
 		{
-			if (SystemTiming::time_expired_ms(static_cast<std::uint32_t>(measurementTimeCommand.lastValue), static_cast<std::uint32_t>(measurementTimeCommand.processDataValue)))
+			std::int32_t newValue = 0;
+			if (SystemTiming::time_expired_ms(static_cast<std::uint32_t>(measurementTimeCommand.lastValue), static_cast<std::uint32_t>(measurementTimeCommand.processDataValue)) &&
+			    request_value(callbacks, measurementTimeCommand.elementNumber, measurementTimeCommand.ddi, newValue))
 			{
-				// Time to update this time interval variable
-				std::int32_t newValue = 0;
-				if (request_value(callbacks, measurementTimeCommand.elementNumber, measurementTimeCommand.ddi, newValue) &&
-				    send_value_command(measurementTimeCommand.elementNumber, measurementTimeCommand.ddi, newValue))
+				LOCK_GUARD(Mutex, clientMutex);
+				if (StateMachineState::Connected != currentState)
+				{
+					return;
+				}
+				if (send_value_command(measurementTimeCommand.elementNumber, measurementTimeCommand.ddi, newValue))
 				{
 					measurementTimeCommand.lastValue = static_cast<std::int32_t>(SystemTiming::get_timestamp_ms());
 				}
@@ -1608,28 +1613,23 @@ namespace isobus
 		}
 		for (auto &measurementMaxCommand : measurementMaximumThresholdCommands)
 		{
-			// Get the current process data value
 			std::int32_t newValue = 0;
-			for (const auto &currentCallback : callbacks)
+			if (request_value(callbacks, measurementMaxCommand.elementNumber, measurementMaxCommand.ddi, newValue))
 			{
-				if (is_registered(clientMutex, requestValueCallbacks, currentCallback) &&
-				    currentCallback.callback(measurementMaxCommand.elementNumber, measurementMaxCommand.ddi, newValue, currentCallback.parent))
+				LOCK_GUARD(Mutex, clientMutex);
+				if (StateMachineState::Connected != currentState)
 				{
-					break;
+					return;
 				}
-			}
-
-			if (!measurementMaxCommand.thresholdPassed)
-			{
-				if ((newValue > measurementMaxCommand.processDataValue) &&
-				    (send_value_command(measurementMaxCommand.elementNumber, measurementMaxCommand.ddi, newValue)))
+				if (!measurementMaxCommand.thresholdPassed)
 				{
-					measurementMaxCommand.thresholdPassed = true;
+					if ((newValue > measurementMaxCommand.processDataValue) &&
+					    (send_value_command(measurementMaxCommand.elementNumber, measurementMaxCommand.ddi, newValue)))
+					{
+						measurementMaxCommand.thresholdPassed = true;
+					}
 				}
-			}
-			else
-			{
-				if (newValue < measurementMaxCommand.processDataValue)
+				else if (newValue < measurementMaxCommand.processDataValue)
 				{
 					measurementMaxCommand.thresholdPassed = false;
 				}
@@ -1637,28 +1637,23 @@ namespace isobus
 		}
 		for (auto &measurementMinCommand : measurementMinimumThresholdCommands)
 		{
-			// Get the current process data value
 			std::int32_t newValue = 0;
-			for (const auto &currentCallback : callbacks)
+			if (request_value(callbacks, measurementMinCommand.elementNumber, measurementMinCommand.ddi, newValue))
 			{
-				if (is_registered(clientMutex, requestValueCallbacks, currentCallback) &&
-				    currentCallback.callback(measurementMinCommand.elementNumber, measurementMinCommand.ddi, newValue, currentCallback.parent))
+				LOCK_GUARD(Mutex, clientMutex);
+				if (StateMachineState::Connected != currentState)
 				{
-					break;
+					return;
 				}
-			}
-
-			if (!measurementMinCommand.thresholdPassed)
-			{
-				if ((newValue < measurementMinCommand.processDataValue) &&
-				    (send_value_command(measurementMinCommand.elementNumber, measurementMinCommand.ddi, newValue)))
+				if (!measurementMinCommand.thresholdPassed)
 				{
-					measurementMinCommand.thresholdPassed = true;
+					if ((newValue < measurementMinCommand.processDataValue) &&
+					    (send_value_command(measurementMinCommand.elementNumber, measurementMinCommand.ddi, newValue)))
+					{
+						measurementMinCommand.thresholdPassed = true;
+					}
 				}
-			}
-			else
-			{
-				if (newValue > measurementMinCommand.processDataValue)
+				else if (newValue > measurementMinCommand.processDataValue)
 				{
 					measurementMinCommand.thresholdPassed = false;
 				}
@@ -1666,29 +1661,27 @@ namespace isobus
 		}
 		for (auto &measurementChangeCommand : measurementOnChangeThresholdCommands)
 		{
-			// Get the current process data value
 			std::int32_t newValue = 0;
-			for (const auto &currentCallback : callbacks)
+			if (request_value(callbacks, measurementChangeCommand.elementNumber, measurementChangeCommand.ddi, newValue))
 			{
-				if (is_registered(clientMutex, requestValueCallbacks, currentCallback) &&
-				    currentCallback.callback(measurementChangeCommand.elementNumber, measurementChangeCommand.ddi, newValue, currentCallback.parent))
+				LOCK_GUARD(Mutex, clientMutex);
+				if (StateMachineState::Connected != currentState)
 				{
-					break;
+					return;
 				}
-			}
+				std::int64_t lowerLimit = (static_cast<std::int64_t>(measurementChangeCommand.lastValue) - measurementChangeCommand.processDataValue);
+				if (lowerLimit < 0)
+				{
+					lowerLimit = 0;
+				}
 
-			std::int64_t lowerLimit = (static_cast<std::int64_t>(measurementChangeCommand.lastValue) - measurementChangeCommand.processDataValue);
-			if (lowerLimit < 0)
-			{
-				lowerLimit = 0;
-			}
-
-			if ((newValue != measurementChangeCommand.lastValue) &&
-			    ((newValue >= (measurementChangeCommand.lastValue + measurementChangeCommand.processDataValue)) ||
-			     (newValue <= lowerLimit)) &&
-			    (send_value_command(measurementChangeCommand.elementNumber, measurementChangeCommand.ddi, newValue)))
-			{
-				measurementChangeCommand.lastValue = newValue;
+				if ((newValue != measurementChangeCommand.lastValue) &&
+				    ((newValue >= (measurementChangeCommand.lastValue + measurementChangeCommand.processDataValue)) ||
+				     (newValue <= lowerLimit)) &&
+				    (send_value_command(measurementChangeCommand.elementNumber, measurementChangeCommand.ddi, newValue)))
+				{
+					measurementChangeCommand.lastValue = newValue;
+				}
 			}
 		}
 	}

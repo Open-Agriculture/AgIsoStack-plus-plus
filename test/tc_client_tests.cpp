@@ -2115,8 +2115,11 @@ static bool record_value_and_accept(std::uint16_t, std::uint16_t, std::int32_t &
 	return true;
 }
 
-TEST_F(TaskControllerClientTest, DeclinedRequestValueOnlyCarriesOverForThresholds)
+TEST_F(TaskControllerClientTest, DeclinedRequestValueIsIgnored)
 {
+	VirtualCANPlugin serverTC;
+	serverTC.open();
+
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
 	CANHardwareInterface::start(false);
@@ -2141,7 +2144,23 @@ TEST_F(TaskControllerClientTest, DeclinedRequestValueOnlyCarriesOverForThreshold
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_raw(0x18CB87F7, { 0xA7, 0x05, 0x19, 0x3A, 0x10, 0x00, 0x00, 0x00 }));
 	CANNetworkManager::CANNetwork.update();
 	interfaceUnderTest.update();
-	EXPECT_EQ(99, valueSeenBySecondCallback);
+	EXPECT_EQ(0, valueSeenBySecondCallback);
+
+	// With nobody answering, the declined 99 must not cross the threshold
+	interfaceUnderTest.remove_request_value_callback(record_value_and_accept, nullptr);
+	CANMessageFrame testFrame = {};
+	time_source.update_for_ms(5);
+	while (!serverTC.get_queue_empty())
+	{
+		serverTC.read_frame(testFrame);
+	}
+	interfaceUnderTest.update();
+	time_source.update_for_ms(5);
+	while (!serverTC.get_queue_empty())
+	{
+		serverTC.read_frame(testFrame);
+		EXPECT_NE(0x03, testFrame.data[0] & 0x0F); // Value
+	}
 
 	interfaceUnderTest.terminate();
 	CANHardwareInterface::stop();
@@ -2206,6 +2225,14 @@ TEST_F(TaskControllerClientTest, NoAnswerIsSentAfterACallbackRestartsTheClient)
 	// Set value and acknowledge for element 4, DDI 3
 	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Connected);
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_raw(0x18CB88F8, { 0x4A, 0x00, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00 }));
+	CANNetworkManager::CANNetwork.update();
+	interfaceUnderTest.update();
+	EXPECT_EQ(TaskControllerClient::StateMachineState::Disconnected, interfaceUnderTest.test_wrapper_get_state());
+	expect_no_answer_sent();
+
+	// Maximum threshold of 0 for element 4, DDI 3
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Connected);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_raw(0x18CB88F8, { 0x47, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00 }));
 	CANNetworkManager::CANNetwork.update();
 	interfaceUnderTest.update();
 	EXPECT_EQ(TaskControllerClient::StateMachineState::Disconnected, interfaceUnderTest.test_wrapper_get_state());
