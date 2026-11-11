@@ -31,6 +31,8 @@
 #include "isobus/utility/event_dispatcher.hpp"
 #include "isobus/utility/thread_synchronization.hpp"
 
+#include <atomic>
+
 namespace isobus
 {
 	/// @brief A protocol that handles the NMEA 2000 fast packet protocol.
@@ -126,11 +128,14 @@ namespace isobus
 		/// to be parsed by this protocol, use the "allow_any_control_function()" function to enable this.
 		void register_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, std::shared_ptr<InternalControlFunction> internalControlFunction = nullptr);
 
-		// @brief Removes a callback previously added with register_multipacket_message_callback
+		/// @brief Removes a callback previously added with register_multipacket_message_callback
 		/// @param[in] parameterGroupNumber The PGN to parse as fast packet
 		/// @param[in] callback The callback that the stack will call when a matching message is received
 		/// @param[in] parent Generic context variable
 		/// @param[in] internalControlFunction An internal control function used as an additional filter for the callback
+		/// @details This stops future calls only. A call on another thread can still start or finish after this returns,
+		/// so only destroy what the callback uses once it is removed on the thread that calls CANNetworkManager::update(),
+		/// or once that thread is stopped. A callback may remove itself.
 		void remove_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, std::shared_ptr<InternalControlFunction> internalControlFunction = nullptr);
 
 		/// @brief Used to send CAN messages using fast packet
@@ -196,12 +201,17 @@ namespace isobus
 		/// @returns a matching session, or nullptr if no session matched the supplied parameters
 		std::shared_ptr<FastPacketProtocolSession> get_session(std::uint32_t parameterGroupNumber, std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination);
 
-		/// @brief Checks if a session by the passed in source and destination and PGN combination exists
+		/// @brief Checks if a session by the passed in source and destination and PGN combination exists. The caller must hold sessionMutex.
 		/// @param[in] parameterGroupNumber The PGN of the session
 		/// @param[in] source The source control function for the session
 		/// @param[in] destination The destination control function for the session
 		/// @returns true if a matching session exists, false if not
 		bool has_session(std::uint32_t parameterGroupNumber, std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination);
+
+		/// @brief Checks under the callbacks lock whether a callback is still registered, as one removed during a dispatch must not be called from the copy
+		/// @param[in] callback The callback to look for
+		/// @returns true if the callback is still registered
+		bool is_callback_registered(const ParameterGroupNumberCallbackData &callback);
 
 		/// @brief Update a single session
 		/// @param[in] session The session to update
@@ -217,10 +227,11 @@ namespace isobus
 		static constexpr std::uint8_t PROTOCOL_BYTES_PER_FRAME = 7; ///< The number of payload bytes per frame for all but the first message, which has 6
 
 		std::vector<std::shared_ptr<FastPacketProtocolSession>> activeSessions; ///< A list of all active TP sessions
-		Mutex sessionMutex; ///< A mutex to lock the sessions list in case someone starts a Tx while the stack is processing sessions
+		Mutex sessionMutex; ///< A mutex to lock the sessions list and history in case someone starts a Tx while the stack is processing sessions
+		Mutex callbacksMutex; ///< A mutex to lock the callbacks list, as callbacks can be registered from any thread
 		std::vector<FastPacketHistory> sessionHistory; ///< Used to keep track of sequence numbers for future sessions
 		std::vector<ParameterGroupNumberCallbackData> parameterGroupNumberCallbacks; ///< A list of all parameter group number callbacks that will be parsed as fast packet messages
-		bool allowAnyControlFunction = false; ///< Denotes if messages for non-internal control functions should be parsed by this protocol
+		std::atomic_bool allowAnyControlFunction{ false }; ///< Denotes if messages for non-internal control functions should be parsed by this protocol
 		const CANMessageFrameCallback sendCANFrameCallback; ///< A callback for sending a CAN frame
 	};
 
