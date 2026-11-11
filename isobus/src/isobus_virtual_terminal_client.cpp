@@ -27,6 +27,11 @@
 
 namespace isobus
 {
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+	/// @brief The client whose worker runs on this thread. Not get_id(): on ESP-IDF it aborts outside pthreads.
+	static thread_local const VirtualTerminalClient *workerThreadOwner = nullptr;
+#endif
+
 	/// @brief Pads a version label with spaces, or truncates it, to the label length a version command uses
 	/// @param[in] versionLabel The object pool version label
 	/// @returns The label as sent in a version command
@@ -86,7 +91,7 @@ namespace isobus
 	void VirtualTerminalClient::initialize(bool spawnThread)
 	{
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		if (std::this_thread::get_id() == workerThreadId.load())
+		if (this == workerThreadOwner)
 		{
 			LOG_ERROR("[VT]: initialize() cannot be called from the client's own worker thread.");
 			return;
@@ -149,7 +154,7 @@ namespace isobus
 	void VirtualTerminalClient::terminate()
 	{
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		if (std::this_thread::get_id() == workerThreadId.load())
+		if (this == workerThreadOwner)
 		{
 			// From the worker itself (a callback it runs). It cannot join itself, nor wait for
 			// workerThreadMutex, which an owner joining it may hold. It exits after this update, and the
@@ -208,7 +213,6 @@ namespace isobus
 		{
 			thread->join();
 			delete thread;
-			workerThreadId = std::thread::id();
 		}
 	}
 #endif
@@ -5857,7 +5861,7 @@ namespace isobus
 	void VirtualTerminalClient::worker_thread_function()
 	{
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		workerThreadId = std::this_thread::get_id();
+		workerThreadOwner = this;
 		for (;;)
 		{
 			if (shouldTerminate)

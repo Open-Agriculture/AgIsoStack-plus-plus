@@ -1977,7 +1977,6 @@ namespace isobus
 		std::map<std::uint16_t, AuxiliaryInputState> ourAuxiliaryInputs; ///< The inputs on this auxiliary input device
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		std::atomic<std::thread *> workerThread{ nullptr }; ///< The worker thread that updates this interface
-		std::atomic<std::thread::id> workerThreadId{ std::thread::id() }; ///< The worker's id, stored by the worker itself when it starts
 		Mutex workerThreadMutex; ///< Held through initialize() and terminate(), so one caller at a time starts or stops the worker. The worker never takes it.
 #endif
 		bool firstTimeInState = false; ///< Stores if the current update cycle is the first time a state machine state has been processed
