@@ -61,6 +61,11 @@ namespace isobus
 		return retVal;
 	}
 
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+	/// @brief The client whose worker runs on this thread. Not get_id(): on ESP-IDF it aborts outside pthreads.
+	static thread_local const TaskControllerClient *workerThreadOwner = nullptr;
+#endif
+
 	TaskControllerClient::TaskControllerClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource, std::shared_ptr<PartneredControlFunction> primaryVT) :
 	  languageCommandInterface(clientSource, partner),
 	  partnerControlFunction(partner),
@@ -81,7 +86,7 @@ namespace isobus
 		assert(nullptr != partnerControlFunction);
 
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		if (std::this_thread::get_id() == workerThreadId.load())
+		if (this == workerThreadOwner)
 		{
 			LOG_ERROR("[TC]: initialize() cannot be called from the client's own worker thread.");
 			return;
@@ -312,7 +317,7 @@ namespace isobus
 	void TaskControllerClient::terminate()
 	{
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		if (std::this_thread::get_id() == workerThreadId.load())
+		if (this == workerThreadOwner)
 		{
 			// From the worker itself (a callback it runs). It cannot join itself, nor wait for
 			// workerThreadMutex, which an owner joining it may hold. It exits after this update, and the
@@ -377,7 +382,6 @@ namespace isobus
 		{
 			thread->join();
 			delete thread;
-			workerThreadId = std::thread::id();
 		}
 	}
 #endif
@@ -2557,7 +2561,7 @@ namespace isobus
 	void TaskControllerClient::worker_thread_function()
 	{
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		workerThreadId = std::this_thread::get_id();
+		workerThreadOwner = this;
 		for (;;)
 		{
 			if (shouldTerminate)

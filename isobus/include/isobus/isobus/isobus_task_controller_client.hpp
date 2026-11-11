@@ -763,7 +763,6 @@ namespace isobus
 		Mutex clientMutex; ///< A general mutex to protect data in the worker thread against data accessed by the app or the network manager
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		std::atomic<std::thread *> workerThread{ nullptr }; ///< The worker thread that updates this interface
-		std::atomic<std::thread::id> workerThreadId{ std::thread::id() }; ///< The worker's id, stored by the worker itself when it starts
 		Mutex workerThreadMutex; ///< Held through initialize() and terminate(), so one caller at a time starts or stops the worker. The worker never takes it.
 #endif
 		Mutex runMutex; ///< Makes the run checks and changes in initialize(), terminate() and request_termination() one step each
