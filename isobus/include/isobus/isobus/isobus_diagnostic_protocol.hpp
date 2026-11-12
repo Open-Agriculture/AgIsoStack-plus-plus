@@ -475,6 +475,11 @@ namespace isobus
 		                                            bool &acknowledge,
 		                                            AcknowledgementType &acknowledgementType);
 
+		/// @brief Checks that a value can be used as a field in the identification messages
+		/// @param[in] value The value to check
+		/// @returns true if the value doesn't contain the "*" field delimiter
+		static bool is_valid_identification_field(const std::string &value);
+
 		// @brief Handles PGN requests for the diagnostic protocol
 		/// @param[in] parameterGroupNumber The PGN being requested
 		/// @param[in] requestingControlFunction The control function that is requesting the PGN
@@ -482,11 +487,6 @@ namespace isobus
 		/// @param[out] acknowledgementType The type of acknowledgement to send to the requestor
 		/// @param[in] parentPointer Generic context variable, usually a pointer to the class that the callback was registered for
 		/// @returns true if any callback was able to handle the PGN request
-		/// @brief Checks that a value can be used as a field in the identification messages
-		/// @param[in] value The value to check
-		/// @returns true if the value doesn't contain the "*" field delimiter
-		static bool is_valid_identification_field(const std::string &value);
-
 		static bool process_parameter_group_number_request(std::uint32_t parameterGroupNumber,
 		                                                   std::shared_ptr<ControlFunction> requestingControlFunction,
 		                                                   bool &acknowledge,
