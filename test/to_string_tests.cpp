@@ -8,6 +8,7 @@
 //================================================================================================
 #include <gtest/gtest.h>
 
+#include "isobus/isobus/isobus_virtual_terminal_objects.hpp"
 #include "isobus/utility/to_string.hpp"
 
 #include <cstdint>
@@ -219,4 +220,14 @@ TEST(TO_STRING_TESTS, ConcatenatesLikeTheLogMessages)
 	const std::uint8_t address = 0x1C;
 	EXPECT_EQ("[AC]: Address 28 claimed, PGN 61184",
 	          "[AC]: Address " + isobus::to_string(static_cast<int>(address)) + " claimed, PGN " + isobus::to_string(0xEF00));
+}
+
+TEST(TO_STRING_TESTS, ObjectIdToStringWritesNullOrTheNumberLikeStream)
+{
+	// object_id_to_string used to write the ID to a stream; the VT client puts it in log messages
+	EXPECT_EQ("NULL", isobus::object_id_to_string(isobus::NULL_OBJECT_ID));
+	for (const std::uint16_t objectId : { static_cast<std::uint16_t>(0), static_cast<std::uint16_t>(1), static_cast<std::uint16_t>(1000), static_cast<std::uint16_t>(65534) })
+	{
+		EXPECT_EQ(stream_text(objectId), isobus::object_id_to_string(objectId));
+	}
 }
