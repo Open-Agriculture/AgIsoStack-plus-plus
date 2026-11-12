@@ -58,8 +58,9 @@ namespace isobus
 
 	void TransportProtocolManager::TransportProtocolSession::set_state(StateMachineState value)
 	{
-		state = value;
+		// Timestamp first, so a thread that sees the new state doesn't time it out from the old timestamp
 		update_timestamp();
+		state = value;
 	}
 
 	std::uint8_t TransportProtocolManager::TransportProtocolSession::get_cts_number_of_packets_remaining() const

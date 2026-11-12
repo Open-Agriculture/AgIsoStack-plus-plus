@@ -12,6 +12,7 @@
 #ifndef CAN_TRANSPORT_PROTOCOL_HPP
 #define CAN_TRANSPORT_PROTOCOL_HPP
 
+#include <atomic>
 #include <list>
 
 #include "isobus/isobus/can_message_frame.hpp"
@@ -151,7 +152,7 @@ namespace isobus
 			std::uint8_t get_total_number_of_packets() const;
 
 		private:
-			StateMachineState state = StateMachineState::None; ///< The state machine state for this session
+			std::atomic<StateMachineState> state{ StateMachineState::None }; ///< The state machine state for this session, read by update() while the thread that started a transmit sets it
 
 			std::uint8_t lastSequenceNumber = 0; ///< The last processed sequence number for this set of packets
 			std::uint8_t lastAcknowledgedPacketNumber = 0; ///< The last acknowledged packet number by the receiver

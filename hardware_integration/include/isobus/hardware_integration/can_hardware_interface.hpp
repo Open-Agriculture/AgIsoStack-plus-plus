@@ -191,7 +191,7 @@ namespace isobus
 		static std::condition_variable updateThreadWakeupCondition; ///< A condition variable to allow for signaling the `updateThread` to wakeup
 #endif
 		static std::uint32_t lastUpdateTimestamp; ///< The last time the network manager was updated
-		static std::uint32_t periodicUpdateInterval; ///< The period between calls to the network manager update function in milliseconds
+		static std::atomic<std::uint32_t> periodicUpdateInterval; ///< The period between calls to the network manager update function in milliseconds
 		static EventDispatcher<const CANMessageFrame &> frameReceivedEventDispatcher; ///< The event dispatcher for when a CAN message frame is received from hardware event
 		static EventDispatcher<const CANMessageFrame &> frameTransmittedEventDispatcher; ///< The event dispatcher for when a CAN message has been transmitted via hardware
 		static EventDispatcher<> periodicUpdateEventDispatcher; ///< The event dispatcher for when a periodic update is called

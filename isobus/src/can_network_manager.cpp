@@ -78,6 +78,7 @@ namespace isobus
 	{
 		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 		partneredControlFunctions.erase(std::remove(partneredControlFunctions.begin(), partneredControlFunctions.end(), controlFunction), partneredControlFunctions.end());
+		partnersComingOnline.erase(std::remove(partnersComingOnline.begin(), partnersComingOnline.end(), controlFunction), partnersComingOnline.end());
 		deactivate_control_function(std::static_pointer_cast<ControlFunction>(controlFunction));
 	}
 
@@ -236,6 +237,27 @@ namespace isobus
 		}
 
 		update_new_partners();
+
+		// A partner can also come online in create_partnered_control_function(), on the application's thread, so its
+		// callback is made here instead. Taken one at a time, so that a partner deactivated by an earlier callback is skipped.
+		bool partnerCameOnline = true;
+		while (partnerCameOnline)
+		{
+			std::shared_ptr<PartneredControlFunction> partner;
+			{
+				LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
+				partnerCameOnline = !partnersComingOnline.empty();
+				if (partnerCameOnline)
+				{
+					partner = partnersComingOnline.front();
+					partnersComingOnline.erase(partnersComingOnline.begin());
+				}
+			}
+			if (partnerCameOnline)
+			{
+				process_control_function_state_change_callback(partner, ControlFunctionState::Online);
+			}
+		}
 
 		process_rx_messages();
 
@@ -568,6 +590,7 @@ namespace isobus
 
 	void CANNetworkManager::update_address_table(const CANMessage &message)
 	{
+		std::shared_ptr<ControlFunction> onlineControlFunction;
 		std::uint8_t channelIndex = message.get_can_port_index();
 
 		if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == message.get_identifier().get_parameter_group_number()) &&
@@ -620,7 +643,7 @@ namespace isobus
 					          targetControlFunction->get_NAME().get_full_name(),
 					          claimedAddress,
 					          channelIndex);
-					process_control_function_state_change_callback(targetControlFunction, ControlFunctionState::Online);
+					onlineControlFunction = targetControlFunction;
 				}
 			}
 		}
@@ -644,6 +667,11 @@ namespace isobus
 					}
 				});
 			}
+		}
+
+		if (nullptr != onlineControlFunction)
+		{
+			process_control_function_state_change_callback(onlineControlFunction, ControlFunctionState::Online);
 		}
 	}
 
@@ -720,6 +748,7 @@ namespace isobus
 
 	void CANNetworkManager::update_control_functions(const CANMessageFrame &rxFrame)
 	{
+		std::shared_ptr<ControlFunction> onlineControlFunction;
 		if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == CANIdentifier(rxFrame.identifier).get_parameter_group_number()) &&
 		    (CAN_DATA_LENGTH == rxFrame.dataLength) &&
 		    (rxFrame.channel < CAN_PORT_MAXIMUM))
@@ -852,7 +881,7 @@ namespace isobus
 				// New device, need to start keeping track of it
 				foundControlFunction = create_external_control_function(NAME(claimedNAME), claimedAddress, rxFrame.channel);
 				LOG_DEBUG("[NM]: A control function claimed address %u on channel %u", foundControlFunction->get_address(), foundControlFunction->get_can_port());
-				process_control_function_state_change_callback(foundControlFunction, ControlFunctionState::Online);
+				onlineControlFunction = foundControlFunction;
 			}
 			else if ((foundControlFunction->get_address() != claimedAddress) && (claimedAddress < NULL_CAN_ADDRESS))
 			{
@@ -866,7 +895,7 @@ namespace isobus
 					         claimedAddress,
 					         foundControlFunction->get_can_port());
 					foundControlFunction->address = claimedAddress;
-					process_control_function_state_change_callback(foundControlFunction, ControlFunctionState::Online);
+					onlineControlFunction = foundControlFunction;
 				}
 				else
 				{
@@ -876,9 +905,14 @@ namespace isobus
 					         claimedAddress,
 					         foundControlFunction->get_can_port());
 					foundControlFunction->address = claimedAddress;
-					process_control_function_state_change_callback(foundControlFunction, ControlFunctionState::Online);
+					onlineControlFunction = foundControlFunction;
 				}
 			}
+		}
+
+		if (nullptr != onlineControlFunction)
+		{
+			process_control_function_state_change_callback(onlineControlFunction, ControlFunctionState::Online);
 		}
 	}
 
@@ -889,17 +923,12 @@ namespace isobus
 		{
 			if (!partner->initialized)
 			{
-				// Remove any inactive CF that matches the partner's name
-				for (auto currentInactiveControlFunction = inactiveControlFunctions.begin(); currentInactiveControlFunction != inactiveControlFunctions.end(); currentInactiveControlFunction++)
-				{
-					if ((partner->check_matches_name((*currentInactiveControlFunction)->get_NAME())) &&
-					    (partner->get_can_port() == (*currentInactiveControlFunction)->get_can_port()) &&
-					    (ControlFunction::Type::External == (*currentInactiveControlFunction)->get_type()))
-					{
-						inactiveControlFunctions.erase(currentInactiveControlFunction);
-						break;
-					}
-				}
+				// Remove every inactive CF that matches, as an inactive CF is restored ahead of a partner when it claims again
+				inactiveControlFunctions.remove_if([&partner](const std::shared_ptr<ControlFunction> &inactiveControlFunction) {
+					return (partner->check_matches_name(inactiveControlFunction->get_NAME())) &&
+					  (partner->get_can_port() == inactiveControlFunction->get_can_port()) &&
+					  (ControlFunction::Type::External == inactiveControlFunction->get_type());
+				});
 
 				for (const auto &currentActiveControlFunction : controlFunctionTable[partner->get_can_port()])
 				{
@@ -916,7 +945,7 @@ namespace isobus
 						partner->claimedAddressSinceLastAddressClaimRequest = currentActiveControlFunction->claimedAddressSinceLastAddressClaimRequest;
 						partner->missedAddressClaimRequests = currentActiveControlFunction->missedAddressClaimRequests;
 						controlFunctionTable[partner->get_can_port()][partner->address] = std::shared_ptr<ControlFunction>(partner);
-						process_control_function_state_change_callback(partner, ControlFunctionState::Online);
+						partnersComingOnline.push_back(partner);
 
 						LOG_INFO("[NM]: A partner with name %016llx has claimed address %u on channel %u.",
 						         partner->get_NAME().get_full_name(),
@@ -1006,12 +1035,18 @@ namespace isobus
 
 	void CANNetworkManager::process_any_control_function_pgn_callbacks(const CANMessage &currentMessage)
 	{
-		LOCK_GUARD(Mutex, anyControlFunctionCallbacksMutex);
-		for (const auto &currentCallback : anyControlFunctionParameterGroupNumberCallbacks)
+		// Called on a copy, unlocked, so that a callback can add or remove callbacks without deadlocking.
+		std::vector<ParameterGroupNumberCallbackData> callbacksCopy;
+		{
+			LOCK_GUARD(Mutex, anyControlFunctionCallbacksMutex);
+			callbacksCopy = anyControlFunctionParameterGroupNumberCallbacks;
+		}
+		for (const auto &currentCallback : callbacksCopy)
 		{
 			if ((currentCallback.get_parameter_group_number() == currentMessage.get_identifier().get_parameter_group_number()) &&
 			    ((nullptr == currentMessage.get_destination_control_function()) ||
-			     (ControlFunction::Type::Internal == currentMessage.get_destination_control_function()->get_type())))
+			     (ControlFunction::Type::Internal == currentMessage.get_destination_control_function()->get_type())) &&
+			    is_registered(anyControlFunctionCallbacksMutex, anyControlFunctionParameterGroupNumberCallbacks, currentCallback))
 			{
 				currentCallback.get_callback()(currentMessage, currentCallback.get_parent());
 			}
@@ -1041,19 +1076,31 @@ namespace isobus
 
 	void CANNetworkManager::process_control_function_state_change_callback(std::shared_ptr<ControlFunction> controlFunction, ControlFunctionState state)
 	{
-		LOCK_GUARD(Mutex, controlFunctionStatusCallbacksMutex);
-		for (const auto &callback : controlFunctionStateCallbacks)
+		std::vector<ControlFunctionStateCallback> callbacksCopy;
 		{
-			callback(controlFunction, state);
+			LOCK_GUARD(Mutex, controlFunctionStatusCallbacksMutex);
+			callbacksCopy.assign(controlFunctionStateCallbacks.begin(), controlFunctionStateCallbacks.end());
+		}
+		for (const auto &callback : callbacksCopy)
+		{
+			if (is_registered(controlFunctionStatusCallbacksMutex, controlFunctionStateCallbacks, callback))
+			{
+				callback(controlFunction, state);
+			}
 		}
 	}
 
 	void CANNetworkManager::process_protocol_pgn_callbacks(const CANMessage &currentMessage)
 	{
-		LOCK_GUARD(Mutex, protocolPGNCallbacksMutex);
-		for (const auto &currentCallback : protocolPGNCallbacks)
+		std::vector<ParameterGroupNumberCallbackData> callbacksCopy;
 		{
-			if (currentCallback.get_parameter_group_number() == currentMessage.get_identifier().get_parameter_group_number())
+			LOCK_GUARD(Mutex, protocolPGNCallbacksMutex);
+			callbacksCopy.assign(protocolPGNCallbacks.begin(), protocolPGNCallbacks.end());
+		}
+		for (const auto &currentCallback : callbacksCopy)
+		{
+			if ((currentCallback.get_parameter_group_number() == currentMessage.get_identifier().get_parameter_group_number()) &&
+			    is_registered(protocolPGNCallbacksMutex, protocolPGNCallbacks, currentCallback))
 			{
 				currentCallback.get_callback()(currentMessage, currentCallback.get_parent());
 			}
@@ -1082,7 +1129,8 @@ namespace isobus
 			for (const auto &callback : callbacksCopy)
 			{
 				if (message_parameter_group_number == callback.get_parameter_group_number() &&
-				    nullptr != callback.get_callback())
+				    nullptr != callback.get_callback() &&
+				    is_registered(globalPGNCallbacksMutex, globalParameterGroupNumberCallbacks, callback))
 				{
 					// We have a callback that matches this PGN
 					callback.get_callback()(message, callback.get_parent());
@@ -1155,42 +1203,50 @@ namespace isobus
 		// which stays silent has left the network, so one missed request is not enough to take it offline
 		constexpr std::uint8_t MISSED_REQUESTS_BEFORE_OFFLINE = 2;
 
-		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
-		for (std::uint_fast8_t channelIndex = 0; channelIndex < CAN_PORT_MAXIMUM; channelIndex++)
+		std::vector<std::shared_ptr<ControlFunction>> offlineControlFunctions;
 		{
-			auto &lastAddressClaimRequestTime = lastAddressClaimRequestTimestamp_ms[channelIndex];
-			if ((0 != lastAddressClaimRequestTime) &&
-			    (SystemTiming::time_expired_ms(lastAddressClaimRequestTime, ADDRESS_CLAIM_RESPONSE_TIMEOUT)))
+			LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
+			for (std::uint_fast8_t channelIndex = 0; channelIndex < CAN_PORT_MAXIMUM; channelIndex++)
 			{
-				for (auto &tableEntry : controlFunctionTable[channelIndex])
+				auto &lastAddressClaimRequestTime = lastAddressClaimRequestTimestamp_ms[channelIndex];
+				if ((0 != lastAddressClaimRequestTime) &&
+				    (SystemTiming::time_expired_ms(lastAddressClaimRequestTime, ADDRESS_CLAIM_RESPONSE_TIMEOUT)))
 				{
-					if ((nullptr == tableEntry) ||
-					    (tableEntry->claimedAddressSinceLastAddressClaimRequest))
+					for (auto &tableEntry : controlFunctionTable[channelIndex])
 					{
-						continue;
-					}
+						if ((nullptr == tableEntry) ||
+						    (tableEntry->claimedAddressSinceLastAddressClaimRequest))
+						{
+							continue;
+						}
 
-					if ((tableEntry->missedAddressClaimRequests + 1) < MISSED_REQUESTS_BEFORE_OFFLINE)
-					{
-						tableEntry->missedAddressClaimRequests++;
-						LOG_DEBUG("[NM]: Control function with address %u and NAME %016llx did not answer a request for address claim on channel %u.", tableEntry->get_address(), tableEntry->get_NAME().get_full_name(), channelIndex);
-						continue;
-					}
-					tableEntry->missedAddressClaimRequests = MISSED_REQUESTS_BEFORE_OFFLINE;
+						if ((tableEntry->missedAddressClaimRequests + 1) < MISSED_REQUESTS_BEFORE_OFFLINE)
+						{
+							tableEntry->missedAddressClaimRequests++;
+							LOG_DEBUG("[NM]: Control function with address %u and NAME %016llx did not answer a request for address claim on channel %u.", tableEntry->get_address(), tableEntry->get_NAME().get_full_name(), channelIndex);
+							continue;
+						}
+						tableEntry->missedAddressClaimRequests = MISSED_REQUESTS_BEFORE_OFFLINE;
 
-					auto controlFunction = tableEntry;
-					if (ControlFunction::Type::Internal != controlFunction->get_type())
-					{
-						inactiveControlFunctions.push_back(controlFunction);
-						LOG_INFO("[NM]: Control function with address %u and NAME %016llx is now offline on channel %u.", controlFunction->get_address(), controlFunction->get_NAME(), channelIndex);
-						tableEntry = nullptr;
-						controlFunction->address = NULL_CAN_ADDRESS;
-					}
+						auto controlFunction = tableEntry;
+						if (ControlFunction::Type::Internal != controlFunction->get_type())
+						{
+							inactiveControlFunctions.push_back(controlFunction);
+							LOG_INFO("[NM]: Control function with address %u and NAME %016llx is now offline on channel %u.", controlFunction->get_address(), controlFunction->get_NAME(), channelIndex);
+							tableEntry = nullptr;
+							controlFunction->address = NULL_CAN_ADDRESS;
+						}
 
-					process_control_function_state_change_callback(controlFunction, ControlFunctionState::Offline);
+						offlineControlFunctions.push_back(controlFunction);
+					}
+					lastAddressClaimRequestTime = 0;
 				}
-				lastAddressClaimRequestTime = 0;
 			}
+		}
+
+		for (const auto &controlFunction : offlineControlFunctions)
+		{
+			process_control_function_state_change_callback(controlFunction, ControlFunctionState::Offline);
 		}
 	}
 
