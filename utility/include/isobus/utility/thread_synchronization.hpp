@@ -9,6 +9,8 @@
 #ifndef THREAD_SYNCHRONIZATION_HPP
 #define THREAD_SYNCHRONIZATION_HPP
 
+#include <algorithm>
+
 #if defined CAN_STACK_DISABLE_THREADS || defined ARDUINO
 #include <queue>
 
@@ -202,8 +204,6 @@ private:
 };
 
 #endif
-
-#include <algorithm>
 
 namespace isobus
 {
