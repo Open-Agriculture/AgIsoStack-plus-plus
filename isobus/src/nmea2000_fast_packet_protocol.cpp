@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <iterator>
 
 namespace isobus
 {
@@ -110,12 +111,14 @@ namespace isobus
 
 	void FastPacketProtocol::register_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, std::shared_ptr<InternalControlFunction> internalControlFunction)
 	{
+		LOCK_GUARD(Mutex, callbacksMutex);
 		parameterGroupNumberCallbacks.emplace_back(parameterGroupNumber, callback, parent, internalControlFunction);
 	}
 
 	void FastPacketProtocol::remove_multipacket_message_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, std::shared_ptr<InternalControlFunction> internalControlFunction)
 	{
 		ParameterGroupNumberCallbackData tempObject(parameterGroupNumber, callback, parent, internalControlFunction);
+		LOCK_GUARD(Mutex, callbacksMutex);
 		auto callbackLocation = std::find(parameterGroupNumberCallbacks.begin(), parameterGroupNumberCallbacks.end(), tempObject);
 		if (parameterGroupNumberCallbacks.end() != callbackLocation)
 		{
@@ -155,9 +158,9 @@ namespace isobus
 			LOG_ERROR("[FP]: Unable to send multipacket message, data is invalid or has invalid length.");
 			return false;
 		}
-		else if ((nullptr == source) || (!source->get_address_valid()) || has_session(parameterGroupNumber, source, destination))
+		else if ((nullptr == source) || (!source->get_address_valid()))
 		{
-			LOG_ERROR("[FP]: Unable to send multipacket message, source is invalid or already in a session for the PGN.");
+			LOG_ERROR("[FP]: Unable to send multipacket message, source is invalid.");
 			return false;
 		}
 		else if ((parameterGroupNumber < FP_MIN_PARAMETER_GROUP_NUMBER) || (parameterGroupNumber > FP_MAX_PARAMETER_GROUP_NUMBER))
@@ -171,30 +174,36 @@ namespace isobus
 			return false;
 		}
 
-		std::uint8_t sequenceNumber = get_new_sequence_number(source->get_NAME(), parameterGroupNumber);
-		auto session = std::make_shared<FastPacketProtocolSession>(FastPacketProtocolSession::Direction::Transmit,
-		                                                           std::move(data),
-		                                                           parameterGroupNumber,
-		                                                           messageLength,
-		                                                           sequenceNumber,
-		                                                           priority,
-		                                                           source,
-		                                                           destination,
-		                                                           txCompleteCallback,
-		                                                           parentPointer);
-
+		// One lock for the duplicate check and the push, so two sends can not open the same session
 		LOCK_GUARD(Mutex, sessionMutex);
-		activeSessions.push_back(session);
+		if (has_session(parameterGroupNumber, source, destination))
+		{
+			LOG_ERROR("[FP]: Unable to send multipacket message, already in a session for the PGN.");
+			return false;
+		}
+		activeSessions.push_back(std::make_shared<FastPacketProtocolSession>(FastPacketProtocolSession::Direction::Transmit,
+		                                                                     std::move(data),
+		                                                                     parameterGroupNumber,
+		                                                                     messageLength,
+		                                                                     get_new_sequence_number(source->get_NAME(), parameterGroupNumber),
+		                                                                     priority,
+		                                                                     source,
+		                                                                     destination,
+		                                                                     txCompleteCallback,
+		                                                                     parentPointer));
 		return true;
 	}
 
 	void FastPacketProtocol::update()
 	{
-		LOCK_GUARD(Mutex, sessionMutex);
-		// We use a fancy for loop here to allow us to remove sessions from the list while iterating
-		for (std::size_t i = activeSessions.size(); i > 0; i--)
+		// Updated on a copy, unlocked, so that a transmit complete callback can send again without deadlocking.
+		std::vector<std::shared_ptr<FastPacketProtocolSession>> sessions;
 		{
-			auto session = activeSessions.at(i - 1);
+			LOCK_GUARD(Mutex, sessionMutex);
+			sessions = activeSessions;
+		}
+		for (const auto &session : sessions)
+		{
 			if (!session->get_source()->get_address_valid())
 			{
 				LOG_WARNING("[FP]: Closing active session as the source control function is no longer valid");
@@ -205,7 +214,10 @@ namespace isobus
 				LOG_WARNING("[FP]: Closing active session as the destination control function is no longer valid");
 				close_session(session, false);
 			}
-			update_session(session);
+			else
+			{
+				update_session(session);
+			}
 		}
 	}
 
@@ -242,14 +254,17 @@ namespace isobus
 	{
 		if (nullptr != session)
 		{
-			session->complete(successful);
-			add_session_history(session);
-
-			auto sessionLocation = std::find(activeSessions.begin(), activeSessions.end(), session);
-			if (activeSessions.end() != sessionLocation)
 			{
-				activeSessions.erase(sessionLocation);
+				LOCK_GUARD(Mutex, sessionMutex);
+				add_session_history(session);
+				auto sessionLocation = std::find(activeSessions.begin(), activeSessions.end(), session);
+				if (activeSessions.end() != sessionLocation)
+				{
+					activeSessions.erase(sessionLocation);
+				}
 			}
+			// Completed after the erase, so that the callback can start a new session for the same PGN.
+			session->complete(successful);
 		}
 	}
 
@@ -278,12 +293,6 @@ namespace isobus
 			return;
 		}
 
-		if (parameterGroupNumberCallbacks.empty())
-		{
-			// No listeners, no need to process the message
-			return;
-		}
-
 		if ((!message.is_destination_our_device()) && (!allowAnyControlFunction) && (!message.is_broadcast()))
 		{
 			// Destined for someone else, no need to process the message
@@ -291,22 +300,17 @@ namespace isobus
 		}
 
 		// Check if we have any callbacks for this PGN
-		bool pgnNeedsParsing = false;
-		for (const auto &callback : parameterGroupNumberCallbacks)
+		auto callbackMatches = [&message](const ParameterGroupNumberCallbackData &callback) {
+			return (callback.get_parameter_group_number() == message.get_identifier().get_parameter_group_number()) &&
+			  ((nullptr == callback.get_internal_control_function()) ||
+			   (callback.get_internal_control_function() == message.get_destination_control_function()));
+		};
 		{
-			if ((callback.get_parameter_group_number() == message.get_identifier().get_parameter_group_number()) &&
-			    ((nullptr == callback.get_internal_control_function()) ||
-			     (callback.get_internal_control_function() == message.get_destination_control_function())))
+			LOCK_GUARD(Mutex, callbacksMutex);
+			if (!std::any_of(parameterGroupNumberCallbacks.begin(), parameterGroupNumberCallbacks.end(), callbackMatches))
 			{
-				pgnNeedsParsing = true;
-				break;
+				return;
 			}
-		}
-
-		if (!pgnNeedsParsing)
-		{
-			// No callbacks for this PGN, no need to process the message
-			return;
 		}
 
 		std::shared_ptr<FastPacketProtocolSession> session = get_session(message.get_identifier().get_parameter_group_number(),
@@ -372,12 +376,17 @@ namespace isobus
 					                            message.get_can_port_index(),
 					                            message.get_timestamp_us());
 
-					// Find the appropriate callback and let them know
-					for (const auto &callback : parameterGroupNumberCallbacks)
+					// Called on a copy, unlocked, so that a callback can register or remove callbacks without deadlocking.
+					std::vector<ParameterGroupNumberCallbackData> matchingCallbacks;
 					{
-						if ((callback.get_parameter_group_number() == message.get_identifier().get_parameter_group_number()) &&
-						    ((nullptr == callback.get_internal_control_function()) ||
-						     (callback.get_internal_control_function() == message.get_destination_control_function())))
+						LOCK_GUARD(Mutex, callbacksMutex);
+						std::copy_if(parameterGroupNumberCallbacks.begin(), parameterGroupNumberCallbacks.end(), std::back_inserter(matchingCallbacks), callbackMatches);
+					}
+
+					// Find the appropriate callback and let them know
+					for (const auto &callback : matchingCallbacks)
+					{
+						if (is_callback_registered(callback))
 						{
 							callback.get_callback()(completedMessage, callback.get_parent());
 						}
@@ -539,9 +548,14 @@ namespace isobus
 		}
 	}
 
+	bool FastPacketProtocol::is_callback_registered(const ParameterGroupNumberCallbackData &callback)
+	{
+		LOCK_GUARD(Mutex, callbacksMutex);
+		return (parameterGroupNumberCallbacks.end() != std::find(parameterGroupNumberCallbacks.begin(), parameterGroupNumberCallbacks.end(), callback));
+	}
+
 	bool FastPacketProtocol::has_session(std::uint32_t parameterGroupNumber, std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination)
 	{
-		LOCK_GUARD(Mutex, sessionMutex);
 		return std::any_of(activeSessions.begin(), activeSessions.end(), [&](const std::shared_ptr<FastPacketProtocolSession> &session) {
 			return session->matches(source, destination) && (session->get_parameter_group_number() == parameterGroupNumber);
 		});

@@ -62,6 +62,11 @@ public:
 		return VirtualTerminalClient::get_minimum_object_length(type);
 	}
 
+	static std::vector<std::uint16_t> test_wrapper_get_soft_key_scaled_object_ids(const std::vector<std::vector<std::uint8_t> *> &pools)
+	{
+		return VirtualTerminalClient::get_soft_key_scaled_object_ids(pools);
+	}
+
 	std::uint32_t test_wrapper_get_number_bytes_in_object(std::uint8_t *buffer, std::uint32_t bufferLength)
 	{
 		return VirtualTerminalClient::get_number_bytes_in_object(buffer, bufferLength);
@@ -103,6 +108,32 @@ public:
 	bool test_wrapper_update_auxiliary_input_status(std::uint16_t objectID)
 	{
 		return update_auxiliary_input_status(objectID);
+	}
+
+	void test_wrapper_set_screen(std::uint16_t dataMaskPixels, std::uint8_t softKeyPixels)
+	{
+		xPixels = dataMaskPixels;
+		yPixels = dataMaskPixels;
+		softKeyXAxisPixels = softKeyPixels;
+		softKeyYAxisPixels = softKeyPixels;
+	}
+
+	const std::vector<std::uint8_t> &test_wrapper_get_scaled_pool(std::uint8_t poolIndex) const
+	{
+		return objectPools.at(poolIndex).scaledObjectPool;
+	}
+
+	// The command queued last, while not connected to a VT, as it would be sent now; the queue is emptied
+	std::vector<std::uint8_t> test_wrapper_take_queued_command()
+	{
+		std::vector<std::uint8_t> retVal;
+		if (!commandQueue.empty())
+		{
+			const QueuedCommand &command = commandQueue.back();
+			retVal = command.autoScale ? scale_command(command.data) : command.data;
+			commandQueue.clear();
+		}
+		return retVal;
 	}
 
 	static std::vector<std::uint8_t> staticTestPool;
@@ -307,7 +338,7 @@ static void auxiliary_vt_status(DerivedTestVTClient &client, const std::shared_p
 	receive_auxiliary(client, vt, { 0xFE, 0x26, 0xFF, 0xFF, 0xFF, 0xFF, busyCodes, 0x01 });
 }
 
-static std::vector<std::uint8_t> receive_preferred_payload(AuxiliaryTestCAN &can, test_helpers::TestTimeSource &clock)
+static std::vector<std::uint8_t> receive_ecu_to_vt_payload(AuxiliaryTestCAN &can, test_helpers::TestTimeSource &clock)
 {
 	CANNetworkManager::CANNetwork.update();
 	clock.update_for_ms(10);
@@ -338,7 +369,7 @@ static std::vector<std::uint8_t> receive_preferred_payload(AuxiliaryTestCAN &can
 			EXPECT_EQ(static_cast<std::size_t>(packets) * 7, payload.size());
 			if (payload.size() < length)
 			{
-				ADD_FAILURE() << "Incomplete Preferred Assignment transport";
+				ADD_FAILURE() << "Incomplete ECU to VT transport";
 				return {};
 			}
 			payload.resize(length);
@@ -349,7 +380,7 @@ static std::vector<std::uint8_t> receive_preferred_payload(AuxiliaryTestCAN &can
 			return payload;
 		}
 	}
-	ADD_FAILURE() << "No Preferred Assignment command transmitted";
+	ADD_FAILURE() << "No ECU to VT message transmitted";
 	return {};
 }
 
@@ -431,7 +462,7 @@ TEST_F(VirtualTerminalTest, PopulatedPreferredAssignmentsIncludePacketPadding)
 			expected.insert(expected.end(), { 2, 1, 0x78, 0x56 });
 		}
 		expected.resize(24, 0xFF);
-		EXPECT_EQ(expected, receive_preferred_payload(can, time_source));
+		EXPECT_EQ(expected, receive_ecu_to_vt_payload(can, time_source));
 	}
 }
 
@@ -599,7 +630,7 @@ TEST_F(VirtualTerminalTest, PreferredAssignmentRetriesThreeTimesThenReportsFailu
 			time_source.update_for_ms(1990); // Payload capture advances time by 10 ms.
 			update_auxiliary_client(client);
 		}
-		expect_empty_preferred_assignment(receive_preferred_payload(can, time_source));
+		expect_empty_preferred_assignment(receive_ecu_to_vt_payload(can, time_source));
 		EXPECT_TRUE(failures.empty());
 	}
 	time_source.update_for_ms(2000);
@@ -634,7 +665,7 @@ TEST_F(VirtualTerminalTest, PreferredAssignmentRejectionReportsAllDefinedReasons
 		std::vector<VirtualTerminalClient::AuxiliaryAssignmentFailureEvent> failures;
 		client.get_auxiliary_assignment_failure_event_dispatcher().add_listener([&](const auto &event) { failures.push_back(event); });
 		update_auxiliary_client(client);
-		expect_empty_preferred_assignment(receive_preferred_payload(can, time_source));
+		expect_empty_preferred_assignment(receive_ecu_to_vt_payload(can, time_source));
 		auxiliary_response(client, can.partner, entry.first);
 		ASSERT_EQ(1U, failures.size());
 		EXPECT_EQ(&client, failures.front().parentPointer);
@@ -659,7 +690,7 @@ TEST_F(VirtualTerminalTest, PreferredAssignmentIgnoresInvalidAndUnsolicitedRespo
 	client.get_auxiliary_assignment_failure_event_dispatcher().add_listener([&](const auto &event) { failures.push_back(event); });
 	auxiliary_response(client, can.partner, 0x01); // No active transaction.
 	update_auxiliary_client(client);
-	expect_empty_preferred_assignment(receive_preferred_payload(can, time_source));
+	expect_empty_preferred_assignment(receive_ecu_to_vt_payload(can, time_source));
 	auxiliary_response(client, auxiliary_device(99, 0x22), 0x01);
 	receive_auxiliary(client, can.partner, { 0x22, 0x01 });
 	EXPECT_TRUE(failures.empty());
@@ -689,7 +720,7 @@ TEST_F(VirtualTerminalTest, InvalidPreferredAssignmentsReportInvalidPreferences)
 		client.initialize(false);
 		client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
 		update_auxiliary_client(client);
-		expect_empty_preferred_assignment(receive_preferred_payload(can, time_source));
+		expect_empty_preferred_assignment(receive_ecu_to_vt_payload(can, time_source));
 		auxiliary_response(client, can.partner);
 		std::vector<VirtualTerminalClient::AuxiliaryAssignmentFailureEvent> failures;
 		client.get_auxiliary_assignment_failure_event_dispatcher().add_listener([&](const auto &event) { failures.push_back(event); });
@@ -802,7 +833,7 @@ TEST_F(VirtualTerminalTest, EmptyPreferredAssignmentWaitsForCorrectVTResponse)
 	auxiliary_maintenance(client, auxiliary_device(600, 0x20), 0x3344, 0);
 	update_auxiliary_client(client);
 	EXPECT_EQ(1U, preferences.loadCalls);
-	expect_empty_preferred_assignment(receive_preferred_payload(can, time_source));
+	expect_empty_preferred_assignment(receive_ecu_to_vt_payload(can, time_source));
 	auxiliary_response(client, auxiliary_device(99, 0x22));
 	update_auxiliary_client(client);
 	EXPECT_TRUE(auxiliary_frames(can.vt).empty());
@@ -867,7 +898,7 @@ TEST_F(VirtualTerminalTest, StaleInitializingDeviceReleasesPendingInitialSync)
 	EXPECT_TRUE(auxiliary_frames(can.vt).empty());
 	time_source.update_for_ms(301);
 	update_auxiliary_client(client);
-	expect_empty_preferred_assignment(receive_preferred_payload(can, time_source));
+	expect_empty_preferred_assignment(receive_ecu_to_vt_payload(can, time_source));
 }
 
 TEST_F(VirtualTerminalTest, ObsoletePreferredSnapshotCompletesOnACKOrTimeout)
@@ -886,7 +917,7 @@ TEST_F(VirtualTerminalTest, ObsoletePreferredSnapshotCompletesOnACKOrTimeout)
 		std::vector<VirtualTerminalClient::AuxiliaryAssignmentFailureEvent> failures;
 		client.get_auxiliary_assignment_failure_event_dispatcher().add_listener([&](const auto &event) { failures.push_back(event); });
 		update_auxiliary_client(client);
-		expect_empty_preferred_assignment(receive_preferred_payload(can, time_source));
+		expect_empty_preferred_assignment(receive_ecu_to_vt_payload(can, time_source));
 		auxiliary_response(client, can.partner);
 		update_auxiliary_client(client);
 		auxiliary_frames(can.vt);
@@ -951,7 +982,7 @@ TEST_F(VirtualTerminalTest, PersistentAssignmentWaitsForOutstandingPreferenceLoa
 	client.initialize(false);
 	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
 	update_auxiliary_client(client);
-	expect_empty_preferred_assignment(receive_preferred_payload(can, time_source));
+	expect_empty_preferred_assignment(receive_ecu_to_vt_payload(can, time_source));
 
 	const auto device = auxiliary_device(701, 0x25);
 	auxiliary_maintenance(client, device, 0x3344, 1);
@@ -1344,6 +1375,484 @@ TEST_F(VirtualTerminalTest, FullPoolAutoscalingWithDataChunkCallbacks)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
+namespace
+{
+	void append_u16(std::vector<std::uint8_t> &pool, std::uint16_t value)
+	{
+		pool.push_back(static_cast<std::uint8_t>(value & 0xFF));
+		pool.push_back(static_cast<std::uint8_t>(value >> 8));
+	}
+
+	void append_font_attributes(std::vector<std::uint8_t> &pool, std::uint16_t id, VirtualTerminalClient::FontSize size)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::FontAttributes));
+		pool.push_back(1); // Colour
+		pool.push_back(static_cast<std::uint8_t>(size));
+		pool.push_back(0); // Font type
+		pool.push_back(0); // Font style
+		pool.push_back(0); // Number of macros
+	}
+
+	void append_output_string(std::vector<std::uint8_t> &pool, std::uint16_t id, std::uint16_t width, std::uint16_t fontAttributes)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::OutputString));
+		append_u16(pool, width);
+		append_u16(pool, 40); // Height
+		pool.push_back(0); // Background colour
+		append_u16(pool, fontAttributes);
+		pool.push_back(0); // Options
+		append_u16(pool, 0xFFFF); // No variable reference
+		pool.push_back(1); // Justification
+		append_u16(pool, 4); // Length
+		for (char c : { 'T', 'E', 'X', 'T' })
+		{
+			pool.push_back(static_cast<std::uint8_t>(c));
+		}
+		pool.push_back(0); // Number of macros
+	}
+
+	void append_key(std::vector<std::uint8_t> &pool, std::uint16_t id, std::uint16_t child)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::Key));
+		pool.push_back(0); // Background colour
+		pool.push_back(1); // Key code
+		pool.push_back(1); // Number of objects
+		pool.push_back(0); // Number of macros
+		append_u16(pool, child);
+		append_u16(pool, 0); // X
+		append_u16(pool, 0); // Y
+	}
+
+	void append_input_string(std::vector<std::uint8_t> &pool, std::uint16_t id, std::uint16_t width, std::uint16_t fontAttributes)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::InputString));
+		append_u16(pool, width);
+		append_u16(pool, 40); // Height
+		pool.push_back(0); // Background colour
+		append_u16(pool, fontAttributes);
+		append_u16(pool, 0xFFFF); // No input attributes
+		pool.push_back(0); // Options
+		append_u16(pool, 0xFFFF); // No variable reference
+		pool.push_back(1); // Justification
+		pool.push_back(4); // Length
+		for (char c : { 'T', 'E', 'X', 'T' })
+		{
+			pool.push_back(static_cast<std::uint8_t>(c));
+		}
+		pool.push_back(1); // Enabled
+		pool.push_back(0); // Number of macros
+	}
+
+	void append_input_number(std::vector<std::uint8_t> &pool, std::uint16_t id, std::uint16_t width, std::uint16_t fontAttributes)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::InputNumber));
+		append_u16(pool, width);
+		append_u16(pool, 40); // Height
+		pool.push_back(0); // Background colour
+		append_u16(pool, fontAttributes);
+		pool.push_back(0); // Options
+		append_u16(pool, 0xFFFF); // No variable reference
+		for (std::uint32_t value : { 0u, 0u, 100u, 0u, 0x3F800000u }) // Value, minimum, maximum, offset, scale 1.0
+		{
+			append_u16(pool, static_cast<std::uint16_t>(value & 0xFFFF));
+			append_u16(pool, static_cast<std::uint16_t>(value >> 16));
+		}
+		pool.push_back(0); // Number of decimals
+		pool.push_back(0); // Format
+		pool.push_back(1); // Justification
+		pool.push_back(1); // Options 2: enabled
+		pool.push_back(0); // Number of macros
+	}
+
+	void append_object_pointer(std::vector<std::uint8_t> &pool, std::uint16_t id, std::uint16_t value)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::ObjectPointer));
+		append_u16(pool, value);
+	}
+
+	void append_container(std::vector<std::uint8_t> &pool, std::uint16_t id, std::uint16_t child)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::Container));
+		append_u16(pool, 60); // Width
+		append_u16(pool, 40); // Height
+		pool.push_back(0); // Hidden
+		pool.push_back(1); // Number of objects
+		pool.push_back(0); // Number of macros
+		append_u16(pool, child);
+		append_u16(pool, 0); // X
+		append_u16(pool, 0); // Y
+	}
+
+	void append_output_rectangle(std::vector<std::uint8_t> &pool, std::uint16_t id)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::OutputRectangle));
+		append_u16(pool, 0xFFFF); // No line attributes
+		append_u16(pool, 50); // Width
+		append_u16(pool, 20); // Height
+		pool.push_back(0); // Line suppression
+		append_u16(pool, 0xFFFF); // No fill attributes
+		pool.push_back(0); // Number of macros
+	}
+
+	void append_output_line(std::vector<std::uint8_t> &pool, std::uint16_t id)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::OutputLine));
+		append_u16(pool, 0xFFFF); // No line attributes
+		append_u16(pool, 50); // Width
+		append_u16(pool, 20); // Height
+		pool.push_back(0); // Line direction
+		pool.push_back(0); // Number of macros
+	}
+
+	void append_output_polygon(std::vector<std::uint8_t> &pool, std::uint16_t id)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::OutputPolygon));
+		append_u16(pool, 50); // Width
+		append_u16(pool, 20); // Height
+		append_u16(pool, 0xFFFF); // No line attributes
+		append_u16(pool, 0xFFFF); // No fill attributes
+		pool.push_back(3); // Polygon type: open
+		pool.push_back(3); // Number of points
+		pool.push_back(0); // Number of macros
+		for (std::uint16_t value : { 0, 0, 50, 0, 50, 20 })
+		{
+			append_u16(pool, value);
+		}
+	}
+
+	void append_data_mask(std::vector<std::uint8_t> &pool, std::uint16_t id, const std::vector<std::uint16_t> &children)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::DataMask));
+		pool.push_back(0); // Background colour
+		append_u16(pool, 0xFFFF); // No soft key mask
+		pool.push_back(static_cast<std::uint8_t>(children.size()));
+		pool.push_back(0); // Number of macros
+		for (std::uint16_t child : children)
+		{
+			append_u16(pool, child);
+			append_u16(pool, 0); // X
+			append_u16(pool, 0); // Y
+		}
+	}
+
+	void append_working_set(std::vector<std::uint8_t> &pool, std::uint16_t id, std::uint16_t activeMask, std::uint16_t child)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSet));
+		pool.push_back(0); // Background colour
+		pool.push_back(1); // Selectable
+		append_u16(pool, activeMask);
+		pool.push_back(1); // Number of children
+		pool.push_back(0); // Number of macros
+		pool.push_back(0); // Number of language codes
+		append_u16(pool, child);
+		append_u16(pool, 0); // X
+		append_u16(pool, 0); // Y
+	}
+
+	void append_animation(std::vector<std::uint8_t> &pool, std::uint16_t id, std::uint16_t child)
+	{
+		append_u16(pool, id);
+		pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::Animation));
+		append_u16(pool, 50); // Width
+		append_u16(pool, 20); // Height
+		append_u16(pool, 100); // Refresh interval
+		pool.push_back(0); // Value
+		pool.push_back(1); // Enabled
+		pool.push_back(0); // First child index
+		pool.push_back(0); // Last child index
+		pool.push_back(0); // Default child index
+		pool.push_back(0); // Options
+		pool.push_back(1); // Number of object references
+		pool.push_back(0); // Number of macros
+		append_u16(pool, child);
+		append_u16(pool, 0); // X
+		append_u16(pool, 0); // Y
+	}
+
+	using ValuePair = std::pair<std::uint16_t, std::uint16_t>;
+
+	// The two pixel values a command carries at this offset
+	std::pair<std::uint16_t, std::uint16_t> command_values(const std::vector<std::uint8_t> &command, std::size_t offset)
+	{
+		EXPECT_GE(command.size(), offset + 4);
+		if (command.size() < (offset + 4))
+		{
+			return { 0, 0 };
+		}
+		return { static_cast<std::uint16_t>(command[offset] | (command[offset + 1] << 8)),
+			       static_cast<std::uint16_t>(command[offset + 2] | (command[offset + 3] << 8)) };
+	}
+
+	// The object with this ID in an uploaded pool: its offset, or -1.
+	int find_object(const std::vector<std::uint8_t> &pool, std::uint16_t id, DerivedTestVTClient &client)
+	{
+		std::vector<std::uint8_t> copy(pool);
+		std::size_t offset = 0;
+		while (offset + 3 <= copy.size())
+		{
+			if ((copy[offset] | (copy[offset + 1] << 8)) == id)
+			{
+				return static_cast<int>(offset);
+			}
+			std::uint32_t size = client.test_wrapper_get_number_bytes_in_object(&copy[offset], static_cast<std::uint32_t>(copy.size() - offset));
+			if (0 == size)
+			{
+				break;
+			}
+			offset += size;
+		}
+		return -1;
+	}
+
+	// The width of the object with this ID in an uploaded pool, which follows its ID and type
+	int width_of(const std::vector<std::uint8_t> &pool, std::uint16_t id, DerivedTestVTClient &client)
+	{
+		int offset = find_object(pool, id, client);
+		EXPECT_GE(offset, 0);
+		return (offset < 0) ? 0 : (pool[offset + 3] | (pool[offset + 4] << 8));
+	}
+
+	// The font size of the font attributes with this ID in an uploaded pool, which follows their ID, type and colour
+	VirtualTerminalClient::FontSize font_size_of(const std::vector<std::uint8_t> &pool, std::uint16_t id, DerivedTestVTClient &client)
+	{
+		int offset = find_object(pool, id, client);
+		EXPECT_GE(offset, 0);
+		return (offset < 0) ? VirtualTerminalClient::FontSize::Size6x8 : static_cast<VirtualTerminalClient::FontSize>(pool[offset + 4]);
+	}
+} // namespace
+
+// A Key is sized by the soft key designator, but the label it shows is a separate object in
+// the pool, and so is that label's font. Scaled with the data mask factor, a label on a
+// 60 px key designed for a 200 px mask grows to 144 px and a much larger font on a 480 px
+// mask with 62 px keys, and spills off the key. Objects a Key shows, and fonts only they use,
+// must follow the soft key factor.
+TEST_F(VirtualTerminalTest, AutoscalingSoftKeyLabelsFollowTheKey)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	constexpr std::uint16_t KEY_FONT = 100;
+	constexpr std::uint16_t MASK_FONT = 101;
+	constexpr std::uint16_t KEY_LABEL = 200;
+	constexpr std::uint16_t MASK_LABEL = 201;
+	constexpr std::uint16_t KEY_LABEL_SHARED_FONT = 202;
+	std::vector<std::uint8_t> pool;
+	append_font_attributes(pool, KEY_FONT, VirtualTerminalClient::FontSize::Size8x8);
+	append_font_attributes(pool, MASK_FONT, VirtualTerminalClient::FontSize::Size8x8);
+	append_output_string(pool, KEY_LABEL, 60, KEY_FONT);
+	append_output_string(pool, MASK_LABEL, 60, MASK_FONT);
+	append_output_string(pool, KEY_LABEL_SHARED_FONT, 60, MASK_FONT);
+	append_key(pool, 300, KEY_LABEL);
+	append_key(pool, 301, KEY_LABEL_SHARED_FONT);
+
+	clientUnderTest.set_object_pool(0, &pool);
+	clientUnderTest.set_object_pool_scaling(0, 200, 60);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	// 62 px keys keep the soft key factor (62 / 60) inside remap_font_to_scale()'s 5 % fudge,
+	// so the key font is expected to stay 8x8 whatever the font tables do above 1.05
+	clientUnderTest.test_wrapper_set_screen(480, 62);
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+
+	const std::vector<std::uint8_t> &scaled = clientUnderTest.test_wrapper_get_scaled_pool(0);
+
+	// Labels on keys: the soft key factor (62 / 60), so they still fit the 62 px key.
+	EXPECT_EQ(62, width_of(scaled, KEY_LABEL, clientUnderTest));
+	EXPECT_EQ(62, width_of(scaled, KEY_LABEL_SHARED_FONT, clientUnderTest));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size8x8, font_size_of(scaled, KEY_FONT, clientUnderTest));
+	// The data mask label and its font: the data mask factor (480 / 200), as before.
+	EXPECT_EQ(144, width_of(scaled, MASK_LABEL, clientUnderTest));
+	EXPECT_NE(VirtualTerminalClient::FontSize::Size8x8, font_size_of(scaled, MASK_FONT, clientUnderTest));
+}
+
+// Input strings and numbers use a font too, and can't be on a key (ISO 11783-6 Table A.2), so a
+// font a key label shares with one of them must keep the data mask factor, like a font shared
+// with an output string on a mask.
+TEST_F(VirtualTerminalTest, AutoscalingKeepsTheDataMaskFactorForFontsSharedWithInputFields)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	constexpr std::uint16_t STRING_FONT = 110;
+	constexpr std::uint16_t NUMBER_FONT = 111;
+	constexpr std::uint16_t KEY_LABEL_STRING_FONT = 210;
+	constexpr std::uint16_t KEY_LABEL_NUMBER_FONT = 211;
+	constexpr std::uint16_t MASK_INPUT_STRING = 220;
+	constexpr std::uint16_t MASK_INPUT_NUMBER = 221;
+	std::vector<std::uint8_t> pool;
+	append_font_attributes(pool, STRING_FONT, VirtualTerminalClient::FontSize::Size8x8);
+	append_font_attributes(pool, NUMBER_FONT, VirtualTerminalClient::FontSize::Size8x8);
+	append_output_string(pool, KEY_LABEL_STRING_FONT, 60, STRING_FONT);
+	append_output_string(pool, KEY_LABEL_NUMBER_FONT, 60, NUMBER_FONT);
+	append_input_string(pool, MASK_INPUT_STRING, 60, STRING_FONT);
+	append_input_number(pool, MASK_INPUT_NUMBER, 60, NUMBER_FONT);
+	append_key(pool, 310, KEY_LABEL_STRING_FONT);
+	append_key(pool, 311, KEY_LABEL_NUMBER_FONT);
+
+	clientUnderTest.set_object_pool(0, &pool);
+	clientUnderTest.set_object_pool_scaling(0, 200, 60);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	clientUnderTest.test_wrapper_set_screen(480, 62);
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+
+	const std::vector<std::uint8_t> &scaled = clientUnderTest.test_wrapper_get_scaled_pool(0);
+
+	// The key labels themselves still follow the key.
+	EXPECT_EQ(62, width_of(scaled, KEY_LABEL_STRING_FONT, clientUnderTest));
+	EXPECT_EQ(62, width_of(scaled, KEY_LABEL_NUMBER_FONT, clientUnderTest));
+	// The input fields and the fonts they share with the labels: the data mask factor (480 / 200).
+	EXPECT_EQ(144, width_of(scaled, MASK_INPUT_STRING, clientUnderTest));
+	EXPECT_EQ(144, width_of(scaled, MASK_INPUT_NUMBER, clientUnderTest));
+	EXPECT_NE(VirtualTerminalClient::FontSize::Size8x8, font_size_of(scaled, STRING_FONT, clientUnderTest));
+	EXPECT_NE(VirtualTerminalClient::FontSize::Size8x8, font_size_of(scaled, NUMBER_FONT, clientUnderTest));
+}
+
+// An Object Pointer on a key (VT 2+) shows the object it points at on that key, so that object
+// and its font follow the soft key factor too. A null pointer shows nothing.
+TEST_F(VirtualTerminalTest, AutoscalingFollowsObjectPointersOnKeys)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	constexpr std::uint16_t POINTED_FONT = 120;
+	constexpr std::uint16_t POINTED_LABEL = 230;
+	std::vector<std::uint8_t> pool;
+	append_font_attributes(pool, POINTED_FONT, VirtualTerminalClient::FontSize::Size8x8);
+	append_output_string(pool, POINTED_LABEL, 60, POINTED_FONT);
+	append_object_pointer(pool, 240, POINTED_LABEL);
+	append_object_pointer(pool, 241, 0xFFFF);
+	append_key(pool, 320, 240);
+	append_key(pool, 321, 241);
+
+	clientUnderTest.set_object_pool(0, &pool);
+	clientUnderTest.set_object_pool_scaling(0, 200, 60);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	clientUnderTest.test_wrapper_set_screen(480, 62);
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+
+	const std::vector<std::uint8_t> &scaled = clientUnderTest.test_wrapper_get_scaled_pool(0);
+	EXPECT_EQ(62, width_of(scaled, POINTED_LABEL, clientUnderTest));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size8x8, font_size_of(scaled, POINTED_FONT, clientUnderTest));
+}
+
+// The pools of a working set are uploaded together, so a key in one pool can show a label from
+// another, and a font in the keys' pool can also be used by a mask in another pool. The search
+// for soft key objects has to look across all pools, or the label overflows its key and the
+// mask text shrinks.
+TEST_F(VirtualTerminalTest, AutoscalingSoftKeyObjectsAcrossPools)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	constexpr std::uint16_t SHARED_FONT = 130; // Pool 0, used by a key label in pool 0 and a mask label in pool 1
+	constexpr std::uint16_t OTHER_POOL_KEY_FONT = 131; // Pool 1, used only by the label a pool 0 key shows
+	constexpr std::uint16_t KEY_LABEL_SHARED_FONT = 250; // Pool 0
+	constexpr std::uint16_t OTHER_POOL_KEY_LABEL = 251; // Pool 1, shown by a key in pool 0
+	constexpr std::uint16_t OTHER_POOL_MASK_LABEL = 252; // Pool 1
+	std::vector<std::uint8_t> keyPool;
+	append_font_attributes(keyPool, SHARED_FONT, VirtualTerminalClient::FontSize::Size8x8);
+	append_output_string(keyPool, KEY_LABEL_SHARED_FONT, 60, SHARED_FONT);
+	append_key(keyPool, 330, KEY_LABEL_SHARED_FONT);
+	append_key(keyPool, 331, OTHER_POOL_KEY_LABEL);
+	std::vector<std::uint8_t> maskPool;
+	append_font_attributes(maskPool, OTHER_POOL_KEY_FONT, VirtualTerminalClient::FontSize::Size8x8);
+	append_output_string(maskPool, OTHER_POOL_KEY_LABEL, 60, OTHER_POOL_KEY_FONT);
+	append_output_string(maskPool, OTHER_POOL_MASK_LABEL, 60, SHARED_FONT);
+
+	clientUnderTest.set_object_pool(0, &keyPool);
+	clientUnderTest.set_object_pool(1, &maskPool);
+	clientUnderTest.set_object_pool_scaling(0, 200, 60);
+	clientUnderTest.set_object_pool_scaling(1, 200, 60);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	clientUnderTest.test_wrapper_set_screen(480, 62);
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+
+	const std::vector<std::uint8_t> &scaledKeyPool = clientUnderTest.test_wrapper_get_scaled_pool(0);
+	const std::vector<std::uint8_t> &scaledMaskPool = clientUnderTest.test_wrapper_get_scaled_pool(1);
+
+	// A label in pool 1 shown by a key in pool 0 follows the key, and so does the font only it uses.
+	EXPECT_EQ(62, width_of(scaledMaskPool, OTHER_POOL_KEY_LABEL, clientUnderTest));
+	EXPECT_EQ(VirtualTerminalClient::FontSize::Size8x8, font_size_of(scaledMaskPool, OTHER_POOL_KEY_FONT, clientUnderTest));
+	// The key label in pool 0 follows its key.
+	EXPECT_EQ(62, width_of(scaledKeyPool, KEY_LABEL_SHARED_FONT, clientUnderTest));
+	// A font in pool 0 that a mask in pool 1 also uses keeps the data mask factor (480 / 200).
+	EXPECT_EQ(144, width_of(scaledMaskPool, OTHER_POOL_MASK_LABEL, clientUnderTest));
+	EXPECT_NE(VirtualTerminalClient::FontSize::Size8x8, font_size_of(scaledKeyPool, SHARED_FONT, clientUnderTest));
+}
+
+// A pool without auto-scaling is uploaded as given, so it must not be resized (it has no original
+// dimensions to divide by), but its objects still count as font users outside the keys.
+TEST_F(VirtualTerminalTest, AutoscalingLeavesPoolsWithoutScalingAloneButSeesTheirFontUsers)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	constexpr std::uint16_t SHARED_FONT = 140;
+	constexpr std::uint16_t KEY_LABEL = 260;
+	constexpr std::uint16_t UNSCALED_INPUT = 261;
+	std::vector<std::uint8_t> scaledPool;
+	append_font_attributes(scaledPool, SHARED_FONT, VirtualTerminalClient::FontSize::Size8x8);
+	append_output_string(scaledPool, KEY_LABEL, 60, SHARED_FONT);
+	append_key(scaledPool, 340, KEY_LABEL);
+	std::vector<std::uint8_t> unscaledPool;
+	append_input_string(unscaledPool, UNSCALED_INPUT, 60, SHARED_FONT);
+
+	clientUnderTest.set_object_pool(0, &scaledPool);
+	clientUnderTest.set_object_pool(1, &unscaledPool);
+	clientUnderTest.set_object_pool_scaling(0, 200, 60);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	clientUnderTest.test_wrapper_set_screen(480, 62);
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+
+	// The unscaled pool is uploaded from the original data, so no scaled copy is kept.
+	EXPECT_TRUE(clientUnderTest.test_wrapper_get_scaled_pool(1).empty());
+
+	const std::vector<std::uint8_t> &scaled = clientUnderTest.test_wrapper_get_scaled_pool(0);
+	EXPECT_EQ(62, width_of(scaled, KEY_LABEL, clientUnderTest));
+	// The input string in the unscaled pool uses the font too, so it keeps the data mask factor.
+	EXPECT_NE(VirtualTerminalClient::FontSize::Size8x8, font_size_of(scaled, SHARED_FONT, clientUnderTest));
+}
+
+// IDs that are not objects in any pool, such as the null object ID on a key or in an object
+// pointer, or a font a label references but no pool holds, are not reported.
+TEST_F(VirtualTerminalTest, SoftKeyScaledObjectIdsOnlyHoldObjectsInThePools)
+{
+	constexpr std::uint16_t MISSING_FONT = 150;
+	constexpr std::uint16_t KEY_LABEL = 270;
+	constexpr std::uint16_t NULL_POINTER = 271;
+	std::vector<std::uint8_t> pool;
+	append_output_string(pool, KEY_LABEL, 60, MISSING_FONT);
+	append_object_pointer(pool, NULL_POINTER, 0xFFFF);
+	append_key(pool, 350, KEY_LABEL);
+	append_key(pool, 351, NULL_POINTER);
+	append_key(pool, 352, 0xFFFF);
+
+	const std::vector<std::uint16_t> ids = DerivedTestVTClient::test_wrapper_get_soft_key_scaled_object_ids({ &pool });
+	EXPECT_EQ((std::vector<std::uint16_t>{ KEY_LABEL, NULL_POINTER }), ids);
+}
+
+// A Container on a key shows its children on that key, so they and their fonts are found too.
+TEST_F(VirtualTerminalTest, SoftKeyScaledObjectIdsFollowContainersOnKeys)
+{
+	constexpr std::uint16_t LABEL_FONT = 160;
+	constexpr std::uint16_t CONTAINER_LABEL = 280;
+	constexpr std::uint16_t CONTAINER = 290;
+	std::vector<std::uint8_t> pool;
+	append_font_attributes(pool, LABEL_FONT, VirtualTerminalClient::FontSize::Size8x8);
+	append_output_string(pool, CONTAINER_LABEL, 60, LABEL_FONT);
+	append_container(pool, CONTAINER, CONTAINER_LABEL);
+	append_key(pool, 360, CONTAINER);
+
+	const std::vector<std::uint16_t> ids = DerivedTestVTClient::test_wrapper_get_soft_key_scaled_object_ids({ &pool });
+	EXPECT_EQ((std::vector<std::uint16_t>{ LABEL_FONT, CONTAINER_LABEL, CONTAINER }), ids);
+}
+
 TEST_F(VirtualTerminalTest, FullPoolAutoscalingWithPointer)
 {
 	NAME clientNAME(0);
@@ -1481,6 +1990,405 @@ TEST_F(VirtualTerminalTest, FontRemappingKeepsTheFontBetweenTheFudgeAndTheFirstT
 	EXPECT_EQ(FontSize::Size8x12, clientUnderTest.test_wrapper_remap_font_to_scale(FontSize::Size8x8, 1.5f));
 	EXPECT_EQ(FontSize::Size16x16, clientUnderTest.test_wrapper_remap_font_to_scale(FontSize::Size12x16, 1.3f));
 	EXPECT_EQ(FontSize::Size32x32, clientUnderTest.test_wrapper_remap_font_to_scale(FontSize::Size24x32, 1.3f));
+}
+
+// #221: commands that carry pixels can be scaled like the uploaded pool. The pool is drawn for
+// 200 px masks and 60 px keys and shown on a 480 px mask (factor 2.4) with 90 px keys (1.5).
+TEST_F(VirtualTerminalTest, AutoScaledCommandsUseTheFactorOfTheObject)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	constexpr std::uint16_t KEY_LABEL = 200;
+	constexpr std::uint16_t KEY = 300;
+	constexpr std::uint16_t RECTANGLE = 400;
+	constexpr std::uint16_t LINE = 401;
+	constexpr std::uint16_t POLYGON = 402;
+	constexpr std::uint16_t MASK = 500;
+	std::vector<std::uint8_t> pool;
+	append_font_attributes(pool, 100, VirtualTerminalClient::FontSize::Size8x8);
+	append_output_string(pool, KEY_LABEL, 60, 100);
+	append_key(pool, KEY, KEY_LABEL);
+	append_output_rectangle(pool, RECTANGLE);
+	append_output_line(pool, LINE);
+	append_output_polygon(pool, POLYGON);
+	append_data_mask(pool, MASK, { RECTANGLE, LINE, POLYGON, KEY_LABEL });
+
+	clientUnderTest.set_object_pool(0, &pool);
+	clientUnderTest.set_object_pool_scaling(0, 200, 60);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	clientUnderTest.test_wrapper_set_screen(480, 90);
+
+	// Before the pool is scaled, nothing is
+	EXPECT_FLOAT_EQ(1.0f, clientUnderTest.get_object_scale_factor(RECTANGLE));
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+
+	EXPECT_FLOAT_EQ(2.4f, clientUnderTest.get_object_scale_factor(RECTANGLE));
+	EXPECT_FLOAT_EQ(2.4f, clientUnderTest.get_object_scale_factor(MASK));
+	EXPECT_FLOAT_EQ(1.5f, clientUnderTest.get_object_scale_factor(KEY));
+	EXPECT_FLOAT_EQ(1.5f, clientUnderTest.get_object_scale_factor(KEY_LABEL));
+	EXPECT_FLOAT_EQ(1.0f, clientUnderTest.get_object_scale_factor(999));
+
+	// Without autoScale the values go out as given
+	EXPECT_TRUE(clientUnderTest.send_change_size_command(RECTANGLE, 50, 20));
+	EXPECT_EQ(ValuePair(50, 20), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+
+	EXPECT_TRUE(clientUnderTest.send_change_size_command(RECTANGLE, 50, 20, true));
+	EXPECT_EQ(ValuePair(120, 48), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+	EXPECT_TRUE(clientUnderTest.send_change_size_command(KEY_LABEL, 60, 20, true));
+	EXPECT_EQ(ValuePair(90, 30), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+	EXPECT_TRUE(clientUnderTest.send_change_size_command(RECTANGLE, 60000, 1, true));
+	EXPECT_EQ(ValuePair(0xFFFF, 2), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+
+	EXPECT_TRUE(clientUnderTest.send_change_endpoint(LINE, 50, 20, VirtualTerminalClient::LineDirection::TopLeftToBottomRightOfEnclosingVirtualRectangle, true));
+	EXPECT_EQ(ValuePair(120, 48), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+	EXPECT_TRUE(clientUnderTest.send_change_polygon_scale(POLYGON, 50, 20, true));
+	EXPECT_EQ(ValuePair(120, 48), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+	EXPECT_TRUE(clientUnderTest.send_change_polygon_point(POLYGON, 1, 50, 20, true));
+	EXPECT_EQ(ValuePair(120, 48), command_values(clientUnderTest.test_wrapper_take_queued_command(), 4));
+
+	// Positions follow the parent, which positions its children: the mask, or the key
+	EXPECT_TRUE(clientUnderTest.send_change_child_position(RECTANGLE, MASK, 10, 20, true));
+	EXPECT_EQ(ValuePair(24, 48), command_values(clientUnderTest.test_wrapper_take_queued_command(), 5));
+	EXPECT_TRUE(clientUnderTest.send_change_child_position(KEY_LABEL, KEY, 10, 20, true));
+	EXPECT_EQ(ValuePair(15, 30), command_values(clientUnderTest.test_wrapper_take_queued_command(), 5));
+	// The key label is also on the mask: it has the soft key factor, but the mask positions it
+	EXPECT_TRUE(clientUnderTest.send_change_child_position(KEY_LABEL, MASK, 10, 20, true));
+	EXPECT_EQ(ValuePair(24, 48), command_values(clientUnderTest.test_wrapper_take_queued_command(), 5));
+	EXPECT_TRUE(clientUnderTest.send_change_child_position(RECTANGLE, MASK, static_cast<std::uint16_t>(-10), 0, true));
+	EXPECT_EQ(ValuePair(static_cast<std::uint16_t>(-24), 0), command_values(clientUnderTest.test_wrapper_take_queued_command(), 5));
+
+	// Relative moves carry an offset of 127, and stay within -127 to +128 px
+	EXPECT_TRUE(clientUnderTest.send_change_child_location(RECTANGLE, MASK, 127 + 10, 127 - 10, true));
+	std::vector<std::uint8_t> command = clientUnderTest.test_wrapper_take_queued_command();
+	ASSERT_EQ(8u, command.size());
+	EXPECT_EQ(127 + 24, command[5]);
+	EXPECT_EQ(127 - 24, command[6]);
+	EXPECT_TRUE(clientUnderTest.send_change_child_location(RECTANGLE, MASK, 127 + 100, 127 - 100, true));
+	command = clientUnderTest.test_wrapper_take_queued_command();
+	ASSERT_EQ(8u, command.size());
+	EXPECT_EQ(255, command[5]);
+	EXPECT_EQ(0, command[6]);
+}
+
+// With several pools, each object is scaled with the factors of its own pool, and objects in a
+// pool without autoscaling are not scaled at all.
+TEST_F(VirtualTerminalTest, AutoScaledCommandsUseTheFactorsOfTheObjectsPool)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	std::vector<std::uint8_t> firstPool;
+	append_output_rectangle(firstPool, 410);
+	std::vector<std::uint8_t> secondPool;
+	append_output_rectangle(secondPool, 420);
+	std::vector<std::uint8_t> unscaledPool;
+	append_output_rectangle(unscaledPool, 430);
+
+	clientUnderTest.set_object_pool(0, &firstPool);
+	clientUnderTest.set_object_pool_scaling(0, 200, 60);
+	clientUnderTest.set_object_pool(1, &secondPool);
+	clientUnderTest.set_object_pool_scaling(1, 240, 60);
+	clientUnderTest.set_object_pool(2, &unscaledPool);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	clientUnderTest.test_wrapper_set_screen(480, 90);
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+
+	EXPECT_FLOAT_EQ(2.4f, clientUnderTest.get_object_scale_factor(410));
+	EXPECT_FLOAT_EQ(2.0f, clientUnderTest.get_object_scale_factor(420));
+	EXPECT_FLOAT_EQ(1.0f, clientUnderTest.get_object_scale_factor(430));
+
+	EXPECT_TRUE(clientUnderTest.send_change_size_command(420, 50, 20, true));
+	EXPECT_EQ(ValuePair(100, 40), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+	EXPECT_TRUE(clientUnderTest.send_change_size_command(430, 50, 20, true));
+	EXPECT_EQ(ValuePair(50, 20), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+}
+
+// Commands with autoScale are scaled when they are sent, with the factors of the VT they go to: one
+// queued before the pools are scaled is still scaled, and the factors don't outlive a disconnect.
+TEST_F(VirtualTerminalTest, AutoScaledCommandsAreScaledForTheVtTheyAreSentTo)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	std::vector<std::uint8_t> pool;
+	append_output_rectangle(pool, 400);
+	append_data_mask(pool, 500, { 400 });
+	clientUnderTest.set_object_pool(0, &pool);
+	clientUnderTest.set_object_pool_scaling(0, 200, 60);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+
+	// Queued at startup, before there is a VT
+	EXPECT_TRUE(clientUnderTest.send_change_size_command(400, 50, 20, true));
+	clientUnderTest.test_wrapper_set_screen(480, 90);
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+	EXPECT_EQ(ValuePair(120, 48), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+
+	// Queued for the 480 px VT, which then goes away; the next VT is 200 px
+	EXPECT_TRUE(clientUnderTest.send_change_size_command(400, 50, 20, true));
+	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Disconnected);
+	EXPECT_FLOAT_EQ(1.0f, clientUnderTest.get_object_scale_factor(400));
+	clientUnderTest.test_wrapper_set_screen(200, 60);
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+	EXPECT_EQ(ValuePair(50, 20), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+}
+
+// A VT with a matching version label loads the pools from its memory, which skips the upload and
+// with it the scaling: the factors are set all the same, and the copies of the pools are released.
+TEST_F(VirtualTerminalTest, AutoScaledCommandsAfterTheVtLoadsTheVersion)
+{
+	AuxiliaryTestCAN can(time_source);
+	DerivedTestVTClient client(can.partner, can.ecu);
+
+	std::vector<std::uint8_t> pool;
+	append_output_rectangle(pool, 400);
+	append_data_mask(pool, 500, { 400 });
+	client.set_object_pool(0, &pool, "TEST");
+	client.set_object_pool_scaling(0, 200, 60);
+	client.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	client.test_wrapper_set_screen(480, 90);
+	client.initialize(false);
+
+	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::SendLoadVersion);
+	update_auxiliary_client(client);
+
+	EXPECT_FLOAT_EQ(2.4f, client.get_object_scale_factor(400));
+	EXPECT_TRUE(client.test_wrapper_get_scaled_pool(0).empty());
+	EXPECT_TRUE(client.send_change_size_command(400, 50, 20, true));
+	EXPECT_EQ(ValuePair(120, 48), command_values(client.test_wrapper_take_queued_command(), 3));
+}
+
+namespace
+{
+	std::vector<std::uint8_t> slowPool;
+	test_helpers::TestTimeSource *slowPoolClock = nullptr;
+	constexpr std::uint32_t SLOW_POOL_MS_PER_CALL = 200;
+
+	// Serves the pool like a slow medium would
+	bool read_slow_pool(std::uint32_t, std::uint32_t bytesOffset, std::uint32_t numberOfBytesNeeded, std::uint8_t *chunkBuffer, void *)
+	{
+		memcpy(chunkBuffer, &slowPool[bytesOffset], numberOfBytesNeeded);
+		slowPoolClock->simulate_delay_ms(SLOW_POOL_MS_PER_CALL);
+		return true;
+	}
+} // namespace
+
+// Reading the pools for the factors can take longer than Send Load Version may wait for the VT,
+// with a large pool served byte by byte through the data callback. That time doesn't count.
+TEST_F(VirtualTerminalTest, AutoScaledCommandsAfterTheVtLoadsAPoolThatIsSlowToRead)
+{
+	AuxiliaryTestCAN can(time_source);
+	DerivedTestVTClient client(can.partner, can.ecu);
+
+	slowPool.clear();
+	append_output_rectangle(slowPool, 400);
+	append_data_mask(slowPool, 500, { 400 });
+	slowPoolClock = &time_source;
+	ASSERT_GT(slowPool.size() * SLOW_POOL_MS_PER_CALL, 3000u); // Longer than VT_STATUS_TIMEOUT_MS
+	client.register_object_pool_data_chunk_callback(0, static_cast<std::uint32_t>(slowPool.size()), read_slow_pool, "TEST");
+	client.set_object_pool_scaling(0, 200, 60);
+	client.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	client.test_wrapper_set_screen(480, 90);
+	client.initialize(false);
+
+	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::SendLoadVersion);
+	update_auxiliary_client(client);
+
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::WaitForLoadVersionResponse, client.get_state());
+	EXPECT_FLOAT_EQ(2.4f, client.get_object_scale_factor(400));
+	slowPoolClock = nullptr;
+}
+
+// A pool whose last object claims more bytes than are left ends the search there, instead of
+// reading past the end of the pool.
+TEST_F(VirtualTerminalTest, AutoScaledCommandsAfterTheVtLoadsATruncatedPool)
+{
+	AuxiliaryTestCAN can(time_source);
+	DerivedTestVTClient client(can.partner, can.ecu);
+
+	std::vector<std::uint8_t> pool;
+	append_output_rectangle(pool, 400);
+	append_u16(pool, 500);
+	pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::DataMask));
+	pool.push_back(0); // Background colour
+	append_u16(pool, 0xFFFF); // No soft key mask
+	pool.push_back(2); // Number of objects, which are missing
+	pool.push_back(0); // Number of macros
+	client.set_object_pool(0, &pool, "TEST");
+	client.set_object_pool_scaling(0, 200, 60);
+	client.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	client.test_wrapper_set_screen(480, 90);
+	client.initialize(false);
+
+	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::SendLoadVersion);
+	update_auxiliary_client(client);
+
+	EXPECT_FLOAT_EQ(2.4f, client.get_object_scale_factor(400));
+	EXPECT_FLOAT_EQ(1.0f, client.get_object_scale_factor(500));
+}
+
+// Both ways a command reaches the bus scale it: from the queue once connected, and straight away
+// when sent while connected.
+TEST_F(VirtualTerminalTest, AutoScaledCommandsAreScaledOnTheBus)
+{
+	AuxiliaryTestCAN can(time_source);
+	DerivedTestVTClient client(can.partner, can.ecu);
+
+	std::vector<std::uint8_t> pool;
+	append_output_rectangle(pool, 400);
+	append_data_mask(pool, 500, { 400 });
+	client.set_object_pool(0, &pool);
+	client.set_object_pool_scaling(0, 200, 60);
+	client.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	client.test_wrapper_set_screen(480, 90);
+	client.initialize(false);
+	ASSERT_TRUE(client.test_wrapper_scale_object_pools());
+	auxiliary_frames(can.vt);
+
+	// The Change Size commands sent on the bus since the last call
+	auto sent_change_sizes = [&can]() {
+		std::vector<std::vector<std::uint8_t>> commands;
+		for (const auto &frame : auxiliary_frames(can.vt))
+		{
+			if ((CANIdentifier(frame.identifier).get_parameter_group_number() == 0xE700) && (frame.data[0] == 0xA6))
+			{
+				commands.emplace_back(frame.data, frame.data + frame.dataLength);
+			}
+		}
+		return commands;
+	};
+
+	// Queued while not connected, then sent from the queue
+	EXPECT_TRUE(client.send_change_size_command(400, 50, 20, true));
+	EXPECT_TRUE(sent_change_sizes().empty());
+	client.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::Connected);
+	client.test_wrapper_process_command_queue();
+	auto commands = sent_change_sizes();
+	ASSERT_EQ(1u, commands.size());
+	EXPECT_EQ(ValuePair(120, 48), command_values(commands.front(), 3));
+
+	// Once the VT has answered, a command sent while connected goes out straight away
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(
+	  6, 0xE600, can.ecu, can.partner, { 0xA6, 0x90, 0x01, 0, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_TRUE(client.send_change_size_command(400, 60, 10, true));
+	commands = sent_change_sizes();
+	ASSERT_EQ(1u, commands.size());
+	EXPECT_EQ(ValuePair(144, 24), command_values(commands.front(), 3));
+}
+
+// Autoscaling leaves a Working Set and an Animation alone, so commands on them aren't scaled either
+TEST_F(VirtualTerminalTest, AutoScaledCommandsLeaveObjectsTheUploadDoesNotScale)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	std::vector<std::uint8_t> pool;
+	append_working_set(pool, 1, 500, 400);
+	append_output_rectangle(pool, 400);
+	append_animation(pool, 600, 400);
+	append_data_mask(pool, 500, { 400, 600 });
+	clientUnderTest.set_object_pool(0, &pool);
+	clientUnderTest.set_object_pool_scaling(0, 200, 60);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	clientUnderTest.test_wrapper_set_screen(480, 90);
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+
+	EXPECT_FLOAT_EQ(1.0f, clientUnderTest.get_object_scale_factor(1));
+	EXPECT_FLOAT_EQ(1.0f, clientUnderTest.get_object_scale_factor(600));
+	EXPECT_FLOAT_EQ(2.4f, clientUnderTest.get_object_scale_factor(400));
+
+	EXPECT_TRUE(clientUnderTest.send_change_child_position(400, 1, 10, 20, true));
+	EXPECT_EQ(ValuePair(10, 20), command_values(clientUnderTest.test_wrapper_take_queued_command(), 5));
+	EXPECT_TRUE(clientUnderTest.send_change_size_command(600, 50, 20, true));
+	EXPECT_EQ(ValuePair(50, 20), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+}
+
+// Below a factor of 1, a size above 0 stays at least 1 px: 0 hides the object (F.18), and a Change
+// Polygon Scale to 0 would collapse its points. 0 itself stays 0, and coordinates may become 0.
+TEST_F(VirtualTerminalTest, AutoScaledCommandsKeepSizesAboveZero)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	std::vector<std::uint8_t> pool;
+	append_output_rectangle(pool, 400);
+	append_output_line(pool, 401);
+	append_output_polygon(pool, 402);
+	append_data_mask(pool, 500, { 400, 401, 402 });
+	clientUnderTest.set_object_pool(0, &pool);
+	clientUnderTest.set_object_pool_scaling(0, 480, 90);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	clientUnderTest.test_wrapper_set_screen(200, 60); // Factor 0.4167
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+
+	EXPECT_TRUE(clientUnderTest.send_change_size_command(400, 2, 0, true));
+	EXPECT_EQ(ValuePair(1, 0), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+	EXPECT_TRUE(clientUnderTest.send_change_endpoint(401, 0, 2, VirtualTerminalClient::LineDirection::TopLeftToBottomRightOfEnclosingVirtualRectangle, true));
+	EXPECT_EQ(ValuePair(0, 1), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+	EXPECT_TRUE(clientUnderTest.send_change_polygon_scale(402, 1, 2, true));
+	EXPECT_EQ(ValuePair(1, 1), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+	EXPECT_TRUE(clientUnderTest.send_change_polygon_point(402, 1, 2, 24, true));
+	EXPECT_EQ(ValuePair(0, 10), command_values(clientUnderTest.test_wrapper_take_queued_command(), 4));
+
+	// A relative move of 1 px truncates to no move: send_change_child_location() says so
+	EXPECT_TRUE(clientUnderTest.send_change_child_location(400, 500, 127 + 1, 127 - 10, true));
+	const std::vector<std::uint8_t> command = clientUnderTest.test_wrapper_take_queued_command();
+	ASSERT_EQ(8u, command.size());
+	EXPECT_EQ(127, command[5]);
+	EXPECT_EQ(127 - 4, command[6]);
+}
+
+// Autoscaling scales an Input Boolean's width (ResizeInputBoolean), so a Change Size on one is
+// scaled too: otherwise a 30 px box uploaded at 72 px would shrink back to 30 px.
+TEST_F(VirtualTerminalTest, AutoScaledCommandsScaleInputBooleansLikeTheUpload)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	std::vector<std::uint8_t> pool;
+	append_u16(pool, 700);
+	pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::InputBoolean));
+	pool.push_back(0); // Background colour
+	append_u16(pool, 30); // Width
+	append_u16(pool, 0xFFFF); // No foreground colour
+	append_u16(pool, 0xFFFF); // No variable reference
+	pool.push_back(0); // Value
+	pool.push_back(1); // Enabled
+	pool.push_back(0); // Number of macros
+	append_data_mask(pool, 500, { 700 });
+	clientUnderTest.set_object_pool(0, &pool);
+	clientUnderTest.set_object_pool_scaling(0, 200, 60);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	clientUnderTest.test_wrapper_set_screen(480, 90);
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+
+	const std::vector<std::uint8_t> &scaled = clientUnderTest.test_wrapper_get_scaled_pool(0);
+	ASSERT_GE(scaled.size(), 6u);
+	EXPECT_EQ(72, scaled[4] | (scaled[5] << 8));
+	EXPECT_FLOAT_EQ(2.4f, clientUnderTest.get_object_scale_factor(700));
+	EXPECT_TRUE(clientUnderTest.send_change_size_command(700, 30, 30, true));
+	EXPECT_EQ(ValuePair(72, 72), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+}
+
+// When pools share an object ID, the VT keeps the object it got last (4.6.10.3), so its pool's factor applies
+TEST_F(VirtualTerminalTest, AutoScaledCommandsUseTheLastPoolWithTheObject)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	std::vector<std::uint8_t> firstPool;
+	append_output_rectangle(firstPool, 410);
+	append_output_rectangle(firstPool, 411);
+	std::vector<std::uint8_t> secondPool;
+	append_output_rectangle(secondPool, 410);
+	std::vector<std::uint8_t> unscaledPool;
+	append_output_rectangle(unscaledPool, 411);
+
+	clientUnderTest.set_object_pool(0, &firstPool);
+	clientUnderTest.set_object_pool_scaling(0, 200, 60);
+	clientUnderTest.set_object_pool(1, &secondPool);
+	clientUnderTest.set_object_pool_scaling(1, 240, 60);
+	clientUnderTest.set_object_pool(2, &unscaledPool);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	clientUnderTest.test_wrapper_set_screen(480, 90);
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+
+	EXPECT_FLOAT_EQ(2.0f, clientUnderTest.get_object_scale_factor(410));
+	EXPECT_FLOAT_EQ(1.0f, clientUnderTest.get_object_scale_factor(411));
 }
 
 TEST_F(VirtualTerminalTest, FontRemapping)
@@ -1947,9 +2855,47 @@ TEST_F(VirtualTerminalTest, ResizeInputBoolean)
 	testObject[12] = 1;
 	EXPECT_EQ(15, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject, sizeof(testObject)));
 
-	// Cant really resize these since the width is a max value. Should remain the same.
+	// The width is the box's maximum width and height, which scales like any other size
+	const std::vector<std::uint8_t> original(testObject, testObject + sizeof(testObject));
+	EXPECT_EQ(true, clientUnderTest.test_wrapper_resize_object(testObject, 0.5f, VirtualTerminalObjectType::InputBoolean));
+	EXPECT_EQ(testWidth / 2, static_cast<std::uint16_t>(testObject[4]) | (static_cast<std::uint16_t>(testObject[5]) << 8));
+
 	EXPECT_EQ(true, clientUnderTest.test_wrapper_resize_object(testObject, 2.0f, VirtualTerminalObjectType::InputBoolean));
 	EXPECT_EQ(testWidth, static_cast<std::uint16_t>(testObject[4]) | (static_cast<std::uint16_t>(testObject[5]) << 8));
+
+	// Nothing else changes
+	EXPECT_TRUE(std::equal(original.begin(), original.begin() + 4, testObject));
+	EXPECT_TRUE(std::equal(original.begin() + 6, original.end(), testObject + 6));
+}
+
+// A checkbox drawn 30 px wide for a 200 px mask is uploaded 72 px wide to a 480 px mask, like the
+// objects around it, instead of staying 30 px.
+TEST_F(VirtualTerminalTest, AutoscalingScalesInputBooleans)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	std::vector<std::uint8_t> pool;
+	append_u16(pool, 700);
+	pool.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::InputBoolean));
+	pool.push_back(0); // Background colour
+	append_u16(pool, 30); // Width
+	append_u16(pool, 0xFFFF); // No foreground colour
+	append_u16(pool, 0xFFFF); // No variable reference
+	pool.push_back(0); // Value
+	pool.push_back(1); // Enabled
+	pool.push_back(0); // Number of macros
+	append_output_string(pool, 701, 60, 0xFFFF);
+
+	clientUnderTest.set_object_pool(0, &pool);
+	clientUnderTest.set_object_pool_scaling(0, 200, 60);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	clientUnderTest.test_wrapper_set_screen(480, 90);
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+
+	const std::vector<std::uint8_t> &scaled = clientUnderTest.test_wrapper_get_scaled_pool(0);
+	ASSERT_GE(scaled.size(), 6u);
+	EXPECT_EQ(72, scaled[4] | (scaled[5] << 8));
+	EXPECT_EQ(144, width_of(scaled, 701, clientUnderTest));
 }
 
 TEST_F(VirtualTerminalTest, NumberBytesInExtendedInputAttributes)
@@ -2297,6 +3243,77 @@ TEST_F(VirtualTerminalTest, ExtendedVersionCommandsAreOnlySentForLongLabelsOnVer
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
+static std::vector<std::uint8_t> object_pool_transfer(const std::vector<std::uint8_t> &pool)
+{
+	std::vector<std::uint8_t> message = { static_cast<std::uint8_t>(VirtualTerminalClient::Function::ObjectPoolTransferMessage) };
+	message.insert(message.end(), pool.begin(), pool.end());
+	return message;
+}
+
+TEST_F(VirtualTerminalTest, ObjectPoolUploadRecoversAfterFailure)
+{
+	using State = VirtualTerminalClient::StateMachineState;
+	constexpr std::uint32_t TP_CM_PGN = static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolConnectionManagement);
+	constexpr std::uint8_t TP_RTS = 0x10;
+	constexpr std::uint8_t TP_ABORT = 0xFF;
+	constexpr std::uint32_t TP_PACKET_DATA_SIZE = CAN_DATA_LENGTH - 1;
+	const std::vector<std::vector<std::uint8_t>> pools = {
+		std::vector<std::uint8_t>(2 * TP_PACKET_DATA_SIZE - 1, 0xAA),
+		std::vector<std::uint8_t>(3 * TP_PACKET_DATA_SIZE - 1, 0xBB)
+	};
+	AuxiliaryTestCAN can(time_source);
+	DerivedTestVTClient clientUnderTest(can.partner, can.ecu);
+	clientUnderTest.initialize(false);
+	for (std::uint8_t i = 0; i < pools.size(); ++i)
+	{
+		clientUnderTest.set_object_pool(i, pools[i].data(), static_cast<std::uint32_t>(pools[i].size()));
+	}
+
+	for (const bool nack : { true, false })
+	{
+		SCOPED_TRACE(nack ? "NACK during upload" : "TP abort after the first pool");
+		clientUnderTest.test_wrapper_set_state(State::Disconnected);
+		clientUnderTest.test_wrapper_set_state(State::UploadObjectPool);
+		clientUnderTest.update();
+		if (!nack)
+		{
+			EXPECT_EQ(object_pool_transfer(pools.front()), receive_ecu_to_vt_payload(can, time_source));
+			clientUnderTest.update();
+		}
+		time_source.update_for_ms(10);
+		const auto rts = auxiliary_frames(can.vt);
+		ASSERT_EQ(1, rts.size());
+		ASSERT_EQ(TP_RTS, rts[0].data[0]);
+		ASSERT_EQ((nack ? pools.front().size() : pools.back().size()) + 1, rts[0].data[1]);
+		if (nack)
+		{
+			const auto message = test_helpers::create_message(6, static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge), can.ecu, can.partner, { 1, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xE7, 0x00 });
+			clientUnderTest.test_wrapper_process_rx_message(message, &clientUnderTest);
+			ASSERT_EQ(State::Disconnected, clientUnderTest.state);
+		}
+		// After a NACK, the old TP completes outside the upload state and its callback is ignored.
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(6, TP_CM_PGN, can.ecu, can.partner, { TP_ABORT, 1, 0xFF, 0xFF, 0xFF, 0x00, 0xE7, 0x00 }));
+		time_source.update_for_ms(10);
+		if (!nack)
+		{
+			clientUnderTest.update();
+		}
+		ASSERT_EQ(State::Disconnected, clientUnderTest.state);
+		time_source.update_for_ms(10);
+		EXPECT_TRUE(auxiliary_frames(can.vt).empty());
+
+		clientUnderTest.test_wrapper_set_state(State::UploadObjectPool);
+		clientUnderTest.update();
+		for (const auto &pool : pools)
+		{
+			EXPECT_EQ(object_pool_transfer(pool), receive_ecu_to_vt_payload(can, time_source));
+			clientUnderTest.update();
+		}
+		clientUnderTest.update();
+		EXPECT_EQ(State::SendEndOfObjectPool, clientUnderTest.state);
+	}
+}
+
 TEST_F(VirtualTerminalTest, WaitForPartnerVTStatusMessageTimesOutAndRetries)
 {
 	NAME clientNAME(0);
@@ -2402,6 +3419,87 @@ TEST_F(VirtualTerminalTest, ObjectPoolParsingWaitsForThreeConsecutiveIdleStatusM
 		receive_status(false);
 		EXPECT_EQ(State::Failed, clientUnderTest.state);
 	}
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+TEST_F(VirtualTerminalTest, RejectedObjectPoolIsNotSentAgainUntilTheVTGoesAway)
+{
+	using State = VirtualTerminalClient::StateMachineState;
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(NAME(0), 0, 0x26);
+	std::vector<NAMEFilter> vtNameFilters = { NAMEFilter(NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(NAME::Function::VirtualTerminal)) };
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+
+	const auto receive_status = [&]() {
+		CANIdentifier identifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), CANIdentifier::CANPriority::PriorityDefault6, 0xFF, 0x27);
+		CANMessage message(CANMessage::Type::Receive, identifier, { 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xFF }, vtPartner, nullptr, 0);
+		clientUnderTest.test_wrapper_process_rx_message(message, &clientUnderTest);
+	};
+
+	receive_status();
+	clientUnderTest.test_wrapper_set_state(State::WaitForEndOfObjectPoolResponse);
+	clientUnderTest.test_wrapper_process_rx_message(create_vt_to_ecu_message({ 0x12, 0x01, 0xE8, 0x03, 0xE9, 0x03, 0x02, 0xFF }), &clientUnderTest);
+	EXPECT_EQ(State::Failed, clientUnderTest.state);
+
+	// Well past the usual 5 s retry, but the VT that rejected the pool is still there
+	for (int seconds = 0; seconds < 10; ++seconds)
+	{
+		time_source.simulate_delay_ms(1000);
+		receive_status();
+		clientUnderTest.update();
+		EXPECT_EQ(State::Failed, clientUnderTest.state);
+	}
+
+	// The VT may NACK our auxiliary input maintenance now that it has dropped the working set
+	CANIdentifier nackIdentifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge), CANIdentifier::CANPriority::PriorityDefault6, 0x26, 0x27);
+	clientUnderTest.test_wrapper_process_rx_message(CANMessage(CANMessage::Type::Receive, nackIdentifier, { 1, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xE7, 0x00 }, vtPartner, internalECU, 0), &clientUnderTest);
+	clientUnderTest.update();
+	EXPECT_EQ(State::Failed, clientUnderTest.state);
+
+	time_source.simulate_delay_ms(3001);
+	clientUnderTest.update();
+	EXPECT_EQ(State::Disconnected, clientUnderTest.state);
+
+	// A plain failure still retries after 5 s
+	clientUnderTest.update();
+	clientUnderTest.test_wrapper_set_state(State::Failed);
+	time_source.simulate_delay_ms(5001);
+	receive_status();
+	clientUnderTest.update();
+	EXPECT_EQ(State::Disconnected, clientUnderTest.state);
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+TEST_F(VirtualTerminalTest, StoreVersionTimeoutKeepsTheUploadedPool)
+{
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(NAME(0), 0, 0x26);
+	std::vector<NAMEFilter> vtNameFilters = { NAMEFilter(NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(NAME::Function::VirtualTerminal)) };
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+	DerivedTestVTClient clientUnderTest(vtPartner, internalECU);
+
+	const auto receive_status = [&]() {
+		CANIdentifier identifier(CANIdentifier::Type::Extended, static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), CANIdentifier::CANPriority::PriorityDefault6, 0xFF, 0x27);
+		CANMessage message(CANMessage::Type::Receive, identifier, { 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xFF }, vtPartner, nullptr, 0);
+		clientUnderTest.test_wrapper_process_rx_message(message, &clientUnderTest);
+	};
+
+	clientUnderTest.test_wrapper_set_state(VirtualTerminalClient::StateMachineState::WaitForStoreVersionResponse);
+	for (int seconds = 0; seconds < 6; ++seconds)
+	{
+		time_source.simulate_delay_ms(1000);
+		receive_status();
+		clientUnderTest.update();
+	}
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::Connected, clientUnderTest.state);
+
+	// A late response is ignored, the pool stays in use
+	clientUnderTest.test_wrapper_process_rx_message(create_vt_to_ecu_message({ 0xD4, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xFF, 0xFF }), &clientUnderTest);
+	clientUnderTest.update();
+	EXPECT_EQ(VirtualTerminalClient::StateMachineState::Connected, clientUnderTest.state);
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);

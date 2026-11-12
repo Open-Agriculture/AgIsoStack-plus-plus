@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
+#include "isobus/hardware_integration/vector_asc_logger.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/utility/system_timing.hpp"
 
@@ -10,6 +11,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdio>
 #include <future>
 #include <thread>
 
@@ -194,6 +196,7 @@ TEST(HARDWARE_INTERFACE_TESTS, PeriodicUpdateIntervalSetting)
 
 	CANHardwareInterface::get_periodic_update_event_dispatcher().add_listener(periodicCallback);
 
+	const std::uint32_t originalInterval = CANHardwareInterface::get_periodic_update_interval();
 	CANHardwareInterface::set_periodic_update_interval(10);
 	EXPECT_EQ(CANHardwareInterface::get_periodic_update_interval(), 10);
 
@@ -212,6 +215,7 @@ TEST(HARDWARE_INTERFACE_TESTS, PeriodicUpdateIntervalSetting)
 	EXPECT_TRUE(future.wait_for(std::chrono::seconds(5)) != std::future_status::timeout);
 
 	CANHardwareInterface::stop();
+	CANHardwareInterface::set_periodic_update_interval(originalInterval);
 }
 
 TEST(HARDWARE_INTERFACE_TESTS, StopSetsStartedFalseInNonThreadingMode)
@@ -438,3 +442,20 @@ TEST(HARDWARE_INTERFACE_TESTS, SocketCANNameOver15CharactersIsRefused)
 	EXPECT_NE(std::string::npos, tooLong.get_last_error().find("longer than 15 characters"));
 }
 #endif
+
+TEST(HARDWARE_INTERFACE_TESTS, VectorASCLoggerRemovesItsListenersOnDestruction)
+{
+	const std::string fileName = "vector_asc_logger_listener_test.asc";
+	auto receivedListeners = CANHardwareInterface::get_can_frame_received_event_dispatcher().get_listener_count();
+	auto transmittedListeners = CANHardwareInterface::get_can_frame_transmitted_event_dispatcher().get_listener_count();
+
+	{
+		VectorASCLogger logger(fileName);
+		EXPECT_EQ(CANHardwareInterface::get_can_frame_received_event_dispatcher().get_listener_count(), receivedListeners + 1);
+		EXPECT_EQ(CANHardwareInterface::get_can_frame_transmitted_event_dispatcher().get_listener_count(), transmittedListeners + 1);
+	}
+
+	EXPECT_EQ(CANHardwareInterface::get_can_frame_received_event_dispatcher().get_listener_count(), receivedListeners);
+	EXPECT_EQ(CANHardwareInterface::get_can_frame_transmitted_event_dispatcher().get_listener_count(), transmittedListeners);
+	EXPECT_EQ(std::remove(fileName.c_str()), 0);
+}

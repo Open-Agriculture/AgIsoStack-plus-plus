@@ -167,16 +167,25 @@ namespace isobus
 		/// @brief Removes the specified callback from the list of default process data requested callbacks
 		/// @param[in] callback The callback to remove
 		/// @param[in] parentPointer parent pointer associated to the callback being removed
+		/// @details This stops future calls only. A call on another thread can still start or finish after this returns,
+		/// so only destroy what the callback uses once it is removed on the thread that calls update(), or once that thread is stopped.
+		/// A callback may remove itself.
 		void remove_default_process_data_requested_callback(DefaultProcessDataRequestedCallback callback, void *parentPointer);
 
 		/// @brief Removes the specified callback from the list of value request callbacks
 		/// @param[in] callback The callback to remove
 		/// @param[in] parentPointer parent pointer associated to the callback being removed
+		/// @details This stops future calls only. A call on another thread can still start or finish after this returns,
+		/// so only destroy what the callback uses once it is removed on the thread that calls update(), or once that thread is stopped.
+		/// A callback may remove itself.
 		void remove_request_value_callback(RequestValueCommandCallback callback, void *parentPointer);
 
 		/// @brief Removes the specified callback from the list of value command callbacks
 		/// @param[in] callback The callback to remove
 		/// @param[in] parentPointer parent pointer associated to the callback being removed
+		/// @details This stops future calls only. A call on another thread can still start or finish after this returns,
+		/// so only destroy what the callback uses once it is removed on the thread that calls update(), or once that thread is stopped.
+		/// A callback may remove itself.
 		void remove_value_command_callback(ValueCommandCallback callback, void *parentPointer);
 
 		/// @brief A convenient way to set all client options at once instead of calling the individual setters
@@ -726,6 +735,14 @@ namespace isobus
 			UserProvidedVector ///< Uses a vector of bytes that comprise a binary DDOP
 		};
 
+		/// @brief Asks the request value callbacks for a value, until one of them supplies it. Each callback starts from 0.
+		/// @param[in] callbacks A copy of the request value callbacks, taken under `clientMutex`
+		/// @param[in] elementNumber The element number of the value
+		/// @param[in] DDI The DDI of the value
+		/// @param[out] value The value supplied by the callback
+		/// @returns true if a callback supplied the value
+		bool request_value(const std::vector<RequestValueCommandCallbackInfo> &callbacks, std::uint16_t elementNumber, std::uint16_t DDI, std::int32_t &value);
+
 		std::shared_ptr<PartneredControlFunction> partnerControlFunction; ///< The partner control function this client will send to
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function the client uses to send from
 		std::shared_ptr<PartneredControlFunction> primaryVirtualTerminal; ///< A pointer to the primary VT's control function. Used for TCs < version 4 and language command compatibility
@@ -746,7 +763,6 @@ namespace isobus
 		Mutex clientMutex; ///< A general mutex to protect data in the worker thread against data accessed by the app or the network manager
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		std::atomic<std::thread *> workerThread{ nullptr }; ///< The worker thread that updates this interface
-		std::atomic<std::thread::id> workerThreadId{ std::thread::id() }; ///< The worker's id, stored by the worker itself when it starts
 		Mutex workerThreadMutex; ///< Held through initialize() and terminate(), so one caller at a time starts or stops the worker. The worker never takes it.
 #endif
 		Mutex runMutex; ///< Makes the run checks and changes in initialize(), terminate() and request_termination() one step each
