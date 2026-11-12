@@ -53,6 +53,11 @@ namespace isobus
 			newFunctionality.generation = functionalityGeneration;
 			supportedFunctionalities.emplace_back(newFunctionality);
 		}
+		else if ((supportedFunctionalities.end() != existingFunctionality) && isSupported)
+		{
+			// Keep the options that are already configured, only the generation changes
+			existingFunctionality->generation = functionalityGeneration;
+		}
 		else if ((supportedFunctionalities.end() != existingFunctionality) && (!isSupported))
 		{
 			if (Functionalities::MinimumControlFunction == functionality)

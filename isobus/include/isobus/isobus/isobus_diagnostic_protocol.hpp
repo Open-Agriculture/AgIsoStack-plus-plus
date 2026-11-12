@@ -264,10 +264,11 @@ namespace isobus
 		/// @details See ECUIdentificationFields for a brief description of the fields
 		/// @note The fields in this message are optional and separated by an ASCII "*". It is not necessary to include parametric
 		/// data for all fields. Any additional ECU identification fields defined in the future will be appended at the end.
-		/// @attention Do not include the "*" character in your field values and only use HardwareID when not in J1939 mode.
+		/// @attention Only use HardwareID when not in J1939 mode.
 		/// @param[in] field The field to set
-		/// @param[in] value The string value associated with the ECU ID field
-		void set_ecu_id_field(ECUIdentificationFields field, const std::string &value);
+		/// @param[in] value The string value associated with the ECU ID field. It must not contain the "*" delimiter.
+		/// @returns true if the value was set, false if the field is out of range or the value contains a "*"
+		bool set_ecu_id_field(ECUIdentificationFields field, const std::string &value);
 
 		/// @brief Adds a DTC to the active list, or removes one from the active list
 		/// @details When you call this function with a DTC and `true`, it will be added to the DM1 message.
@@ -288,21 +289,21 @@ namespace isobus
 		/// type plate of a product. For vehicles, this number can be the same as the VIN. For stand-alone systems, such as VTs,
 		/// this number can be the same as the ECU ID number. The combination of the product identification code and brand shall
 		/// make the product globally unique.
-		/// @param value The ascii product identification code, up to 50 characters long
-		/// @returns true if the value was set, false if the string is too long
+		/// @param value The ascii product identification code, up to 50 characters long, without a "*"
+		/// @returns true if the value was set, false if the string is too long or contains a "*"
 		bool set_product_identification_code(const std::string &value);
 
 		/// @brief Sets the product identification brand used in the diagnostic protocol "Product Identification" message (PGN 0xFC8D)
 		/// @details The product identification brand specifies the brand of a product. The combination of the product ID code and brand
 		/// shall make the product unique in the world.
-		/// @param value The ascii product brand, up to 50 characters long
-		/// @returns true if the value was set, false if the string is too long
+		/// @param value The ascii product brand, up to 50 characters long, without a "*"
+		/// @returns true if the value was set, false if the string is too long or contains a "*"
 		bool set_product_identification_brand(const std::string &value);
 
 		/// @brief Sets the product identification model used in the diagnostic protocol "Product Identification" message (PGN 0xFC8D)
 		/// @details The product identification model specifies a unique product within a brand.
-		/// @param value The ascii model string, up to 50 characters
-		/// @returns true if the value was set, false if the string is too long
+		/// @param value The ascii model string, up to 50 characters, without a "*"
+		/// @returns true if the value was set, false if the string is too long or contains a "*"
 		bool set_product_identification_model(const std::string &value);
 
 		/// @brief Adds an ascii string to this internal control function's software ID
@@ -312,10 +313,11 @@ namespace isobus
 		/// that is version 2.00, you could set field `0` to be "App v1.00" and
 		/// field `1` to be "Bootloader v2.00", and it will be transmitted on request as:
 		/// "App v1.00*Bootloader v2.00*" in accordance with ISO 11783-12
-		/// You can remove a field by setting it to ""
+		/// You can clear a field by setting it to "". Cleared fields at the end of the list are removed, so they aren't sent.
 		/// @param[in] index The field index to set
-		/// @param[in] value The software ID string to add
-		void set_software_id_field(std::uint32_t index, const std::string &value);
+		/// @param[in] value The software ID string to add. It must not contain the "*" delimiter.
+		/// @returns true if the value was set, false if the value contains a "*"
+		bool set_software_id_field(std::uint32_t index, const std::string &value);
 
 		/// @brief Informs the diagnostic protocol that you are going to suspend broadcasts
 		/// @details When you call this, DM1 and other broadcasts that come from this protocol will be stopped for the duration specified.
@@ -480,6 +482,11 @@ namespace isobus
 		/// @param[out] acknowledgementType The type of acknowledgement to send to the requestor
 		/// @param[in] parentPointer Generic context variable, usually a pointer to the class that the callback was registered for
 		/// @returns true if any callback was able to handle the PGN request
+		/// @brief Checks that a value can be used as a field in the identification messages
+		/// @param[in] value The value to check
+		/// @returns true if the value doesn't contain the "*" field delimiter
+		static bool is_valid_identification_field(const std::string &value);
+
 		static bool process_parameter_group_number_request(std::uint32_t parameterGroupNumber,
 		                                                   std::shared_ptr<ControlFunction> requestingControlFunction,
 		                                                   bool &acknowledge,

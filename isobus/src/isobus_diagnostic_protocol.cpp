@@ -225,12 +225,16 @@ namespace isobus
 		softwareIdentificationFields.clear();
 	}
 
-	void DiagnosticProtocol::set_ecu_id_field(ECUIdentificationFields field, const std::string &value)
+	bool DiagnosticProtocol::set_ecu_id_field(ECUIdentificationFields field, const std::string &value)
 	{
-		if (field < ECUIdentificationFields::NumberOfFields)
+		bool retVal = false;
+
+		if ((field < ECUIdentificationFields::NumberOfFields) && is_valid_identification_field(value))
 		{
 			ecuIdentificationFields[static_cast<std::size_t>(field)] = value + "*";
+			retVal = true;
 		}
+		return retVal;
 	}
 
 	bool DiagnosticProtocol::set_diagnostic_trouble_code_active(const DiagnosticTroubleCode &dtc, bool active)
@@ -315,7 +319,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (value.size() < PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH)
+		if ((value.size() < PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH) && is_valid_identification_field(value))
 		{
 			productIdentificationCode = value;
 			retVal = true;
@@ -327,7 +331,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (value.size() < PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH)
+		if ((value.size() < PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH) && is_valid_identification_field(value))
 		{
 			productIdentificationBrand = value;
 			retVal = true;
@@ -339,7 +343,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (value.size() < PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH)
+		if ((value.size() < PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH) && is_valid_identification_field(value))
 		{
 			productIdentificationModel = value;
 			retVal = true;
@@ -347,17 +351,40 @@ namespace isobus
 		return retVal;
 	}
 
-	void DiagnosticProtocol::set_software_id_field(std::uint32_t index, const std::string &value)
+	bool DiagnosticProtocol::set_software_id_field(std::uint32_t index, const std::string &value)
 	{
-		if (index >= softwareIdentificationFields.size())
+		if (!is_valid_identification_field(value))
 		{
-			softwareIdentificationFields.resize(index + 1);
+			return false;
 		}
-		else if (("" == value) && (index == softwareIdentificationFields.size()))
+
+		if (value.empty())
 		{
-			softwareIdentificationFields.pop_back();
+			if (index < softwareIdentificationFields.size())
+			{
+				softwareIdentificationFields[index].clear();
+			}
+
+			// Remove empty fields from the end so they aren't sent, keeping the indices of the fields before them
+			while ((!softwareIdentificationFields.empty()) && softwareIdentificationFields.back().empty())
+			{
+				softwareIdentificationFields.pop_back();
+			}
 		}
-		softwareIdentificationFields[index] = value;
+		else
+		{
+			if (index >= softwareIdentificationFields.size())
+			{
+				softwareIdentificationFields.resize(index + 1);
+			}
+			softwareIdentificationFields[index] = value;
+		}
+		return true;
+	}
+
+	bool DiagnosticProtocol::is_valid_identification_field(const std::string &value)
+	{
+		return std::string::npos == value.find('*');
 	}
 
 	bool DiagnosticProtocol::suspend_broadcasts(std::uint16_t suspendTime_seconds)
