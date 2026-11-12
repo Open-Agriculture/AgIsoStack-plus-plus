@@ -19,15 +19,20 @@
 
 namespace isobus
 {
-	/// @brief An interface for using FlexCAN_T4 on a Teensy4/4.1 device
-	/// @details The plugin receives through FlexCAN_T4's FIFO interrupt. Don't call `events()` on a
+	/// @brief An interface for using FlexCAN_T4 on a Teensy 4.0/4.1 or Teensy 3.2/3.5/3.6 device
+	/// @details The channel numbers name the controllers in order:
+	/// - Teensy 4.0/4.1: channel 0, 1 and 2 are CAN1, CAN2 and CAN3;
+	/// - Teensy 3.6: channel 0 and 1 are CAN0 and CAN1;
+	/// - Teensy 3.2/3.5: channel 0 is CAN0, the only controller.
+	///
+	/// The plugin receives through FlexCAN_T4's FIFO interrupt. Don't call `events()` on a
 	/// FlexCAN_T4 bus this plugin uses: once `events()` has been called, FlexCAN_T4 hands received
 	/// frames to the handler only from `events()`, and this plugin stops receiving without an error.
 	class FlexCANT4Plugin : public CANHardwarePlugin
 	{
 	public:
 		/// @brief Constructor for the FlexCANT4Plugin
-		/// @param[in] channel The channel to use on the device
+		/// @param[in] channel The channel to use on the device, see the class description
 		explicit FlexCANT4Plugin(std::uint8_t channel);
 
 		/// @brief The destructor for FlexCANT4Plugin, stops the receive interrupt handing frames to this plugin
@@ -95,12 +100,17 @@ namespace isobus
 		// frame straight to receiveQueue. The transmit queue is used, for bursts such as an object
 		// pool upload.
 #if defined(__IMXRT1062__)
+		static constexpr std::uint8_t CONTROLLER_COUNT = 3; ///< The CAN controllers the board has
 		static FlexCAN_T4<CAN1, RX_SIZE_2, TX_SIZE_512> *can0;
 		static FlexCAN_T4<CAN2, RX_SIZE_2, TX_SIZE_512> *can1;
 		static FlexCAN_T4<CAN3, RX_SIZE_2, TX_SIZE_512> *can2;
-#elif defined(__MK20DX256__) || defined(__MK64FX512__) || defined(__MK66FX1M0__)
-		static FlexCAN_T4<CAN1, RX_SIZE_2, TX_SIZE_512> *can0;
-		static FlexCAN_T4<CAN2, RX_SIZE_2, TX_SIZE_512> *can1;
+#elif defined(__MK66FX1M0__)
+		static constexpr std::uint8_t CONTROLLER_COUNT = 2; ///< The CAN controllers the board has
+		static FlexCAN_T4<CAN0, RX_SIZE_2, TX_SIZE_512> *can0;
+		static FlexCAN_T4<CAN1, RX_SIZE_2, TX_SIZE_512> *can1;
+#elif defined(__MK20DX256__) || defined(__MK64FX512__)
+		static constexpr std::uint8_t CONTROLLER_COUNT = 1; ///< The CAN controllers the board has
+		static FlexCAN_T4<CAN0, RX_SIZE_2, TX_SIZE_512> *can0;
 #endif
 		std::uint8_t selectedChannel; ///< The channel that this plugin is assigned to
 		bool isOpen = false; ///< Tracks if the connection is open/connected
