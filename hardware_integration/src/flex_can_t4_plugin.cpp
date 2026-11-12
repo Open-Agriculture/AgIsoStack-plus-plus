@@ -66,14 +66,14 @@ namespace isobus
 	}
 
 #if defined(__IMXRT1062__)
-	FlexCAN_T4<CAN1, RX_SIZE_2, TX_SIZE_512> *FlexCANT4Plugin::can0 = nullptr;
-	FlexCAN_T4<CAN2, RX_SIZE_2, TX_SIZE_512> *FlexCANT4Plugin::can1 = nullptr;
-	FlexCAN_T4<CAN3, RX_SIZE_2, TX_SIZE_512> *FlexCANT4Plugin::can2 = nullptr;
+	FlexCANT4Plugin::Controller<CAN1> *FlexCANT4Plugin::can0 = nullptr;
+	FlexCANT4Plugin::Controller<CAN2> *FlexCANT4Plugin::can1 = nullptr;
+	FlexCANT4Plugin::Controller<CAN3> *FlexCANT4Plugin::can2 = nullptr;
 #elif defined(__MK66FX1M0__)
-	FlexCAN_T4<CAN0, RX_SIZE_2, TX_SIZE_512> *FlexCANT4Plugin::can0 = nullptr;
-	FlexCAN_T4<CAN1, RX_SIZE_2, TX_SIZE_512> *FlexCANT4Plugin::can1 = nullptr;
+	FlexCANT4Plugin::Controller<CAN0> *FlexCANT4Plugin::can0 = nullptr;
+	FlexCANT4Plugin::Controller<CAN1> *FlexCANT4Plugin::can1 = nullptr;
 #else
-	FlexCAN_T4<CAN0, RX_SIZE_2, TX_SIZE_512> *FlexCANT4Plugin::can0 = nullptr;
+	FlexCANT4Plugin::Controller<CAN0> *FlexCANT4Plugin::can0 = nullptr;
 #endif
 
 	FlexCANT4Plugin *FlexCANT4Plugin::openPlugins[3] = { nullptr, nullptr, nullptr };
