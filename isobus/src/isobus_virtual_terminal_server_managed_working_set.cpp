@@ -6,6 +6,7 @@
 ///
 /// @copyright 2023 Adrian Del Grosso
 //================================================================================================
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 #include "isobus/isobus/isobus_virtual_terminal_server_managed_working_set.hpp"
 
 #include "isobus/isobus/can_network_manager.hpp"
@@ -32,6 +33,11 @@ namespace isobus
 		{
 			LOG_INFO("[WS]: New VT Server Object Created with no associated control function");
 		}
+	}
+
+	VirtualTerminalServerManagedWorkingSet::~VirtualTerminalServerManagedWorkingSet()
+	{
+		join_parsing_thread();
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::start_parsing_thread()
@@ -113,6 +119,7 @@ namespace isobus
 		workingSetID = NULL_OBJECT_ID;
 		focusedObject = NULL_OBJECT_ID;
 		set_object_pool_faulting_object_id(NULL_OBJECT_ID);
+		set_object_pool_processing_state(ObjectPoolProcessingThreadState::None);
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::set_object_focus(std::uint16_t objectID)
@@ -244,3 +251,4 @@ namespace isobus
 	}
 
 } // namespace isobus
+#endif // !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO

@@ -463,6 +463,7 @@ namespace isobus
 			std::uint16_t numberOfObjectPoolSegments = 0; ///< The number of object pool segments that have been sent to the client.
 			std::uint8_t reportedVersion = 0; ///< The value representing a version reported by the client.
 			bool isDDOPActive = false; ///< Whether or not the client's DDOP is active.
+			bool isVersionRequested = false; ///< Whether or not we have requested the client's version.
 		};
 
 		/// @brief Stores messages received from task controller clients for processing later.

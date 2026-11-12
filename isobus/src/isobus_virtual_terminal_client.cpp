@@ -21,10 +21,17 @@
 #include <functional>
 #include <limits>
 #include <map>
+#include <set>
 #include <unordered_map>
+#include <utility>
 
 namespace isobus
 {
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+	/// @brief The client whose worker runs on this thread. Not get_id(): on ESP-IDF it aborts outside pthreads.
+	static thread_local const VirtualTerminalClient *workerThreadOwner = nullptr;
+#endif
+
 	/// @brief Pads a version label with spaces, or truncates it, to the label length a version command uses
 	/// @param[in] versionLabel The object pool version label
 	/// @returns The label as sent in a version command
@@ -36,6 +43,36 @@ namespace isobus
 		retVal.fill(' ');
 		std::copy_n(versionLabel.begin(), std::min(LABEL_LENGTH, versionLabel.size()), retVal.begin());
 		return retVal;
+	}
+
+	/// @brief Reads a 16-bit value, such as an object ID, from an object pool, which stores values low byte first
+	/// @param[in] data The low byte, followed by the high byte
+	/// @returns The value
+	static std::uint16_t read_little_endian_uint16(const std::uint8_t *data)
+	{
+		return static_cast<std::uint16_t>(data[0] | (data[1] << 8));
+	}
+
+	/// @brief Validates preferred assignments for a single auxiliary input device
+	/// @param[in] assignments Assignments to check for valid counts, object IDs, function types, and unique function IDs
+	/// @returns true if all assignments are valid, false otherwise
+	static bool valid_preferred_auxiliary_assignments(const std::vector<VirtualTerminalClient::AssignedAuxiliaryFunction> &assignments)
+	{
+		if (assignments.size() > std::numeric_limits<std::uint8_t>::max())
+		{
+			return false;
+		}
+		std::set<std::uint16_t> functionIDs;
+		for (const auto &assignment : assignments)
+		{
+			if ((NULL_OBJECT_ID == assignment.functionObjectID) || (NULL_OBJECT_ID == assignment.inputObjectID) ||
+			    (static_cast<std::uint8_t>(assignment.functionType) > static_cast<std::uint8_t>(VirtualTerminalClient::AuxiliaryTypeTwoFunctionType::BidirectionalEncoder)) ||
+			    !functionIDs.insert(assignment.functionObjectID).second)
+			{
+				return false;
+			}
+		}
+		return true;
 	}
 
 	VirtualTerminalClient::VirtualTerminalClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource) :
@@ -53,6 +90,20 @@ namespace isobus
 
 	void VirtualTerminalClient::initialize(bool spawnThread)
 	{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		if (this == workerThreadOwner)
+		{
+			LOG_ERROR("[VT]: initialize() cannot be called from the client's own worker thread.");
+			return;
+		}
+		LOCK_GUARD(Mutex, workerThreadMutex);
+		if (shouldTerminate)
+		{
+			// A worker that terminated the client from one of its own callbacks has been told to exit,
+			// and is joined before a new one starts, so the old one cannot carry on beside it.
+			join_worker_thread();
+		}
+#endif
 		if (shouldTerminate)
 		{
 			shouldTerminate = false;
@@ -78,6 +129,8 @@ namespace isobus
 			{
 				workerThread = new std::thread([this]() { worker_thread_function(); });
 			}
+#else
+			(void)spawnThread;
 #endif
 			initialized = true;
 		}
@@ -93,7 +146,30 @@ namespace isobus
 		return (StateMachineState::Connected == state);
 	}
 
+	VirtualTerminalClient::StateMachineState VirtualTerminalClient::get_state() const
+	{
+		return state;
+	}
+
 	void VirtualTerminalClient::terminate()
+	{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		if (this == workerThreadOwner)
+		{
+			// From the worker itself (a callback it runs). It cannot join itself, nor wait for
+			// workerThreadMutex, which an owner joining it may hold. It exits after this update, and the
+			// owner's terminate() or initialize(), or the destructor, joins it.
+			stop(false);
+			return;
+		}
+		// Held through the whole call, so a second caller waits until the first has finished: it cannot
+		// return to an owner that destroys the client while the first is still inside.
+		LOCK_GUARD(Mutex, workerThreadMutex);
+#endif
+		stop(true);
+	}
+
+	void VirtualTerminalClient::stop(bool joinWorker)
 	{
 		if (initialized)
 		{
@@ -109,24 +185,43 @@ namespace isobus
 				CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message, this);
 				CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal), process_rx_message, this);
 			}
-
 			shouldTerminate = true;
+		}
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			if (nullptr != workerThread)
-			{
-				workerThread->join();
-				delete workerThread;
-				workerThread = nullptr;
-			}
+		if (joinWorker)
+		{
+			// Also a worker that terminated the client from one of its own callbacks earlier.
+			join_worker_thread();
+		}
+#else
+		(void)joinWorker;
 #endif
+		if (initialized)
+		{
 			initialized = false;
 			set_state(StateMachineState::Disconnected);
 			LOG_INFO("[VT]: VT Client connection has been terminated.");
 		}
+		store_pending_auxiliary_preferences();
 	}
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+	void VirtualTerminalClient::join_worker_thread()
+	{
+		std::thread *thread = workerThread.exchange(nullptr);
+		if (nullptr != thread)
+		{
+			thread->join();
+			delete thread;
+		}
+	}
+#endif
 
 	void VirtualTerminalClient::restart_communication()
 	{
+		/// @todo Support automatic runtime Input reconfiguration. Input registration/removal and pool setters do not
+		/// coordinate the J.7.10 sequence, and the model identification code cannot be changed while initialized.
+		/// restart_communication() only restarts the VT session; it does not implement the reconfiguration sequence.
 		LOG_INFO("[VT]:VT Client connection restart requested. Client will now terminate and reinitialize.");
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 		bool workerNeeded = (nullptr != workerThread);
@@ -220,7 +315,46 @@ namespace isobus
 
 	void VirtualTerminalClient::set_auxiliary_input_model_identification_code(std::uint16_t modelIdentificationCode)
 	{
+		if (initialized)
+		{
+			LOG_WARNING("[VT]: Cannot change AUX-N model identification while the VT client is initialized.");
+			return;
+		}
 		ourModelIdentificationCode = modelIdentificationCode;
+	}
+
+	void VirtualTerminalClient::set_auxiliary_assignment_callbacks(AuxiliaryAssignmentLoadCallback loadCallback,
+	                                                               AuxiliaryAssignmentStoreCallback storeCallback,
+	                                                               void *context)
+	{
+		if (initialized)
+		{
+			LOG_WARNING("[VT]: Cannot change AUX-N assignment callbacks while the VT client is initialized.");
+			return;
+		}
+		auxiliaryAssignmentLoadCallback = loadCallback;
+		auxiliaryAssignmentStoreCallback = storeCallback;
+		auxiliaryAssignmentCallbackContext = context;
+		for (auto &device : assignedAuxiliaryInputDevices)
+		{
+			device.preferredFunctions.clear();
+			device.preferredAssignmentsLoaded = false;
+		}
+	}
+
+	void VirtualTerminalClient::set_auxiliary_functions_enabled(bool enabled)
+	{
+		if (initialized)
+		{
+			LOG_WARNING("[VT]: Cannot change AUX-N enablement while the VT client is initialized.");
+			return;
+		}
+		auxiliaryFunctionsEnabled = enabled;
+	}
+
+	EventDispatcher<VirtualTerminalClient::AuxiliaryAssignmentFailureEvent> &VirtualTerminalClient::get_auxiliary_assignment_failure_event_dispatcher()
+	{
+		return auxiliaryAssignmentFailureEventDispatcher;
 	}
 
 	bool VirtualTerminalClient::get_auxiliary_input_learn_mode_enabled() const
@@ -230,11 +364,13 @@ namespace isobus
 
 	void VirtualTerminalClient::add_auxiliary_input_object_id(const std::uint16_t auxiliaryInputID)
 	{
+		/// @todo Coordinate runtime input additions with pool updates and Initializing/Ready maintenance status (J.7.10).
 		ourAuxiliaryInputs[auxiliaryInputID] = AuxiliaryInputState{ 0, false, false, false, 0, 0 };
 	}
 
 	void VirtualTerminalClient::remove_auxiliary_input_object_id(const std::uint16_t auxiliaryInputID)
 	{
+		/// @todo Coordinate runtime input removal with the J.7.10 reconfiguration sequence before changing the pool.
 		if (ourAuxiliaryInputs.count(auxiliaryInputID))
 		{
 			ourAuxiliaryInputs.erase(auxiliaryInputID);
@@ -362,7 +498,7 @@ namespace isobus
 		return queue_command(buffer, true);
 	}
 
-	bool VirtualTerminalClient::send_change_child_location(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint8_t relativeXPositionChange, std::uint8_t relativeYPositionChange)
+	bool VirtualTerminalClient::send_change_child_location(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint8_t relativeXPositionChange, std::uint8_t relativeYPositionChange, bool autoScale)
 	{
 		const std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ChangeChildLocationCommand),
 			                                         static_cast<std::uint8_t>(parentObjectID & 0xFF),
@@ -372,10 +508,10 @@ namespace isobus
 			                                         relativeXPositionChange,
 			                                         relativeYPositionChange,
 			                                         0xFF };
-		return queue_command(buffer, true);
+		return queue_command(buffer, true, autoScale);
 	}
 
-	bool VirtualTerminalClient::send_change_child_position(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint16_t xPosition, std::uint16_t yPosition)
+	bool VirtualTerminalClient::send_change_child_position(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint16_t xPosition, std::uint16_t yPosition, bool autoScale)
 	{
 		const std::vector<std::uint8_t> buffer = {
 			static_cast<std::uint8_t>(Function::ChangeChildPositionCommand),
@@ -388,10 +524,10 @@ namespace isobus
 			static_cast<std::uint8_t>(yPosition & 0xFF),
 			static_cast<std::uint8_t>(yPosition >> 8),
 		};
-		return queue_command(buffer, true);
+		return queue_command(buffer, true, autoScale);
 	}
 
-	bool VirtualTerminalClient::send_change_size_command(std::uint16_t objectID, std::uint16_t newWidth, std::uint16_t newHeight)
+	bool VirtualTerminalClient::send_change_size_command(std::uint16_t objectID, std::uint16_t newWidth, std::uint16_t newHeight, bool autoScale)
 	{
 		const std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ChangeSizeCommand),
 			                                         static_cast<std::uint8_t>(objectID & 0xFF),
@@ -401,7 +537,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(newHeight & 0xFF),
 			                                         static_cast<std::uint8_t>(newHeight >> 8),
 			                                         0xFF };
-		return queue_command(buffer, true);
+		return queue_command(buffer, true, autoScale);
 	}
 
 	bool VirtualTerminalClient::send_change_background_colour(std::uint16_t objectID, std::uint8_t colour)
@@ -461,11 +597,20 @@ namespace isobus
 
 	bool VirtualTerminalClient::send_change_string_value(std::uint16_t objectID, const std::string &value)
 	{
-		assert(value.length() < std::numeric_limits<std::uint16_t>::max()); // You can't send more than 65535 characters!
-		return send_change_string_value(objectID, static_cast<std::uint16_t>(value.size()), value.c_str());
+		bool retVal = false;
+
+		if (value.length() <= std::numeric_limits<std::uint16_t>::max())
+		{
+			retVal = send_change_string_value(objectID, static_cast<std::uint16_t>(value.size()), value.c_str());
+		}
+		else
+		{
+			LOG_ERROR("[VT]: Cannot change string value of object " + isobus::to_string(static_cast<int>(objectID)) + ", the string is longer than 65535 characters.");
+		}
+		return retVal;
 	}
 
-	bool VirtualTerminalClient::send_change_endpoint(std::uint16_t objectID, std::uint16_t width_px, std::uint16_t height_px, LineDirection direction)
+	bool VirtualTerminalClient::send_change_endpoint(std::uint16_t objectID, std::uint16_t width_px, std::uint16_t height_px, LineDirection direction, bool autoScale)
 	{
 		const std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ChangeEndPointCommand),
 			                                         static_cast<std::uint8_t>(objectID & 0xFF),
@@ -475,7 +620,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(height_px & 0xFF),
 			                                         static_cast<std::uint8_t>(height_px >> 8),
 			                                         static_cast<std::uint8_t>(direction) };
-		return queue_command(buffer, true);
+		return queue_command(buffer, true, autoScale);
 	}
 
 	bool VirtualTerminalClient::send_change_font_attributes(std::uint16_t objectID, std::uint8_t colour, FontSize size, std::uint8_t type, std::uint8_t styleBitfield)
@@ -626,7 +771,7 @@ namespace isobus
 		return queue_command(buffer);
 	}
 
-	bool VirtualTerminalClient::send_change_polygon_point(std::uint16_t objectID, std::uint8_t pointIndex, std::uint16_t newXValue, std::uint16_t newYValue)
+	bool VirtualTerminalClient::send_change_polygon_point(std::uint16_t objectID, std::uint8_t pointIndex, std::uint16_t newXValue, std::uint16_t newYValue, bool autoScale)
 	{
 		const std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ChangePolygonPointCommand),
 			                                         static_cast<std::uint8_t>(objectID & 0xFF),
@@ -636,10 +781,10 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(newXValue >> 8),
 			                                         static_cast<std::uint8_t>(newYValue & 0xFF),
 			                                         static_cast<std::uint8_t>(newYValue >> 8) };
-		return queue_command(buffer, true);
+		return queue_command(buffer, true, autoScale);
 	}
 
-	bool VirtualTerminalClient::send_change_polygon_scale(std::uint16_t objectID, std::uint16_t widthAttribute, std::uint16_t heightAttribute)
+	bool VirtualTerminalClient::send_change_polygon_scale(std::uint16_t objectID, std::uint16_t widthAttribute, std::uint16_t heightAttribute, bool autoScale)
 	{
 		const std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ChangePolygonScaleCommand),
 			                                         static_cast<std::uint8_t>(objectID & 0xFF),
@@ -649,7 +794,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(heightAttribute & 0xFF),
 			                                         static_cast<std::uint8_t>(heightAttribute >> 8),
 			                                         0xFF };
-		return queue_command(buffer, true);
+		return queue_command(buffer, true, autoScale);
 	}
 
 	bool VirtualTerminalClient::send_select_colour_map_or_palette(std::uint16_t objectID)
@@ -1094,7 +1239,7 @@ namespace isobus
 
 	bool VirtualTerminalClient::get_font_style_supported(FontStyleBits value) const
 	{
-		return (0 != (static_cast<std::uint8_t>(value) & fontStylesBitfield));
+		return (0 != ((1 << static_cast<std::uint8_t>(value)) & fontStylesBitfield));
 	}
 
 	VirtualTerminalClient::GraphicMode VirtualTerminalClient::get_graphic_mode() const
@@ -1221,6 +1366,9 @@ namespace isobus
 
 	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, const std::uint8_t *pool, std::uint32_t size, const std::string &version)
 	{
+		/// @todo For changes/deletions of existing assigned AUX-N Input objects, implement J.7.10: notify the operator
+		/// if input status was enabled, stop maintenance for more than 500 ms, resume as Initializing with a changed
+		/// model code, update the pool, then report Ready after success. The model-code setter currently requires termination.
 		if ((nullptr != pool) &&
 		    (0 != size))
 		{
@@ -1250,6 +1398,7 @@ namespace isobus
 
 	void VirtualTerminalClient::set_object_pool(std::uint8_t poolIndex, const std::vector<std::uint8_t> *pool, const std::string &version)
 	{
+		/// @todo Coordinate AUX-N Input pool reconfiguration as described in the pointer overload (J.7.10).
 		if ((nullptr != pool) &&
 		    (!pool->empty()))
 		{
@@ -1289,6 +1438,7 @@ namespace isobus
 
 	void VirtualTerminalClient::register_object_pool_data_chunk_callback(std::uint8_t poolIndex, std::uint32_t poolTotalSize, DataChunkCallback value, std::string version)
 	{
+		/// @todo Coordinate AUX-N Input pool reconfiguration as described in set_object_pool() (J.7.10).
 		if ((nullptr != value) &&
 		    (0 != poolTotalSize))
 		{
@@ -1318,7 +1468,38 @@ namespace isobus
 
 	void VirtualTerminalClient::update()
 	{
+		{
+			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+			send_pending_auxiliary_assignment_responses_locked();
+		}
+		store_pending_auxiliary_preferences();
+
 		StateMachineState previousStateMachineState = state; // Save state to see if it changes this update
+
+		// Expire active mappings after 300 ms without maintenance while retaining preferences.
+		std::vector<std::pair<std::uint64_t, std::uint16_t>> timedOutDevices;
+		{
+			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+			for (auto &device : assignedAuxiliaryInputDevices)
+			{
+				if (SystemTiming::time_expired_ms(device.lastMaintenanceMessageTimestamp, AUXILIARY_INPUT_DEVICE_TIMEOUT_MS))
+				{
+					if (device.ready)
+					{
+						timedOutDevices.emplace_back(device.name, device.modelIdentificationCode);
+					}
+					mark_auxiliary_input_device_unavailable(device);
+				}
+			}
+		}
+		for (const auto &timedOutDevice : timedOutDevices)
+		{
+			LOG_WARNING("[AUX-N]: Auxiliary input device with name: " +
+			            isobus::to_string(timedOutDevice.first) +
+			            " and model identification code: " +
+			            isobus::to_string(timedOutDevice.second) +
+			            " timed out. Removing device.");
+		}
 
 		if (nullptr != partnerControlFunction)
 		{
@@ -1327,7 +1508,7 @@ namespace isobus
 				case StateMachineState::Disconnected:
 				{
 					sendWorkingSetMaintenance = false;
-					sendAuxiliaryMaintenance = false;
+					objectPoolRejected = false;
 					unsupportedFunctions.clear();
 					{
 						LOCK_GUARD(Mutex, commandQueueMutex);
@@ -1381,7 +1562,6 @@ namespace isobus
 						send_working_set_maintenance(true);
 						lastWorkingSetMaintenanceTimestamp_ms = SystemTiming::get_timestamp_ms();
 						sendWorkingSetMaintenance = true;
-						sendAuxiliaryMaintenance = true;
 					}
 				}
 				break;
@@ -1497,6 +1677,16 @@ namespace isobus
 
 				case StateMachineState::SendLoadVersion:
 				{
+					if (firstTimeInState)
+					{
+						// The VT loads the scaled pools from its memory, so they are not scaled again: set the factors for the commands
+						prepare_command_scaling_for_loaded_pools();
+
+						// Reading a large pool through the data callback takes time, which mustn't count towards the timeout
+						LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+						stateMachineTimestamp_ms = SystemTiming::get_timestamp_ms();
+					}
+
 					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
 						set_state(StateMachineState::Failed);
@@ -1572,8 +1762,9 @@ namespace isobus
 				{
 					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
-						set_state(StateMachineState::Failed);
-						LOG_ERROR("[VT]: Store Version Response Timeout");
+						// The pool is already in use, only storing it may have failed
+						LOG_WARNING("[VT]: Store Version Response Timeout");
+						set_state(StateMachineState::Connected);
 					}
 				}
 				break;
@@ -1590,6 +1781,7 @@ namespace isobus
 							if (!scale_object_pools())
 							{
 								set_state(StateMachineState::Failed);
+								break;
 							}
 						}
 					}
@@ -1640,9 +1832,9 @@ namespace isobus
 							}
 							else if (CurrentObjectPoolUploadState::Failed == currentObjectPoolState)
 							{
-								currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized;
 								LOG_ERROR("[VT]: An object pool failed to upload. Resetting connection to VT.");
 								set_state(StateMachineState::Disconnected);
+								break;
 							}
 							else
 							{
@@ -1658,7 +1850,7 @@ namespace isobus
 						}
 					}
 
-					if (allPoolsProcessed)
+					if (allPoolsProcessed && (StateMachineState::UploadObjectPool == state))
 					{
 						set_state(StateMachineState::SendEndOfObjectPool);
 					}
@@ -1681,6 +1873,7 @@ namespace isobus
 					{
 						set_state(StateMachineState::Disconnected);
 						LOG_ERROR("[VT]: Status Timeout");
+						break;
 					}
 					update_auxiliary_input_status();
 				}
@@ -1690,10 +1883,10 @@ namespace isobus
 				{
 					constexpr std::uint32_t VT_STATE_MACHINE_RETRY_TIMEOUT_MS = 5000;
 					sendWorkingSetMaintenance = false;
-					sendAuxiliaryMaintenance = false;
 
-					// Retry connecting after a while
-					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATE_MACHINE_RETRY_TIMEOUT_MS))
+					// The same VT would reject the same pool again, so wait until it goes away (ISO 11783-6 C.2.5)
+					const bool retry = objectPoolRejected ? SystemTiming::time_expired_ms(lastVTStatusTimestamp_ms, VT_STATUS_TIMEOUT_MS) : SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATE_MACHINE_RETRY_TIMEOUT_MS);
+					if (retry)
 					{
 						LOG_INFO("[VT]: Resetting Failed VT Connection");
 						set_state(StateMachineState::Disconnected);
@@ -1711,19 +1904,22 @@ namespace isobus
 		{
 			set_state(StateMachineState::Disconnected);
 		}
+		if (StateMachineState::Connected == state)
+		{
+			update_auxiliary_assignment_transaction();
+		}
 
 		if ((sendWorkingSetMaintenance) &&
 		    (SystemTiming::time_expired_ms(lastWorkingSetMaintenanceTimestamp_ms, WORKING_SET_MAINTENANCE_TIMEOUT_MS)))
 		{
 			txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendWorkingSetMaintenance));
 		}
-		if ((sendAuxiliaryMaintenance) &&
-		    (!ourAuxiliaryInputs.empty()) &&
+		if ((!ourAuxiliaryInputs.empty()) &&
 		    (SystemTiming::time_expired_ms(lastAuxiliaryMaintenanceTimestamp_ms, AUXILIARY_MAINTENANCE_TIMEOUT_MS)))
 		{
-			/// @todo We should make sure that when we disconnect/reconnect atleast 500ms has passed since the last auxiliary maintenance message
 			txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendAuxiliaryMaintenance));
 		}
+
 		txFlags.process_all_flags();
 		process_command_queue();
 
@@ -1993,15 +2189,311 @@ namespace isobus
 		                                                      CANIdentifier::CANPriority::Priority5);
 	}
 
-	bool VirtualTerminalClient::send_auxiliary_functions_preferred_assignment() const
+	bool VirtualTerminalClient::ensure_auxiliary_preferences_loaded()
 	{
-		//! @todo load preferred assignment from saved configuration
-		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::PreferredAssignmentCommand), 0 };
-		if (buffer.size() < CAN_DATA_LENGTH)
+		std::vector<AuxiliaryPreferenceSnapshot> loaded;
+		std::uint32_t sessionGeneration;
 		{
-			buffer.resize(CAN_DATA_LENGTH, 0xFF);
+			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+			sessionGeneration = auxiliaryAssignmentSessionGeneration;
+			if (auxiliaryAssignmentTransaction.outstanding())
+			{
+				return true;
+			}
+			for (const auto &device : assignedAuxiliaryInputDevices)
+			{
+				if (!device.preferredAssignmentsLoaded &&
+				    !SystemTiming::time_expired_ms(device.lastMaintenanceMessageTimestamp, AUXILIARY_INPUT_DEVICE_TIMEOUT_MS))
+				{
+					loaded.push_back({ device.name, device.modelIdentificationCode, {} });
+				}
+			}
 		}
-		return send_message_to_vt(buffer.data(), buffer.size());
+		bool allValid = true;
+		for (auto &entry : loaded)
+		{
+			if (nullptr != auxiliaryAssignmentLoadCallback)
+			{
+				entry.functions = auxiliaryAssignmentLoadCallback(entry.name, entry.modelIdentificationCode, auxiliaryAssignmentCallbackContext);
+			}
+			if (!valid_preferred_auxiliary_assignments(entry.functions))
+			{
+				LOG_WARNING("[AUX-N]: Stored assignments contain invalid or duplicate entries.");
+				allValid = false;
+				entry.functions.clear();
+			}
+		}
+		{
+			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+			if (sessionGeneration != auxiliaryAssignmentSessionGeneration)
+			{
+				return allValid;
+			}
+			for (const auto &entry : loaded)
+			{
+				auto device = std::find_if(assignedAuxiliaryInputDevices.begin(), assignedAuxiliaryInputDevices.end(), [&entry](const AssignedAuxiliaryInputDevice &candidate) {
+					return candidate.name == entry.name && candidate.modelIdentificationCode == entry.modelIdentificationCode;
+				});
+				if (device != assignedAuxiliaryInputDevices.end() && !device->preferredAssignmentsLoaded)
+				{
+					device->preferredFunctions = entry.functions;
+					device->preferredAssignmentsLoaded = true;
+					if (device->ready && !device->preferredFunctions.empty())
+					{
+						auxiliaryAssignmentPending = true;
+					}
+				}
+			}
+		}
+		return allValid;
+	}
+
+	void VirtualTerminalClient::store_pending_auxiliary_preferences()
+	{
+		std::vector<AuxiliaryPreferenceSnapshot> pending;
+		{
+			LOCK_GUARD(Mutex, auxiliaryPreferenceOperationMutex);
+			{
+				LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+				pending.swap(auxiliaryAssignmentPendingStores);
+			}
+			if (nullptr != auxiliaryAssignmentStoreCallback)
+			{
+				for (const auto &entry : pending)
+				{
+					auxiliaryAssignmentStoreCallback(entry.name, entry.modelIdentificationCode, entry.functions, auxiliaryAssignmentCallbackContext);
+				}
+			}
+		}
+	}
+
+	void VirtualTerminalClient::send_pending_auxiliary_assignment_responses_locked()
+	{
+		for (std::size_t i = 0; i < auxiliaryAssignmentResponseCount; ++i)
+		{
+			auto &response = auxiliaryAssignmentResponses[(auxiliaryAssignmentResponseHead + i) % AUXILIARY_ASSIGNMENT_RESPONSE_QUEUE_CAPACITY];
+			if (!response.deadlineReported && SystemTiming::time_expired_ms(response.receivedTimestamp_ms, 1000))
+			{
+				response.deadlineReported = true;
+				LOG_ERROR("[AUX-N]: Assignment response missed its one-second deadline.");
+			}
+		}
+		while (auxiliaryAssignmentResponseCount != 0)
+		{
+			const auto &response = auxiliaryAssignmentResponses[auxiliaryAssignmentResponseHead];
+			if (!send_auxiliary_function_assignment_response(response.functionObjectID, response.hasError, response.isAlreadyAssigned))
+			{
+				return;
+			}
+			auxiliaryAssignmentResponseHead = (auxiliaryAssignmentResponseHead + 1) % AUXILIARY_ASSIGNMENT_RESPONSE_QUEUE_CAPACITY;
+			--auxiliaryAssignmentResponseCount;
+		}
+	}
+
+	void VirtualTerminalClient::handle_auxiliary_assignment_command(const CANMessage &message)
+	{
+		const auto receivedTimestamp = SystemTiming::get_timestamp_ms();
+		const std::uint64_t deviceName = message.get_uint64_at(1);
+		const bool storeAsPreferred = !message.get_bool_at(9, 7);
+		const std::uint8_t functionType = message.get_uint8_at(9) & 0x1F;
+		const std::uint16_t inputObjectID = message.get_uint16_at(10);
+		const std::uint16_t functionObjectID = message.get_uint16_at(12);
+		// Serialize admission, loading and mutation against other commands and stores.
+		// Never acquire the operation mutex while holding the state mutex.
+		std::uint32_t sessionGeneration;
+		{
+			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+			sessionGeneration = auxiliaryAssignmentSessionGeneration;
+		}
+		LOCK_GUARD(Mutex, auxiliaryPreferenceOperationMutex);
+		{
+			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+			if (sessionGeneration != auxiliaryAssignmentSessionGeneration)
+			{
+				LOG_WARNING("[AUX-N]: Assignment session ended before command admission; command not applied.");
+				return;
+			}
+			send_pending_auxiliary_assignment_responses_locked();
+			if (auxiliaryAssignmentResponseCount == AUXILIARY_ASSIGNMENT_RESPONSE_QUEUE_CAPACITY)
+			{
+				LOG_ERROR("[AUX-N]: Assignment response FIFO full; refusing command before applying it.");
+				return;
+			}
+		}
+		if (storeAsPreferred)
+		{
+			ensure_auxiliary_preferences_loaded();
+		}
+		{
+			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+			if (sessionGeneration != auxiliaryAssignmentSessionGeneration)
+			{
+				LOG_WARNING("[AUX-N]: Assignment session ended while loading preferences; command not applied.");
+				return;
+			}
+			bool isAlreadyAssigned = false;
+			std::vector<AuxiliaryPreferenceSnapshot> toStore;
+			// Do not overwrite persisted preferences while their loading is deferred.
+			const bool preferencesUnavailable = storeAsPreferred &&
+			  std::any_of(assignedAuxiliaryInputDevices.begin(), assignedAuxiliaryInputDevices.end(), [](const AssignedAuxiliaryInputDevice &device) {
+				                                    return !device.preferredAssignmentsLoaded &&
+				                                      !SystemTiming::time_expired_ms(device.lastMaintenanceMessageTimestamp, AUXILIARY_INPUT_DEVICE_TIMEOUT_MS);
+			                                    });
+			const bool hasError = preferencesUnavailable ||
+			  apply_auxiliary_assignment_command_locked(deviceName, storeAsPreferred, functionType, inputObjectID, functionObjectID, toStore, isAlreadyAssigned);
+			if (!hasError && !toStore.empty() && auxiliaryAssignmentTransaction.outstanding())
+			{
+				auxiliaryAssignmentPending = true;
+			}
+			for (const auto &entry : toStore)
+			{
+				auto pending = std::find_if(auxiliaryAssignmentPendingStores.begin(), auxiliaryAssignmentPendingStores.end(), [&entry](const AuxiliaryPreferenceSnapshot &candidate) {
+					return candidate.name == entry.name && candidate.modelIdentificationCode == entry.modelIdentificationCode;
+				});
+				if (pending == auxiliaryAssignmentPendingStores.end())
+				{
+					auxiliaryAssignmentPendingStores.push_back(entry);
+				}
+				else
+				{
+					pending->functions = entry.functions;
+				}
+			}
+			const auto tail = (auxiliaryAssignmentResponseHead + auxiliaryAssignmentResponseCount) % AUXILIARY_ASSIGNMENT_RESPONSE_QUEUE_CAPACITY;
+			auxiliaryAssignmentResponses[tail] = { functionObjectID, hasError, isAlreadyAssigned && !hasError, receivedTimestamp, false };
+			++auxiliaryAssignmentResponseCount;
+			send_pending_auxiliary_assignment_responses_locked();
+		}
+	}
+
+	void VirtualTerminalClient::mark_auxiliary_input_device_unavailable(AssignedAuxiliaryInputDevice &device)
+	{
+		const bool hadAssignments = !device.functions.empty() || (device.ready && !device.preferredFunctions.empty());
+		const auto key = std::make_pair(device.name, device.modelIdentificationCode);
+		const bool wasInTransaction = auxiliaryAssignmentTransaction.outstanding() &&
+		  (auxiliaryAssignmentTransaction.devices.end() != std::find(auxiliaryAssignmentTransaction.devices.begin(), auxiliaryAssignmentTransaction.devices.end(), key));
+		device.ready = false;
+		device.functions.clear();
+		if (wasInTransaction)
+		{
+			auxiliaryAssignmentTransaction.obsolete = true;
+		}
+		if (wasInTransaction || hadAssignments)
+		{
+			auxiliaryAssignmentPending = true;
+		}
+	}
+
+	bool VirtualTerminalClient::apply_auxiliary_assignment_command_locked(std::uint64_t deviceName, bool storeAsPreferred, std::uint8_t functionType, std::uint16_t inputObjectID, std::uint16_t functionObjectID, std::vector<AuxiliaryPreferenceSnapshot> &toStore, bool &isAlreadyAssigned)
+	{
+		isAlreadyAssigned = false;
+		if (0x1F == functionType)
+		{
+			if ((DEFAULT_NAME != deviceName) || (NULL_OBJECT_ID != inputObjectID))
+			{
+				return true;
+			}
+			if (NULL_OBJECT_ID == functionObjectID)
+			{
+				for (auto &device : assignedAuxiliaryInputDevices)
+				{
+					device.functions.clear();
+					if (storeAsPreferred)
+					{
+						const bool preferencesChanged = !device.preferredFunctions.empty();
+						device.preferredFunctions.clear();
+						device.preferredAssignmentsLoaded = true;
+						if (preferencesChanged)
+						{
+							toStore.push_back({ device.name, device.modelIdentificationCode, device.preferredFunctions });
+						}
+					}
+				}
+				return false;
+			}
+			for (auto &device : assignedAuxiliaryInputDevices)
+			{
+				const auto oldPreferredFunctions = device.preferredFunctions;
+				erase_auxiliary_function_assignment(device, functionObjectID, storeAsPreferred);
+				if (storeAsPreferred)
+				{
+					if (oldPreferredFunctions != device.preferredFunctions)
+					{
+						toStore.push_back({ device.name, device.modelIdentificationCode, device.preferredFunctions });
+					}
+				}
+			}
+			return false;
+		}
+		if (NULL_OBJECT_ID == functionObjectID || NULL_OBJECT_ID == inputObjectID)
+		{
+			return true;
+		}
+		if (functionType > static_cast<std::uint8_t>(AuxiliaryTypeTwoFunctionType::BidirectionalEncoder))
+		{
+			return true;
+		}
+
+		auto target = std::find_if(assignedAuxiliaryInputDevices.begin(), assignedAuxiliaryInputDevices.end(), [deviceName](const AssignedAuxiliaryInputDevice &device) {
+			return device.ready && device.name == deviceName;
+		});
+		if (target == assignedAuxiliaryInputDevices.end())
+		{
+			return true;
+		}
+		isAlreadyAssigned = std::any_of(target->functions.begin(), target->functions.end(), [inputObjectID, functionObjectID](const AssignedAuxiliaryFunction &function) {
+			return function.inputObjectID == inputObjectID && function.functionObjectID == functionObjectID;
+		});
+
+		const AssignedAuxiliaryFunction assignment(functionObjectID, inputObjectID, static_cast<AuxiliaryTypeTwoFunctionType>(functionType));
+		for (auto &device : assignedAuxiliaryInputDevices)
+		{
+			const bool isTarget = &device == &*target;
+			erase_auxiliary_function_assignment(device, functionObjectID, false);
+			if (storeAsPreferred)
+			{
+				const auto oldPreferredFunctions = device.preferredFunctions;
+				const bool targetAlreadyPrefersAssignment = isTarget &&
+				  (oldPreferredFunctions.end() != std::find(oldPreferredFunctions.begin(), oldPreferredFunctions.end(), assignment));
+				if (!targetAlreadyPrefersAssignment)
+				{
+					device.preferredFunctions.erase(std::remove_if(device.preferredFunctions.begin(), device.preferredFunctions.end(), [functionObjectID](const AssignedAuxiliaryFunction &function) {
+						                                return function.functionObjectID == functionObjectID;
+					                                }),
+					                                device.preferredFunctions.end());
+					if (isTarget)
+					{
+						device.preferredFunctions.push_back(assignment);
+					}
+				}
+				if (oldPreferredFunctions != device.preferredFunctions)
+				{
+					toStore.push_back({ device.name, device.modelIdentificationCode, device.preferredFunctions });
+				}
+				if (isTarget)
+				{
+					device.preferredAssignmentsLoaded = true;
+				}
+			}
+		}
+		target->functions.push_back(assignment);
+		return false;
+	}
+
+	void VirtualTerminalClient::erase_auxiliary_function_assignment(AssignedAuxiliaryInputDevice &device, std::uint16_t functionObjectID, bool updatePreferred)
+	{
+		device.functions.erase(std::remove_if(device.functions.begin(), device.functions.end(), [functionObjectID](const AssignedAuxiliaryFunction &function) {
+			                       return function.functionObjectID == functionObjectID;
+		                       }),
+		                       device.functions.end());
+		if (!updatePreferred)
+		{
+			return;
+		}
+		device.preferredFunctions.erase(std::remove_if(device.preferredFunctions.begin(), device.preferredFunctions.end(), [functionObjectID](const AssignedAuxiliaryFunction &function) {
+			                                return function.functionObjectID == functionObjectID;
+		                                }),
+		                                device.preferredFunctions.end());
 	}
 
 	bool VirtualTerminalClient::send_auxiliary_function_assignment_response(std::uint16_t functionObjectID, bool hasError, bool isAlreadyAssigned) const
@@ -2026,12 +2518,19 @@ namespace isobus
 		return send_message_to_vt(buffer.data(), buffer.size());
 	}
 
+	bool VirtualTerminalClient::get_auxiliary_input_pool_ready() const
+	{
+		return (StateMachineState::SendStoreVersion == state) ||
+		  (StateMachineState::WaitForStoreVersionResponse == state) ||
+		  (StateMachineState::Connected == state);
+	}
+
 	bool VirtualTerminalClient::send_auxiliary_input_maintenance() const
 	{
 		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(Function::AuxiliaryInputTypeTwoMaintenanceMessage),
 			                                                         static_cast<std::uint8_t>(ourModelIdentificationCode),
 			                                                         static_cast<std::uint8_t>(ourModelIdentificationCode >> 8),
-			                                                         static_cast<std::uint8_t>(StateMachineState::Connected == state ? 0x01 : 0x00),
+			                                                         static_cast<std::uint8_t>(get_auxiliary_input_pool_ready() ? 0x01 : 0x00),
 			                                                         0xFF,
 			                                                         0xFF,
 			                                                         0xFF,
@@ -2069,14 +2568,15 @@ namespace isobus
 	{
 		bool retVal = false;
 		AuxiliaryInputState &state = ourAuxiliaryInputs.at(objectID);
+		if (!state.enabled && !get_auxiliary_input_learn_mode_enabled())
+		{
+			return false;
+		}
 		/// @todo Change status message every 50ms to every 200ms for non-latched boolean inputs on interaction
 		if (SystemTiming::time_expired_ms(state.lastStatusUpdate, AUXILIARY_INPUT_STATUS_DELAY) ||
 		    (state.hasInteraction &&
-		     !get_auxiliary_input_learn_mode_enabled() &&
 		     SystemTiming::time_expired_ms(state.lastStatusUpdate, AUXILIARY_INPUT_STATUS_DELAY_INTERACTION)))
 		{
-			state.lastStatusUpdate = SystemTiming::get_timestamp_ms();
-
 			std::uint8_t operatingState = 0;
 			if (get_auxiliary_input_learn_mode_enabled())
 			{
@@ -2094,8 +2594,6 @@ namespace isobus
 					operatingState |= 0x08;
 				}
 			}
-			state.hasInteraction = false; // reset interaction flag
-
 			/// @todo Change values based on state of auxiliary input, e.g. for non-latched boolean inputs we have to change from value=1 (momentary) to value=2 (held)
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { static_cast<std::uint8_t>(Function::AuxiliaryInputTypeTwoStatusMessage),
 				                                                         static_cast<std::uint8_t>(objectID),
@@ -2118,16 +2616,26 @@ namespace isobus
 				                                                        nullptr,
 				                                                        CANIdentifier::CANPriority::Priority3);
 			}
+			if (retVal)
+			{
+				state.lastStatusUpdate = SystemTiming::get_timestamp_ms();
+				state.hasInteraction = false;
+			}
 		}
 		return retVal;
 	}
 
 	void VirtualTerminalClient::set_state(StateMachineState value)
 	{
+		LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
 		stateMachineTimestamp_ms = SystemTiming::get_timestamp_ms();
 
 		if (value != state)
 		{
+			if (StateMachineState::UploadObjectPool == state)
+			{
+				currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized;
+			}
 			firstTimeInState = true;
 			if ((StateMachineState::WaitForEndOfObjectPoolResponse == value) ||
 			    (StateMachineState::WaitForLoadVersionResponse == value))
@@ -2135,16 +2643,185 @@ namespace isobus
 				consecutiveNonParsingVTStatusMessages = 0;
 			}
 		}
+		if ((StateMachineState::Connected == value) && (StateMachineState::Connected != state) && auxiliaryFunctionsEnabled)
+		{
+			auxiliaryAssignmentPending = true;
+		}
 
 		state = value;
 
 		if (StateMachineState::Disconnected == value)
 		{
+			{
+				// The next VT may need other factors: commands still queued are scaled when sent
+				LOCK_GUARD(Mutex, commandScalingMutex);
+				commandScaling = CommandScaling();
+			}
 			lastVTStatusTimestamp_ms = 0;
+			++auxiliaryAssignmentSessionGeneration;
+			auxiliaryAssignmentTransaction.reset();
+			if (auxiliaryAssignmentResponseCount != 0)
+			{
+				LOG_ERROR("[AUX-N]: VT session ended with undelivered assignment responses.");
+			}
+			auxiliaryAssignmentResponseCount = 0;
+			auxiliaryAssignmentResponseHead = 0;
+			for (auto &device : assignedAuxiliaryInputDevices)
+			{
+				mark_auxiliary_input_device_unavailable(device);
+			}
+			auxiliaryAssignmentPending = false;
 			for (auto &pool : objectPools)
 			{
 				pool.uploaded = false;
 			}
+		}
+	}
+
+	bool VirtualTerminalClient::prepare_auxiliary_assignment_transaction_locked()
+	{
+		AuxiliaryAssignmentTransaction snapshot;
+		std::set<std::uint16_t> functionIDs;
+		snapshot.message = { static_cast<std::uint8_t>(Function::PreferredAssignmentCommand), 0 };
+		for (const auto &device : assignedAuxiliaryInputDevices)
+		{
+			if (!device.ready || device.preferredFunctions.empty())
+			{
+				continue;
+			}
+			if (!device.preferredAssignmentsLoaded || !valid_preferred_auxiliary_assignments(device.preferredFunctions) ||
+			    (snapshot.devices.size() == std::numeric_limits<std::uint8_t>::max()))
+			{
+				return false;
+			}
+			for (const auto &function : device.preferredFunctions)
+			{
+				if (!functionIDs.insert(function.functionObjectID).second)
+				{
+					return false;
+				}
+			}
+			snapshot.devices.emplace_back(device.name, device.modelIdentificationCode);
+			for (unsigned int byte = 0; byte < 8; ++byte)
+			{
+				snapshot.message.push_back(static_cast<std::uint8_t>(device.name >> (byte * 8)));
+			}
+			snapshot.message.push_back(static_cast<std::uint8_t>(device.modelIdentificationCode));
+			snapshot.message.push_back(static_cast<std::uint8_t>(device.modelIdentificationCode >> 8));
+			snapshot.message.push_back(static_cast<std::uint8_t>(device.preferredFunctions.size()));
+			for (const auto &function : device.preferredFunctions)
+			{
+				snapshot.message.push_back(static_cast<std::uint8_t>(function.functionObjectID));
+				snapshot.message.push_back(static_cast<std::uint8_t>(function.functionObjectID >> 8));
+				snapshot.message.push_back(static_cast<std::uint8_t>(function.inputObjectID));
+				snapshot.message.push_back(static_cast<std::uint8_t>(function.inputObjectID >> 8));
+			}
+		}
+		snapshot.message[1] = static_cast<std::uint8_t>(snapshot.devices.size());
+		// ISO 11783-6, 4.6.26 requires padding to the next eight-byte boundary.
+		const auto paddedLength = ((snapshot.message.size() + CAN_DATA_LENGTH - 1) / CAN_DATA_LENGTH) * CAN_DATA_LENGTH;
+		snapshot.message.resize(paddedLength, 0xFF);
+		auxiliaryAssignmentTransaction = std::move(snapshot);
+		return true;
+	}
+
+	void VirtualTerminalClient::update_auxiliary_assignment_transaction()
+	{
+		if (!auxiliaryFunctionsEnabled || (nullptr == partnerControlFunction) ||
+		    (0 != partnerControlFunction->get_NAME().get_function_instance()) || !is_vt_version_supported(VTVersion::Version3))
+		{
+			return;
+		}
+
+		bool failed = false;
+		AuxiliaryAssignmentFailureReason failureReason = AuxiliaryAssignmentFailureReason::ResponseTimeout;
+		{
+			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+			if (StateMachineState::Connected != state)
+			{
+				return;
+			}
+			auto &transaction = auxiliaryAssignmentTransaction;
+			if (transaction.outstanding())
+			{
+				if (SystemTiming::time_expired_ms(transaction.timestamp_ms, AUXILIARY_ASSIGNMENT_RESPONSE_TIMEOUT_MS))
+				{
+					if (transaction.obsolete || (transaction.attemptCount >= 3))
+					{
+						failed = true;
+						failureReason = transaction.obsolete ? AuxiliaryAssignmentFailureReason::ObsoleteAssignment : AuxiliaryAssignmentFailureReason::ResponseTimeout;
+						transaction.reset();
+					}
+					else if (send_message_to_vt(transaction.message.data(), transaction.message.size()))
+					{
+						++transaction.attemptCount;
+						transaction.timestamp_ms = SystemTiming::get_timestamp_ms();
+					}
+				}
+				if (transaction.outstanding())
+				{
+					return;
+				}
+			}
+		}
+		if (failed)
+		{
+			LOG_WARNING("[AUX-N]: Preferred assignment timed out; snapshot obsolete or retry limit reached.");
+			auxiliaryAssignmentFailureEventDispatcher.invoke({ this, failureReason });
+		}
+
+		bool invalidPreferences = false;
+		{
+			LOCK_GUARD(Mutex, auxiliaryPreferenceOperationMutex);
+			std::uint32_t sessionGeneration;
+			{
+				LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+				sessionGeneration = auxiliaryAssignmentSessionGeneration;
+			}
+			const bool preferencesValid = ensure_auxiliary_preferences_loaded();
+			LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+			if ((StateMachineState::Connected != state) || (sessionGeneration != auxiliaryAssignmentSessionGeneration))
+			{
+				return;
+			}
+			auto &transaction = auxiliaryAssignmentTransaction;
+			if (!preferencesValid)
+			{
+				invalidPreferences = true;
+				auxiliaryAssignmentPending = false;
+			}
+			else if (!transaction.outstanding() && auxiliaryAssignmentPending)
+			{
+				// Wait only for detected preferred devices; expired devices retain preferences.
+				if (std::any_of(assignedAuxiliaryInputDevices.begin(), assignedAuxiliaryInputDevices.end(), [](const AssignedAuxiliaryInputDevice &device) {
+					    return !SystemTiming::time_expired_ms(device.lastMaintenanceMessageTimestamp, AUXILIARY_INPUT_DEVICE_TIMEOUT_MS) &&
+					      (!device.preferredAssignmentsLoaded || (!device.ready && !device.preferredFunctions.empty()));
+				    }))
+				{
+					return;
+				}
+				if (!prepare_auxiliary_assignment_transaction_locked())
+				{
+					invalidPreferences = true;
+					auxiliaryAssignmentPending = false;
+				}
+				else if (send_message_to_vt(transaction.message.data(), transaction.message.size()))
+				{
+					transaction.attemptCount = 1;
+					transaction.timestamp_ms = SystemTiming::get_timestamp_ms();
+					auxiliaryAssignmentPending = false;
+				}
+				else
+				{
+					// Preserve pending demand if the command could not be queued.
+					transaction.reset();
+				}
+			}
+		}
+		if (invalidPreferences)
+		{
+			LOG_WARNING("[AUX-N]: Stored preferred assignments could not be serialized.");
+			auxiliaryAssignmentFailureEventDispatcher.invoke({ this, AuxiliaryAssignmentFailureReason::InvalidPreferences });
 		}
 	}
 
@@ -2204,8 +2881,13 @@ namespace isobus
 		if ((nullptr != parentPointer) &&
 		    (CAN_DATA_LENGTH <= message.get_data_length()) &&
 		    ((nullptr == message.get_destination_control_function()) ||
-		     (parentVT->myControlFunction == message.get_destination_control_function())))
+		     (parentVT->myControlFunction == message.get_destination_control_function()) ||
+		     ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == message.get_identifier().get_parameter_group_number()) &&
+		      (static_cast<std::uint8_t>(Function::AuxiliaryInputTypeTwoMaintenanceMessage) == message.get_uint8_at(0)) &&
+		      (parentVT->partnerControlFunction == message.get_destination_control_function()))))
 		{
+			auto &auxiliaryMutex = parentVT->auxiliaryAssignmentMutex;
+			(void)auxiliaryMutex;
 			switch (message.get_identifier().get_parameter_group_number())
 			{
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge):
@@ -2213,7 +2895,8 @@ namespace isobus
 					if (AcknowledgementType::Negative == static_cast<AcknowledgementType>(message.get_uint8_at(0)))
 					{
 						std::uint32_t targetParameterGroupNumber = message.get_uint24_at(5);
-						if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == targetParameterGroupNumber)
+						if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == targetParameterGroupNumber) &&
+						    (StateMachineState::Failed != parentVT->state))
 						{
 							LOG_ERROR("[VT]: The VT Server is NACK-ing our VT messages. Disconnecting.");
 							parentVT->set_state(StateMachineState::Disconnected);
@@ -2399,32 +3082,36 @@ namespace isobus
 						case static_cast<std::uint8_t>(Function::VTESCMessage):
 						{
 							std::uint16_t objectID = message.get_uint16_at(1);
-							std::uint8_t errorCode = message.get_uint8_at(3) & 0x1F;
-							if ((errorCode == static_cast<std::uint8_t>(ESCMessageErrorCode::OtherError)) ||
-							    (errorCode <= static_cast<std::uint8_t>(ESCMessageErrorCode::NoInputFieldOpen)))
+							std::uint8_t errorBits = message.get_uint8_at(3);
+							ESCMessageErrorCode errorCode = ESCMessageErrorCode::NoError;
+							if (0 != (errorBits & static_cast<std::uint8_t>(ESCMessageErrorCode::OtherError)))
 							{
-								std::uint8_t transactionNumber = 0xF;
-								if (parentVT->is_vt_version_supported(VTVersion::Version6))
-								{
-									// VT version is 6 or later
-									transactionNumber = message.get_uint8_at(7) >> 4;
-								}
-
-								parentVT->escMessageEventDispatcher.invoke({ parentVT, objectID, static_cast<ESCMessageErrorCode>(errorCode) });
-
-								// Send response
-								std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
-									static_cast<std::uint8_t>(Function::VTESCMessage),
-									static_cast<std::uint8_t>(objectID),
-									static_cast<std::uint8_t>(objectID >> 8),
-									0xFF,
-									0xFF,
-									0xFF,
-									0xFF,
-									static_cast<std::uint8_t>((transactionNumber << 4) | 0x0F),
-								};
-								parentVT->send_message_to_vt(buffer.data(), buffer.size());
+								errorCode = ESCMessageErrorCode::OtherError;
 							}
+							else if (0 != (errorBits & static_cast<std::uint8_t>(ESCMessageErrorCode::NoInputFieldOpen)))
+							{
+								errorCode = ESCMessageErrorCode::NoInputFieldOpen;
+							}
+
+							std::uint8_t transactionNumber = 0xF;
+							if (parentVT->is_vt_version_supported(VTVersion::Version6))
+							{
+								transactionNumber = message.get_uint8_at(7) >> 4;
+							}
+
+							parentVT->escMessageEventDispatcher.invoke({ parentVT, objectID, errorCode });
+
+							std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
+								static_cast<std::uint8_t>(Function::VTESCMessage),
+								static_cast<std::uint8_t>(objectID),
+								static_cast<std::uint8_t>(objectID >> 8),
+								0xFF,
+								0xFF,
+								0xFF,
+								0xFF,
+								static_cast<std::uint8_t>((transactionNumber << 4) | 0x0F),
+							};
+							parentVT->send_message_to_vt(buffer.data(), buffer.size());
 						}
 						break;
 
@@ -2533,22 +3220,30 @@ namespace isobus
 						{
 							std::uint16_t objectID = message.get_uint16_at(1);
 							std::uint8_t stringLength = message.get_uint8_at(3);
-							std::string value = std::string(message.get_data().begin() + 4, message.get_data().begin() + 4 + stringLength);
 
-							parentVT->changeStringValueEventDispatcher.invoke({ value, parentVT, objectID });
+							if (message.get_data_length() >= (4U + stringLength))
+							{
+								std::string value = std::string(message.get_data().begin() + 4, message.get_data().begin() + 4 + stringLength);
 
-							// Send response
-							std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
-								static_cast<std::uint8_t>(Function::VTChangeStringValueMessage),
-								0xFF,
-								0xFF,
-								static_cast<std::uint8_t>(objectID),
-								static_cast<std::uint8_t>(objectID >> 8),
-								0xFF,
-								0xFF,
-								0xFF
-							};
-							parentVT->send_message_to_vt(buffer.data(), buffer.size());
+								parentVT->changeStringValueEventDispatcher.invoke({ value, parentVT, objectID });
+
+								// Send response
+								std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
+									static_cast<std::uint8_t>(Function::VTChangeStringValueMessage),
+									0xFF,
+									0xFF,
+									static_cast<std::uint8_t>(objectID),
+									static_cast<std::uint8_t>(objectID >> 8),
+									0xFF,
+									0xFF,
+									0xFF
+								};
+								parentVT->send_message_to_vt(buffer.data(), buffer.size());
+							}
+							else
+							{
+								LOG_WARNING("[VT]: Ignoring VT Change String Value message, its string length is longer than the message.");
+							}
 						}
 						break;
 
@@ -2613,157 +3308,93 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::PreferredAssignmentCommand):
 						{
-							if (message.get_bool_at(1, 0))
+							if ((message.get_data_length() != CAN_DATA_LENGTH) || !parentVT->auxiliaryFunctionsEnabled ||
+							    (nullptr == parentVT->partnerControlFunction) || (0 != parentVT->partnerControlFunction->get_NAME().get_function_instance()) ||
+							    (message.get_source_control_function() != parentVT->partnerControlFunction))
 							{
-								LOG_ERROR("[AUX-N]: Preferred Assignment Error - Auxiliary Input Unit(s) (NAME or Model Identification Code) not valid");
+								break;
 							}
-							if (message.get_bool_at(1, 1))
+							const std::uint8_t errors = message.get_uint8_at(1);
+							bool wasOutstanding = false;
 							{
-								LOG_ERROR("[AUX-N]: Preferred Assignment Error - Function Object ID(S) not valid");
+								LOCK_GUARD(Mutex, auxiliaryMutex);
+								wasOutstanding = parentVT->auxiliaryAssignmentTransaction.outstanding();
+								if (wasOutstanding)
+								{
+									parentVT->auxiliaryAssignmentTransaction.reset();
+								}
 							}
-							if (message.get_bool_at(1, 2))
+							if (!wasOutstanding)
 							{
-								LOG_ERROR("[AUX-N]: Preferred Assignment Error - Input Object ID(s) not valid");
+								LOG_WARNING("[AUX-N]: Ignoring preferred assignment response without an active transaction.");
+								break;
 							}
-							if (message.get_bool_at(1, 3))
+							if (0 != errors)
 							{
-								LOG_ERROR("[AUX-N]: Preferred Assignment Error - Duplicate Object ID of Auxiliary Function");
-							}
-							if (message.get_bool_at(1, 4))
-							{
-								LOG_ERROR("[AUX-N]: Preferred Assignment Error - Other");
-							}
-
-							if (0 != message.get_uint8_at(1))
-							{
-								std::uint16_t faultyObjectID = message.get_uint16_at(2);
-								LOG_ERROR("[AUX-N]: Auxiliary Function Object ID of faulty assignment: " + isobus::to_string(faultyObjectID));
+								LOG_ERROR("[AUX-N]: VT rejected the preferred assignment command (error flags " + isobus::to_string(errors) + ").");
+								const auto reason = AuxiliaryAssignmentFailureReason::VTRejected | static_cast<AuxiliaryAssignmentFailureReason>(errors & 0x1F);
+								parentVT->auxiliaryAssignmentFailureEventDispatcher.invoke({ parentVT, reason });
 							}
 							else
 							{
 								LOG_DEBUG("[AUX-N]: Preferred Assignment OK");
-								//! @todo load the preferred assignment into parentVT->assignedAuxiliaryInputDevices
 							}
 						}
 						break;
 
 						case static_cast<std::uint8_t>(Function::AuxiliaryAssignmentTypeTwoCommand):
 						{
-							if (14 == message.get_data_length())
+							// J.7.5 defines 14 data bytes, padded to 16 bytes by 4.6.26.
+							if (((14 == message.get_data_length()) || (16 == message.get_data_length())) &&
+							    (nullptr != parentVT->partnerControlFunction) && (0 == parentVT->partnerControlFunction->get_NAME().get_function_instance()) &&
+							    (message.get_source_control_function() == parentVT->partnerControlFunction))
 							{
-								std::uint64_t isoName = message.get_uint64_at(1);
-								bool storeAsPreferred = message.get_bool_at(9, 7);
-								std::uint8_t functionType = (message.get_uint8_at(9) & 0x1F);
-								std::uint16_t inputObjectID = message.get_uint16_at(10);
-								std::uint16_t functionObjectID = message.get_uint16_at(12);
-
-								bool hasError = false;
-								bool isAlreadyAssigned = false;
-								if (DEFAULT_NAME == isoName && 0x1F == functionType)
+								if (parentVT->auxiliaryFunctionsEnabled)
 								{
-									if (NULL_OBJECT_ID == functionObjectID)
-									{
-										for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
-										{
-											aux.functions.clear();
-										}
-										LOG_INFO("[AUX-N] Unassigned all functions");
-									}
-									else if (NULL_OBJECT_ID == inputObjectID)
-									{
-										for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
-										{
-											for (auto iter = aux.functions.begin(); iter != aux.functions.end();)
-											{
-												if (iter->functionObjectID == functionObjectID)
-												{
-													aux.functions.erase(iter);
-													if (storeAsPreferred)
-													{
-														//! @todo save preferred assignment to persistent configuration
-													}
-													LOG_INFO("[AUX-N] Unassigned function " + isobus::to_string(static_cast<int>(functionObjectID)) + " from input " + isobus::to_string(static_cast<int>(inputObjectID)));
-												}
-												else
-												{
-													++iter;
-												}
-											}
-										}
-									}
+									parentVT->handle_auxiliary_assignment_command(message);
 								}
 								else
 								{
-									auto result = std::find_if(parentVT->assignedAuxiliaryInputDevices.begin(), parentVT->assignedAuxiliaryInputDevices.end(), [&isoName](const AssignedAuxiliaryInputDevice &aux) {
-										return aux.name == isoName;
-									});
-									if (result != std::end(parentVT->assignedAuxiliaryInputDevices))
-									{
-										if (static_cast<std::uint8_t>(AuxiliaryTypeTwoFunctionType::QuadratureBooleanMomentary) >= functionType)
-										{
-											AssignedAuxiliaryFunction assignment(functionObjectID, inputObjectID, static_cast<AuxiliaryTypeTwoFunctionType>(functionType));
-											auto location = std::find(result->functions.begin(), result->functions.end(), assignment);
-											if (location == std::end(result->functions))
-											{
-												result->functions.push_back(assignment);
-												if (storeAsPreferred)
-												{
-													//! @todo save preferred assignment to persistent configuration
-												}
-												LOG_INFO("[AUX-N]: Assigned function " + isobus::to_string(static_cast<int>(functionObjectID)) + " to input " + isobus::to_string(static_cast<int>(inputObjectID)));
-											}
-											else
-											{
-												hasError = true;
-												isAlreadyAssigned = true;
-												LOG_WARNING("[AUX-N]: Unable to store preferred assignment due to missing auxiliary input device with name: " + isobus::to_string(isoName));
-											}
-										}
-										else
-										{
-											hasError = true;
-											LOG_WARNING("[AUX-N]: Unable to store preferred assignment due to unsupported function type: " + isobus::to_string(functionType));
-										}
-									}
-									else
-									{
-										hasError = true;
-										LOG_WARNING("[AUX-N]: Unable to store preferred assignment due to missing auxiliary input device with name: " + isobus::to_string(isoName));
-									}
+									LOG_INFO("[AUX-N]: Ignoring assignment command because AUX-N Functions are disabled. Call set_auxiliary_functions_enabled(true) before initialize() to enable them.");
 								}
-								parentVT->send_auxiliary_function_assignment_response(functionObjectID, hasError, isAlreadyAssigned);
 							}
 							else
 							{
-								LOG_WARNING("[AUX-N]: Received AuxiliaryAssignmentTypeTwoCommand with wrong data length: " + isobus::to_string(message.get_data_length()) + " but expected 14.");
+								LOG_WARNING("[AUX-N]: Ignoring assignment command with invalid source or length.");
 							}
 						}
 						break;
 
 						case static_cast<std::uint8_t>(Function::AuxiliaryInputTypeTwoStatusMessage):
 						{
-							std::uint16_t inputObjectID = message.get_uint16_at(1);
-							std::uint16_t value1 = message.get_uint16_at(3);
-							std::uint16_t value2 = message.get_uint16_at(5);
-							/// @todo figure out how to best pass other status properties below to application
-							/// @todo The standard requires us to not perform any auxiliary function when learn mode is active, so we probably want to let the application know about that somehow
-							// bool learnModeActive = message.get_bool_at(7, 0);
-							// bool inputActive = message.get_bool_at(7, 1); // Only in learn mode?
-							// bool controlIsLocked = false;
-							// bool interactionWhileLocked = false;
-							if (parentVT->is_vt_version_supported(VTVersion::Version6))
+							if ((CAN_DATA_LENGTH == message.get_data_length()) && parentVT->auxiliaryFunctionsEnabled &&
+							    !parentVT->get_auxiliary_input_learn_mode_enabled() &&
+							    (nullptr != message.get_source_control_function()))
 							{
-								// controlIsLocked = message.get_bool_at(7, 2);
-								// interactionWhileLocked = message.get_bool_at(7, 3);
-							}
-							for (AssignedAuxiliaryInputDevice &aux : parentVT->assignedAuxiliaryInputDevices)
-							{
-								auto result = std::find_if(aux.functions.begin(), aux.functions.end(), [&inputObjectID](const AssignedAuxiliaryFunction &assignment) {
-									return assignment.inputObjectID == inputObjectID;
-								});
-								if (aux.functions.end() != result)
+								const std::uint16_t inputObjectID = message.get_uint16_at(1);
+								const std::uint16_t value1 = message.get_uint16_at(3);
+								const std::uint16_t value2 = message.get_uint16_at(5);
+								const std::uint64_t sourceName = message.get_source_control_function()->get_NAME().get_full_name();
+								std::vector<AuxiliaryFunctionEvent> events;
 								{
-									parentVT->auxiliaryFunctionEventDispatcher.invoke({ *result, parentVT, value1, value2 });
+									LOCK_GUARD(Mutex, auxiliaryMutex);
+									auto device = std::find_if(parentVT->assignedAuxiliaryInputDevices.begin(), parentVT->assignedAuxiliaryInputDevices.end(), [sourceName](const AssignedAuxiliaryInputDevice &candidate) {
+										return candidate.ready && candidate.name == sourceName;
+									});
+									if (device != parentVT->assignedAuxiliaryInputDevices.end())
+									{
+										for (const AssignedAuxiliaryFunction &assignment : device->functions)
+										{
+											if (assignment.inputObjectID == inputObjectID)
+											{
+												events.push_back({ assignment, parentVT, value1, value2 });
+											}
+										}
+									}
+								}
+								for (auto &event : events)
+								{
+									parentVT->auxiliaryFunctionEventDispatcher.invoke(std::move(event));
 								}
 							}
 						}
@@ -2771,15 +3402,34 @@ namespace isobus
 
 						case static_cast<std::uint8_t>(Function::AuxiliaryInputStatusTypeTwoEnableCommand):
 						{
+							if ((nullptr == parentVT->partnerControlFunction) ||
+							    (0 != parentVT->partnerControlFunction->get_NAME().get_function_instance()) ||
+							    (message.get_source_control_function() != parentVT->partnerControlFunction))
+							{
+								break;
+							}
 							std::uint16_t inputObjectID = message.get_uint16_at(1);
 							bool shouldEnable = message.get_bool_at(3, 0);
-							auto result = std::find_if(parentVT->ourAuxiliaryInputs.begin(), parentVT->ourAuxiliaryInputs.end(), [&inputObjectID](const std::pair<std::uint16_t, AuxiliaryInputState> &input) {
-								return input.first == inputObjectID;
-							});
-							bool isInvalidObjectID = (result == std::end(parentVT->ourAuxiliaryInputs));
-							if (!isInvalidObjectID)
+							bool isInvalidObjectID = false;
+							if (NULL_OBJECT_ID == inputObjectID)
 							{
-								result->second.enabled = shouldEnable;
+								isInvalidObjectID = shouldEnable;
+								if (!shouldEnable)
+								{
+									for (auto &input : parentVT->ourAuxiliaryInputs)
+									{
+										input.second.enabled = false;
+									}
+								}
+							}
+							else
+							{
+								auto result = parentVT->ourAuxiliaryInputs.find(inputObjectID);
+								isInvalidObjectID = (result == parentVT->ourAuxiliaryInputs.end());
+								if (!isInvalidObjectID)
+								{
+									result->second.enabled = shouldEnable;
+								}
 							}
 							parentVT->send_auxiliary_input_status_enable_response(inputObjectID, isInvalidObjectID ? false : shouldEnable, isInvalidObjectID);
 						}
@@ -2968,20 +3618,9 @@ namespace isobus
 								if (0 == message.get_uint8_at(5))
 								{
 									LOG_INFO("[VT]: Loaded object pool version from VT non-volatile memory with no errors.");
-									parentVT->set_state(StateMachineState::Connected);
 
-									//! @todo maybe a better way available than relying on aux function callbacks registered?
-									if (parentVT->auxiliaryFunctionEventDispatcher.get_listener_count() > 0)
-									{
-										if (parentVT->send_auxiliary_functions_preferred_assignment())
-										{
-											LOG_DEBUG("[AUX-N]: Sent preferred assignments after LoadVersionCommand.");
-										}
-										else
-										{
-											LOG_WARNING("[AUX-N]: Failed to send preferred assignments after LoadVersionCommand.");
-										}
-									}
+									// Normal VT initialization is complete; AUX-N synchronization runs from update().
+									parentVT->set_state(StateMachineState::Connected);
 								}
 								else
 								{
@@ -3023,8 +3662,10 @@ namespace isobus
 								if (0 == message.get_uint8_at(5))
 								{
 									// Stored with no error
-									parentVT->set_state(StateMachineState::Connected);
 									LOG_INFO("[VT]: Stored object pool with no error.");
+
+									// After successful store, send auxiliary assignments if needed.
+									parentVT->set_state(StateMachineState::Connected);
 								}
 								else
 								{
@@ -3041,6 +3682,10 @@ namespace isobus
 									{
 										LOG_WARNING("[VT]: Store Versions Response error: Any other error.");
 									}
+
+									// The pool is already uploaded and in use; only storing it failed,
+									// so it will be uploaded again next time. Carry on.
+									parentVT->set_state(StateMachineState::Connected);
 								}
 							}
 							else
@@ -3096,23 +3741,13 @@ namespace isobus
 									}
 									else
 									{
+										// No version to store, check for auxiliary assignments.
 										parentVT->set_state(StateMachineState::Connected);
-									}
-									//! @todo maybe a better way available than relying on aux function callbacks registered?
-									if (parentVT->auxiliaryFunctionEventDispatcher.get_listener_count() > 0)
-									{
-										if (parentVT->send_auxiliary_functions_preferred_assignment())
-										{
-											LOG_DEBUG("[AUX-N]: Sent preferred assignments after EndOfObjectPoolMessage.");
-										}
-										else
-										{
-											LOG_WARNING("[AUX-N]: Failed to send preferred assignments after EndOfObjectPoolMessage.");
-										}
 									}
 								}
 								else
 								{
+									parentVT->objectPoolRejected = true;
 									parentVT->set_state(StateMachineState::Failed);
 									LOG_ERROR("[VT]: Error in end of object pool message." +
 									          std::string("Faulty Object ") +
@@ -3164,6 +3799,17 @@ namespace isobus
 							if ((parentVT->myControlFunction == message.get_destination_control_function()) &&
 							    (parentVT->partnerControlFunction == message.get_source_control_function()))
 							{
+								if ((static_cast<std::uint8_t>(Function::ChangeStringValueCommand) == message.get_uint8_at(0)) &&
+								    (0 != message.get_uint8_at(5)))
+								{
+									const std::uint8_t errorCodes = message.get_uint8_at(5);
+									LOG_ERROR("[VT]: The VT rejected Change String Value for object " + isobus::to_string(static_cast<int>(message.get_uint16_at(3))) +
+									          ", error code " + isobus::to_string(static_cast<int>(errorCodes)) +
+									          ((0 != (errorCodes & 0x02)) ? " (invalid object ID)" : "") +
+									          ((0 != (errorCodes & 0x04)) ? " (string too long)" : "") +
+									          ((0 != (errorCodes & 0x08)) ? " (any other error)" : "") +
+									          ((0 != (errorCodes & 0x10)) ? " (value in use)" : ""));
+								}
 								parentVT->commandAwaitingResponse = false;
 								parentVT->process_command_queue();
 							}
@@ -3206,22 +3852,47 @@ namespace isobus
 					{
 						case static_cast<std::uint8_t>(Function::AuxiliaryInputTypeTwoMaintenanceMessage):
 						{
-							std::uint16_t modelIdentificationCode = message.get_uint16_at(1);
-							bool ready = message.get_uint8_at(3);
-
-							if (ready)
+							if ((CAN_DATA_LENGTH == message.get_data_length()) && parentVT->auxiliaryFunctionsEnabled &&
+							    (nullptr != message.get_source_control_function()))
 							{
-								auto result = std::find_if(parentVT->assignedAuxiliaryInputDevices.begin(), parentVT->assignedAuxiliaryInputDevices.end(), [&modelIdentificationCode](const AssignedAuxiliaryInputDevice &aux) {
-									return aux.modelIdentificationCode == modelIdentificationCode;
-								});
-								if (result == std::end(parentVT->assignedAuxiliaryInputDevices))
+								const std::uint16_t modelCode = message.get_uint16_at(1);
+								const bool ready = (1 == message.get_uint8_at(3));
+								const std::uint64_t deviceName = message.get_source_control_function()->get_NAME().get_full_name();
+								LOCK_GUARD(Mutex, auxiliaryMutex);
+								for (auto &previous : parentVT->assignedAuxiliaryInputDevices)
 								{
-									AssignedAuxiliaryInputDevice inputDevice{ message.get_source_control_function()->get_NAME().get_full_name(), modelIdentificationCode, {} };
-									parentVT->assignedAuxiliaryInputDevices.push_back(inputDevice);
-									LOG_INFO("[AUX-N]: New auxiliary input device with name: " +
-									         isobus::to_string(inputDevice.name) +
-									         " and model identification code: " +
-									         isobus::to_string(modelIdentificationCode));
+									if (previous.name == deviceName && previous.modelIdentificationCode != modelCode && previous.ready)
+									{
+										parentVT->mark_auxiliary_input_device_unavailable(previous);
+									}
+								}
+								auto device = std::find_if(parentVT->assignedAuxiliaryInputDevices.begin(), parentVT->assignedAuxiliaryInputDevices.end(), [deviceName, modelCode](const AssignedAuxiliaryInputDevice &candidate) {
+									return candidate.name == deviceName && candidate.modelIdentificationCode == modelCode;
+								});
+								if (device == parentVT->assignedAuxiliaryInputDevices.end())
+								{
+									parentVT->assignedAuxiliaryInputDevices.push_back({ deviceName,
+									                                                    modelCode,
+									                                                    {},
+									                                                    SystemTiming::get_timestamp_ms(),
+									                                                    {},
+									                                                    nullptr == parentVT->auxiliaryAssignmentLoadCallback,
+									                                                    false });
+									device = parentVT->assignedAuxiliaryInputDevices.end() - 1;
+									LOG_INFO("[AUX-N]: Discovered auxiliary input device with NAME " + isobus::to_string(deviceName) + " and model code " + isobus::to_string(modelCode));
+								}
+								device->lastMaintenanceMessageTimestamp = SystemTiming::get_timestamp_ms();
+								if (ready && !device->ready)
+								{
+									device->ready = true;
+									if (!device->preferredFunctions.empty())
+									{
+										parentVT->auxiliaryAssignmentPending = true;
+									}
+								}
+								else if (!ready && device->ready)
+								{
+									parentVT->mark_auxiliary_input_device_unavailable(*device);
 								}
 							}
 						}
@@ -3245,7 +3916,7 @@ namespace isobus
 
 	void VirtualTerminalClient::print_objectpool_error(std::uint8_t errorCodes, std::uint8_t objectPoolErrorCodes)
 	{
-		LOG_ERROR("Error(s) occured during the IOP parsing process:");
+		LOG_ERROR("Error(s) occurred during the IOP parsing process:");
 		if (errorCodes & 0x1)
 		{
 			LOG_ERROR(" - Error in the object pool");
@@ -3419,13 +4090,165 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalClient::scale_object_pools()
+	std::vector<std::uint16_t> VirtualTerminalClient::get_soft_key_scaled_object_ids(const std::vector<std::vector<std::uint8_t> *> &pools)
+	{
+		constexpr std::size_t OBJECT_ID_LENGTH = 2;
+		constexpr std::size_t OBJECT_TYPE_OFFSET = 2; // ID
+		constexpr std::size_t KEY_NUMBER_OF_OBJECTS_OFFSET = 5; // ID, type, background colour, key code
+		constexpr std::size_t KEY_CHILDREN_OFFSET = 7; // ID, type, background colour, key code, number of objects, number of macros
+		constexpr std::size_t CONTAINER_NUMBER_OF_OBJECTS_OFFSET = 8; // ID, type, width, height, hidden
+		constexpr std::size_t CONTAINER_CHILDREN_OFFSET = 10; // ID, type, width, height, hidden, number of objects, number of macros
+		constexpr std::size_t CHILD_REFERENCE_LENGTH = 6; // ID, X, Y
+		constexpr std::size_t FONT_ATTRIBUTES_OFFSET = 8; // Output and input strings and numbers: ID, type, width, height, background colour
+		constexpr std::size_t OBJECT_POINTER_VALUE_OFFSET = 3; // ID, type
+
+		auto read_id = [](const ObjectPoolEntry &object, std::size_t relativeOffset) {
+			return read_little_endian_uint16(&(*object.pool)[object.offset + relativeOffset]);
+		};
+		auto uses_font = [](VirtualTerminalObjectType type) {
+			return (VirtualTerminalObjectType::OutputString == type) ||
+			  (VirtualTerminalObjectType::OutputNumber == type) ||
+			  (VirtualTerminalObjectType::InputString == type) ||
+			  (VirtualTerminalObjectType::InputNumber == type);
+		};
+
+		// Index every pool of the working set by object ID, and start from the children of every key.
+		// A key in one pool may show objects from another, so the search has to see all of them.
+		std::map<std::uint16_t, ObjectPoolEntry> objects;
+		std::vector<std::uint16_t> pending;
+
+		for (auto pool : pools)
+		{
+			if (nullptr == pool)
+			{
+				continue;
+			}
+			std::size_t offset = 0;
+
+			while ((offset + OBJECT_TYPE_OFFSET) < pool->size())
+			{
+				const std::uint32_t objectSize = get_number_bytes_in_object(&(*pool)[offset], static_cast<std::uint32_t>(pool->size() - offset));
+
+				if ((0 == objectSize) || ((offset + objectSize) > pool->size()))
+				{
+					break;
+				}
+				const ObjectPoolEntry object{ pool, offset, objectSize, static_cast<VirtualTerminalObjectType>((*pool)[offset + OBJECT_TYPE_OFFSET]) };
+				objects.emplace(read_id(object, 0), object);
+
+				if ((VirtualTerminalObjectType::Key == object.type) && (objectSize > KEY_NUMBER_OF_OBJECTS_OFFSET))
+				{
+					for (std::size_t i = 0; i < (*pool)[offset + KEY_NUMBER_OF_OBJECTS_OFFSET]; i++)
+					{
+						const std::size_t childOffset = KEY_CHILDREN_OFFSET + (CHILD_REFERENCE_LENGTH * i);
+
+						if ((childOffset + OBJECT_ID_LENGTH) <= objectSize)
+						{
+							pending.push_back(read_id(object, childOffset));
+						}
+					}
+				}
+				offset += objectSize;
+			}
+		}
+
+		// Follow the key children down through containers and object pointers, collecting the fonts they use
+		std::set<std::uint16_t> shownOnKeys;
+		std::set<std::uint16_t> fontsOnKeys;
+
+		while (!pending.empty())
+		{
+			const std::uint16_t objectID = pending.back();
+			pending.pop_back();
+
+			auto location = objects.find(objectID);
+			if ((objects.end() == location) || (!shownOnKeys.insert(objectID).second))
+			{
+				// Not an object in any pool (such as the null ID), or already visited
+				continue;
+			}
+			const ObjectPoolEntry &object = location->second;
+
+			switch (object.type)
+			{
+				case VirtualTerminalObjectType::Container:
+				{
+					if (object.size > CONTAINER_NUMBER_OF_OBJECTS_OFFSET)
+					{
+						for (std::size_t i = 0; i < (*object.pool)[object.offset + CONTAINER_NUMBER_OF_OBJECTS_OFFSET]; i++)
+						{
+							const std::size_t childOffset = CONTAINER_CHILDREN_OFFSET + (CHILD_REFERENCE_LENGTH * i);
+
+							if ((childOffset + OBJECT_ID_LENGTH) <= object.size)
+							{
+								pending.push_back(read_id(object, childOffset));
+							}
+						}
+					}
+				}
+				break;
+
+				case VirtualTerminalObjectType::ObjectPointer:
+				{
+					if ((OBJECT_POINTER_VALUE_OFFSET + OBJECT_ID_LENGTH) <= object.size)
+					{
+						pending.push_back(read_id(object, OBJECT_POINTER_VALUE_OFFSET));
+					}
+				}
+				break;
+
+				case VirtualTerminalObjectType::OutputString:
+				case VirtualTerminalObjectType::OutputNumber:
+				{
+					if ((FONT_ATTRIBUTES_OFFSET + OBJECT_ID_LENGTH) <= object.size)
+					{
+						fontsOnKeys.insert(read_id(object, FONT_ATTRIBUTES_OFFSET));
+					}
+				}
+				break;
+
+				default:
+					break;
+			}
+		}
+
+		// A font that is also used off the keys, in any pool, keeps the data mask factor
+		for (const auto &entry : objects)
+		{
+			const ObjectPoolEntry &object = entry.second;
+
+			if (uses_font(object.type) &&
+			    ((FONT_ATTRIBUTES_OFFSET + OBJECT_ID_LENGTH) <= object.size) &&
+			    (0 == shownOnKeys.count(entry.first)))
+			{
+				const std::uint16_t fontID = read_id(object, FONT_ATTRIBUTES_OFFSET);
+
+				if (0 != fontsOnKeys.erase(fontID))
+				{
+					LOG_DEBUG("[VT]: Font attributes " + isobus::to_string(static_cast<int>(fontID)) +
+					          " are used on a soft key and by object " + isobus::to_string(static_cast<int>(entry.first)) +
+					          " outside the soft keys, so they keep the data mask scale factor");
+				}
+			}
+		}
+
+		// Only fonts that exist in a pool are reported
+		for (const auto fontID : fontsOnKeys)
+		{
+			if (objects.end() != objects.find(fontID))
+			{
+				shownOnKeys.insert(fontID);
+			}
+		}
+		return std::vector<std::uint16_t>(shownOnKeys.begin(), shownOnKeys.end());
+	}
+
+	bool VirtualTerminalClient::copy_object_pools()
 	{
 		bool retVal = true;
 
 		for (auto &objectPool : objectPools)
 		{
-			// Step 1: Make a read/write copy of the pool
 			if (nullptr != objectPool.objectPoolDataPointer)
 			{
 				objectPool.scaledObjectPool.resize(objectPool.objectPoolSize);
@@ -3447,26 +4270,116 @@ namespace isobus
 
 				if (!retVal)
 				{
-					break;
+					return false;
 				}
 			}
+		}
+		return retVal;
+	}
 
-			// Step 2, Parse the pool and resize each object as we iterate through it
+	VirtualTerminalClient::CommandScaling VirtualTerminalClient::build_command_scaling()
+	{
+		CommandScaling retVal;
+
+		// The objects drawn on soft keys across the whole working set, which scale like the keys
+		std::vector<std::vector<std::uint8_t> *> allPools;
+		allPools.reserve(objectPools.size());
+		for (auto &objectPool : objectPools)
+		{
+			allPools.push_back(&objectPool.scaledObjectPool);
+		}
+		retVal.softKeyObjectIDs = get_soft_key_scaled_object_ids(allPools);
+		retVal.pools.resize(objectPools.size());
+
+		for (std::size_t i = 0; i < objectPools.size(); i++)
+		{
+			ObjectPoolDataStruct &objectPool = objectPools[i];
+			CommandScalingPool &scaling = retVal.pools[i];
+			const bool autoScaled = (0 != objectPool.autoScaleDataMaskOriginalDimension) &&
+			  (0 != objectPool.autoScaleSoftKeyDesignatorOriginalHeight);
+
+			if (autoScaled)
+			{
+				scaling.dataMaskScaleFactor = static_cast<float>(get_number_x_pixels()) / static_cast<float>(objectPool.autoScaleDataMaskOriginalDimension);
+				scaling.softKeyScaleFactor = static_cast<float>(get_softkey_x_axis_pixels()) / static_cast<float>(objectPool.autoScaleSoftKeyDesignatorOriginalHeight);
+			}
+
+			std::vector<std::uint8_t> &pool = objectPool.scaledObjectPool;
+			std::size_t offset = 0;
+			while ((pool.size() - offset) > 2)
+			{
+				const std::uint32_t objectSize = get_number_bytes_in_object(&pool[offset], static_cast<std::uint32_t>(pool.size() - offset));
+				if ((0 == objectSize) || ((offset + objectSize) > pool.size()))
+				{
+					break; // A broken or truncated pool, which scale_object_pools() or the VT reports
+				}
+
+				const std::uint16_t objectID = read_little_endian_uint16(&pool[offset]);
+				const auto type = static_cast<VirtualTerminalObjectType>(pool[offset + 2]);
+				scaling.objectIDs.push_back(objectID);
+				if (!get_is_object_scalable(type))
+				{
+					scaling.unscaledObjectIDs.push_back(objectID);
+				}
+				else if (autoScaled && (VirtualTerminalObjectType::Key == type))
+				{
+					retVal.softKeyObjectIDs.push_back(objectID);
+				}
+				offset += objectSize;
+			}
+			std::sort(scaling.objectIDs.begin(), scaling.objectIDs.end());
+			std::sort(scaling.unscaledObjectIDs.begin(), scaling.unscaledObjectIDs.end());
+		}
+		std::sort(retVal.softKeyObjectIDs.begin(), retVal.softKeyObjectIDs.end());
+		return retVal;
+	}
+
+	bool VirtualTerminalClient::scale_object_pools()
+	{
+		// Step 1: Make a read/write copy of every pool, including the ones that are not auto-scaled,
+		// because the pools are uploaded as one working set and may reference each other's objects
+		bool retVal = copy_object_pools();
+		if (!retVal)
+		{
+			return false;
+		}
+
+		// Step 2, Work out the factors, and which objects are on the soft keys, from the pools before they are scaled
+		CommandScaling scaling = build_command_scaling();
+
+		// Step 3, Parse each auto-scaled pool and resize each object with that pool's factors
+		for (std::size_t i = 0; i < objectPools.size(); i++)
+		{
+			ObjectPoolDataStruct &objectPool = objectPools[i];
+			if ((0 == objectPool.autoScaleDataMaskOriginalDimension) ||
+			    (0 == objectPool.autoScaleSoftKeyDesignatorOriginalHeight))
+			{
+				// Not auto-scaled: the pool is uploaded as given, the copy was only needed for the search above
+				objectPool.scaledObjectPool.clear();
+				objectPool.scaledObjectPool.shrink_to_fit();
+				continue;
+			}
+
+			const float dataMaskScaleFactor = scaling.pools[i].dataMaskScaleFactor;
+			const float softKeyScaleFactor = scaling.pools[i].softKeyScaleFactor;
 			auto poolIterator = objectPool.scaledObjectPool.begin();
 
 			while ((poolIterator != objectPool.scaledObjectPool.end()) &&
 			       retVal)
 			{
-				if (VirtualTerminalObjectType::Key == static_cast<VirtualTerminalObjectType>(poolIterator[2]))
+				const std::uint16_t objectID = read_little_endian_uint16(&poolIterator[0]);
+
+				if ((VirtualTerminalObjectType::Key == static_cast<VirtualTerminalObjectType>(poolIterator[2])) ||
+				    std::binary_search(scaling.softKeyObjectIDs.begin(), scaling.softKeyObjectIDs.end(), objectID))
 				{
 					retVal &= resize_object(&poolIterator[0],
-					                        static_cast<float>(get_softkey_x_axis_pixels()) / static_cast<float>(objectPool.autoScaleSoftKeyDesignatorOriginalHeight),
+					                        softKeyScaleFactor,
 					                        static_cast<VirtualTerminalObjectType>(poolIterator[2]));
 				}
 				else
 				{
 					retVal &= resize_object(&poolIterator[0],
-					                        static_cast<float>(get_number_x_pixels()) / static_cast<float>(objectPool.autoScaleDataMaskOriginalDimension),
+					                        dataMaskScaleFactor,
 					                        static_cast<VirtualTerminalObjectType>(poolIterator[2]));
 				}
 
@@ -3477,7 +4390,7 @@ namespace isobus
 					if (get_is_object_scalable(static_cast<VirtualTerminalObjectType>(*(poolIterator + 2))))
 					{
 						LOG_DEBUG("[VT]: Resized an object: " +
-						          isobus::to_string(static_cast<int>((*poolIterator)) | (static_cast<int>((*poolIterator + 1))) << 8) +
+						          isobus::to_string(static_cast<int>(objectID)) +
 						          " with type " +
 						          isobus::to_string(static_cast<int>((*(poolIterator + 2)))) +
 						          " with size " +
@@ -3487,16 +4400,175 @@ namespace isobus
 				else
 				{
 					LOG_ERROR("[VT]: Failed to resize an object: " +
-					          isobus::to_string(static_cast<int>((*poolIterator)) | (static_cast<int>((*poolIterator + 1))) << 8) +
+					          isobus::to_string(static_cast<int>(objectID)) +
 					          " with type " +
-					          isobus::to_string(static_cast<int>((*poolIterator + 2))) +
+					          isobus::to_string(static_cast<int>((*(poolIterator + 2)))) +
 					          " with size " +
 					          isobus::to_string(static_cast<int>(objectSize)));
 				}
 				poolIterator += objectSize;
 			}
 		}
+
+		if (retVal)
+		{
+			LOCK_GUARD(Mutex, commandScalingMutex);
+			commandScaling = std::move(scaling);
+		}
 		return retVal;
+	}
+
+	void VirtualTerminalClient::prepare_command_scaling_for_loaded_pools()
+	{
+		if (!get_any_pool_needs_scaling())
+		{
+			return;
+		}
+
+		if (copy_object_pools())
+		{
+			CommandScaling scaling = build_command_scaling();
+			LOCK_GUARD(Mutex, commandScalingMutex);
+			commandScaling = std::move(scaling);
+		}
+		else
+		{
+			LOG_ERROR("[VT]: Could not read the object pools for the loaded version, commands with autoScale go out unscaled");
+		}
+
+		// The VT already has the scaled pools: the copies were only needed to find the objects
+		for (auto &objectPool : objectPools)
+		{
+			objectPool.scaledObjectPool.clear();
+			objectPool.scaledObjectPool.shrink_to_fit();
+		}
+	}
+
+	float VirtualTerminalClient::get_object_scale_factor(std::uint16_t objectID) const
+	{
+		LOCK_GUARD(Mutex, commandScalingMutex);
+		return get_object_scale_factor_locked(objectID);
+	}
+
+	float VirtualTerminalClient::get_object_scale_factor_locked(std::uint16_t objectID) const
+	{
+		// From the last pool: when pools share an object ID, the VT keeps the object it got last (4.6.10.3)
+		for (auto pool = commandScaling.pools.rbegin(); pool != commandScaling.pools.rend(); ++pool)
+		{
+			if (std::binary_search(pool->objectIDs.begin(), pool->objectIDs.end(), objectID))
+			{
+				if (std::binary_search(pool->unscaledObjectIDs.begin(), pool->unscaledObjectIDs.end(), objectID))
+				{
+					return 1.0f;
+				}
+				if (std::binary_search(commandScaling.softKeyObjectIDs.begin(), commandScaling.softKeyObjectIDs.end(), objectID))
+				{
+					return pool->softKeyScaleFactor;
+				}
+				return pool->dataMaskScaleFactor;
+			}
+		}
+		return 1.0f;
+	}
+
+	std::vector<std::uint8_t> VirtualTerminalClient::scale_command(const std::vector<std::uint8_t> &command) const
+	{
+		std::vector<std::uint8_t> retVal = command;
+
+		if (retVal.size() < 3)
+		{
+			return retVal;
+		}
+
+		// Bytes 1-2 hold the object whose factor applies: the parent for the two child commands,
+		// because the parent positions its children, and the object itself for the others
+		float scaleFactor = 1.0f;
+		{
+			LOCK_GUARD(Mutex, commandScalingMutex);
+			scaleFactor = get_object_scale_factor_locked(read_little_endian_uint16(&retVal[1]));
+		}
+
+		const auto get = [&retVal](std::size_t offset) { return read_little_endian_uint16(&retVal[offset]); };
+		const auto put = [&retVal](std::size_t offset, std::uint16_t value) {
+			retVal[offset] = static_cast<std::uint8_t>(value & 0xFF);
+			retVal[offset + 1] = static_cast<std::uint8_t>(value >> 8);
+		};
+
+		switch (static_cast<Function>(retVal[0]))
+		{
+			case Function::ChangeChildLocationCommand: // Parent, object, X change, Y change
+			{
+				if (retVal.size() >= 7)
+				{
+					retVal[5] = scale_command_position_change(retVal[5], scaleFactor);
+					retVal[6] = scale_command_position_change(retVal[6], scaleFactor);
+				}
+			}
+			break;
+
+			case Function::ChangeChildPositionCommand: // Parent, object, X, Y
+			{
+				if (retVal.size() >= 9)
+				{
+					put(5, scale_command_position(get(5), scaleFactor));
+					put(7, scale_command_position(get(7), scaleFactor));
+				}
+			}
+			break;
+
+			case Function::ChangeSizeCommand: // Object, width, height
+			case Function::ChangeEndPointCommand: // Object, width, height, direction
+			case Function::ChangePolygonScaleCommand: // Object, width, height
+			{
+				if (retVal.size() >= 7)
+				{
+					put(3, scale_command_dimension(get(3), scaleFactor));
+					put(5, scale_command_dimension(get(5), scaleFactor));
+				}
+			}
+			break;
+
+			case Function::ChangePolygonPointCommand: // Object, point index, X, Y
+			{
+				if (retVal.size() >= 8)
+				{
+					put(4, scale_command_coordinate(get(4), scaleFactor));
+					put(6, scale_command_coordinate(get(6), scaleFactor));
+				}
+			}
+			break;
+
+			default:
+				break;
+		}
+		return retVal;
+	}
+
+	std::uint16_t VirtualTerminalClient::scale_command_dimension(std::uint16_t value, float scaleFactor)
+	{
+		const std::uint16_t scaled = scale_command_coordinate(value, scaleFactor);
+		return ((0 != value) && (0 == scaled)) ? 1 : scaled;
+	}
+
+	std::uint16_t VirtualTerminalClient::scale_command_coordinate(std::uint16_t value, float scaleFactor)
+	{
+		// Truncated like autoscaling does, so a command gives the same size as the uploaded pool
+		const float scaled = static_cast<float>(value) * scaleFactor;
+		return (scaled >= 65535.0f) ? 0xFFFF : static_cast<std::uint16_t>(scaled);
+	}
+
+	std::uint16_t VirtualTerminalClient::scale_command_position(std::uint16_t value, float scaleFactor)
+	{
+		float scaled = static_cast<float>(static_cast<std::int16_t>(value)) * scaleFactor;
+		scaled = std::max(-32768.0f, std::min(32767.0f, scaled));
+		return static_cast<std::uint16_t>(static_cast<std::int16_t>(scaled));
+	}
+
+	std::uint8_t VirtualTerminalClient::scale_command_position_change(std::uint8_t value, float scaleFactor)
+	{
+		float scaled = static_cast<float>(static_cast<int>(value) - 127) * scaleFactor;
+		scaled = std::max(-127.0f, std::min(128.0f, scaled));
+		return static_cast<std::uint8_t>(static_cast<int>(scaled) + 127);
 	}
 
 	bool VirtualTerminalClient::get_is_object_scalable(VirtualTerminalObjectType type)
@@ -3556,9 +4628,32 @@ namespace isobus
 
 		while ((!get_font_size_supported(retVal)) && (FontSize::Size6x8 != retVal))
 		{
-			retVal = static_cast<FontSize>(static_cast<std::uint8_t>(originalFont) - 1);
+			retVal = static_cast<FontSize>(static_cast<std::uint8_t>(retVal) - 1);
 		}
 		return retVal;
+	}
+
+	std::uint8_t VirtualTerminalClient::scale_proportional_font_height(std::uint8_t originalHeight, float scaleFactor) const
+	{
+		// A proportional font can be any height from 8 pixels up to the height of the VT's largest font (ISO 11783-6 4.6.19.4)
+		static constexpr std::uint8_t MIN_PROPORTIONAL_FONT_HEIGHT = 8;
+		static constexpr std::array<std::uint8_t, 15> FONT_HEIGHTS = { 8, 8, 12, 16, 16, 24, 32, 32, 48, 64, 64, 96, 128, 128, 192 };
+		std::uint8_t maxHeight = MIN_PROPORTIONAL_FONT_HEIGHT;
+
+		for (std::uint8_t i = 0; i < FONT_HEIGHTS.size(); i++)
+		{
+			if (get_font_size_supported(static_cast<FontSize>(i)))
+			{
+				maxHeight = std::max(maxHeight, FONT_HEIGHTS[i]);
+			}
+		}
+
+		const float scaledHeight = (originalHeight * scaleFactor) + 0.5f;
+		if (scaledHeight >= maxHeight)
+		{
+			return maxHeight;
+		}
+		return std::max(MIN_PROPORTIONAL_FONT_HEIGHT, static_cast<std::uint8_t>(scaledHeight));
 	}
 
 	VirtualTerminalClient::FontSize VirtualTerminalClient::remap_font_to_scale(FontSize originalFont, float scaleFactor)
@@ -3763,11 +4858,19 @@ namespace isobus
 						break;
 					}
 				}
-			}
 
-			if (retVal == originalFont)
+				// Most tables go from their lowest upscale entry straight to their first downscale entry,
+				// so a factor between the fudge and that upscale entry would pick a smaller font.
+				// Scaling up never returns a smaller font, and scaling down never a larger one.
+				if (((scaleFactor > 1.0f) && (retVal < originalFont)) ||
+				    ((scaleFactor < 1.0f) && (retVal > originalFont)))
+				{
+					retVal = originalFont;
+				}
+			}
+			else
 			{
-				// Unknown font? Newer version than we support of the ISO standard? Or scaling factor out of range?
+				// Unknown font? Newer version than we support of the ISO standard?
 				LOG_ERROR("[VT]: Unable to scale font type " + isobus::to_string(static_cast<int>(originalFont)) +
 				          " with scale factor " + isobus::to_string(scaleFactor) + ". Returning original font.");
 			}
@@ -3811,6 +4914,7 @@ namespace isobus
 
 			case VirtualTerminalObjectType::SoftKeyMask:
 			case VirtualTerminalObjectType::ColourMap:
+			case VirtualTerminalObjectType::InputAttributes:
 			{
 				retVal = 6;
 			}
@@ -3818,7 +4922,6 @@ namespace isobus
 
 			case VirtualTerminalObjectType::Key:
 			case VirtualTerminalObjectType::NumberVariable:
-			case VirtualTerminalObjectType::InputAttributes:
 			{
 				retVal = 7;
 			}
@@ -4351,7 +5454,8 @@ namespace isobus
 
 				case VirtualTerminalObjectType::InputBoolean:
 				{
-					auto width = static_cast<std::uint16_t>((static_cast<std::uint16_t>(buffer[4]) | (static_cast<std::uint16_t>(buffer[5]) << 8)));
+					// The width is the maximum width and height of the box (B.8.1), so it scales like a Container's maximum size
+					auto width = static_cast<std::uint16_t>(static_cast<float>(read_little_endian_uint16(&buffer[4])) * scaleFactor);
 
 					// Modify the object in memory
 					buffer[4] = (width & 0xFF);
@@ -4473,7 +5577,15 @@ namespace isobus
 
 				case VirtualTerminalObjectType::FontAttributes:
 				{
-					buffer[4] = static_cast<std::uint8_t>(get_font_or_next_smallest_font(remap_font_to_scale(static_cast<FontSize>(buffer[4]), scaleFactor)));
+					if (0 != (buffer[6] & (1 << static_cast<std::uint8_t>(FontStyleBits::ProportionalFontRendering))))
+					{
+						// The font size is a height in pixels, not one of the FontSize values
+						buffer[4] = scale_proportional_font_height(buffer[4], scaleFactor);
+					}
+					else
+					{
+						buffer[4] = static_cast<std::uint8_t>(get_font_or_next_smallest_font(remap_font_to_scale(static_cast<FontSize>(buffer[4]), scaleFactor)));
+					}
 					retVal = true;
 				}
 				break;
@@ -4574,7 +5686,7 @@ namespace isobus
 		return success;
 	}
 
-	bool VirtualTerminalClient::queue_command(const std::vector<std::uint8_t> &data, bool replace)
+	bool VirtualTerminalClient::queue_command(const std::vector<std::uint8_t> &data, bool replace, bool autoScale)
 	{
 		std::uint8_t functionCode = data[0];
 		if (is_function_unsupported(functionCode))
@@ -4582,30 +5694,30 @@ namespace isobus
 			return false;
 		}
 
-		if (get_is_connected() && send_command(data))
+		if (get_is_connected() && send_command(autoScale ? scale_command(data) : data))
 		{
 			return true;
 		}
 
 		LOCK_GUARD(Mutex, commandQueueMutex);
-		if (replace && replace_command(data))
+		if (replace && replace_command(data, autoScale))
 		{
 			return true;
 		}
-		commandQueue.emplace_back(data);
+		commandQueue.push_back(QueuedCommand{ data, autoScale });
 		return true;
 	}
 
-	bool VirtualTerminalClient::replace_command(const std::vector<std::uint8_t> &data)
+	bool VirtualTerminalClient::replace_command(const std::vector<std::uint8_t> &data, bool autoScale)
 	{
 		bool alreadyReplaced = false;
 		for (auto it = commandQueue.begin(); it != commandQueue.end();)
 		{
-			if (are_commands_similar(*it, data))
+			if (are_commands_similar(it->data, data))
 			{
 				if (!alreadyReplaced)
 				{
-					*it = data;
+					*it = QueuedCommand{ data, autoScale };
 					alreadyReplaced = true;
 					it++;
 				}
@@ -4735,7 +5847,7 @@ namespace isobus
 		LOCK_GUARD(Mutex, commandQueueMutex);
 		for (auto it = commandQueue.begin(); it != commandQueue.end();)
 		{
-			if (send_command(*it))
+			if (send_command(it->autoScale ? scale_command(it->data) : it->data))
 			{
 				it = commandQueue.erase(it);
 			}
@@ -4749,6 +5861,7 @@ namespace isobus
 	void VirtualTerminalClient::worker_thread_function()
 	{
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		workerThreadOwner = this;
 		for (;;)
 		{
 			if (shouldTerminate)

@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <memory>
+#include <stdexcept>
 #include <thread>
 
 using namespace isobus;
@@ -101,8 +102,8 @@ TEST_F(EventManagerBool, InvokeUnsafeContextEvent)
 		count += 1;
 	};
 
-	int *context_ptr = new int(42);
-	dispatcher.add_unsafe_listener<int>(callback, context_ptr);
+	int context = 42;
+	dispatcher.add_unsafe_listener<int>(callback, &context);
 
 	dispatcher.invoke(true);
 	ASSERT_EQ(count, 1);
@@ -172,4 +173,63 @@ TEST_F(EventManagerBool, RemoveCallbackWithinCallback)
 	// Execute callbacks for the second time; the first callback should not execute as it was removed
 	dispatcher.invoke(true);
 	EXPECT_EQ(callbackToBeRemovedExecuted, 1); // Ensure the removed callback did not execute again
+}
+
+// Use-after-free under ASan if the inner call() applies the queued clear
+TEST_F(EventManagerBool, ClearListenersWithinNestedCall)
+{
+	int outerCallbackExecuted = 0;
+
+	dispatcher.add_listener([&](bool outer) {
+		if (outer)
+		{
+			outerCallbackExecuted++;
+			dispatcher.call(false);
+		}
+	});
+	dispatcher.add_listener([&](bool outer) {
+		if (!outer)
+		{
+			dispatcher.clear_listeners();
+		}
+	});
+	dispatcher.add_listener([](bool) {});
+
+	dispatcher.invoke(true);
+	EXPECT_EQ(outerCallbackExecuted, 1);
+	EXPECT_EQ(dispatcher.get_listener_count(), 0);
+}
+
+TEST_F(EventManagerBool, ConcurrentAddListenerGivesUniqueIds)
+{
+	static constexpr std::size_t LISTENERS_PER_THREAD = 10000;
+	auto addListeners = [this]() {
+		for (std::size_t i = 0; i < LISTENERS_PER_THREAD; i++)
+		{
+			dispatcher.add_listener([](bool) {});
+		}
+	};
+
+	std::thread first(addListeners);
+	std::thread second(addListeners);
+	first.join();
+	second.join();
+
+	EXPECT_EQ(dispatcher.get_listener_count(), 2 * LISTENERS_PER_THREAD);
+}
+
+TEST_F(EventManagerBool, ThrowingCallbackDoesNotBlockLaterModifications)
+{
+	bool shouldThrow = true;
+	dispatcher.add_listener([&](bool) {
+		if (shouldThrow)
+		{
+			shouldThrow = false;
+			throw std::runtime_error("callback failed");
+		}
+	});
+
+	EXPECT_THROW(dispatcher.invoke(true), std::runtime_error);
+	dispatcher.clear_listeners();
+	EXPECT_EQ(dispatcher.get_listener_count(), 0);
 }

@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <thread>
+
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
@@ -9,6 +11,7 @@
 #include "isobus/utility/system_timing.hpp"
 
 #include "helpers/control_function_helpers.hpp"
+#include "helpers/messaging_helpers.hpp"
 #include "helpers/test_fixture.hpp"
 
 using namespace isobus;
@@ -103,6 +106,21 @@ public:
 	void test_wrapper_process_labels_from_ddop()
 	{
 		TaskControllerClient::process_labels_from_ddop();
+	}
+
+	void test_wrapper_request_termination(std::uint32_t run)
+	{
+		TaskControllerClient::request_termination(run);
+	}
+
+	std::uint32_t test_wrapper_get_run_number() const
+	{
+		return TaskControllerClient::get_run_number();
+	}
+
+	bool test_wrapper_get_termination_requested() const
+	{
+		return TaskControllerClient::get_termination_requested();
 	}
 
 	static const std::uint8_t testBinaryDDOP[];
@@ -1377,6 +1395,79 @@ TEST_F(TaskControllerClientTest, WorkerThread)
 	CANNetworkManager::CANNetwork.deactivate_control_function(tcPartner); // Account for the pointer in the TC client and the language interface
 }
 
+TEST_F(TaskControllerClientTest, ConcurrentTerminate)
+{
+	NAME clientNAME(0);
+	clientNAME.set_industry_group(2);
+	clientNAME.set_ecu_instance(2);
+	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x87);
+
+	std::vector<isobus::NAMEFilter> tcNameFilters;
+	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
+	tcNameFilters.push_back(testFilter);
+
+	auto tcPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, tcNameFilters);
+
+	CANNetworkManager::CANNetwork.update();
+
+	// The owner terminates the client while another thread does too (as the client's own error paths
+	// did, from a PGN callback). Joining the worker twice hangs, or aborts, within a few rounds.
+	for (int round = 0; round < 20; round++)
+	{
+		DerivedTestTCClient interfaceUnderTest(tcPartner, internalECU);
+		interfaceUnderTest.initialize(true);
+
+		std::thread other([&interfaceUnderTest]() { interfaceUnderTest.terminate(); });
+		interfaceUnderTest.terminate();
+		other.join();
+		EXPECT_TRUE(interfaceUnderTest.test_wrapper_get_termination_requested());
+	}
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(tcPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+TEST_F(TaskControllerClientTest, LateErrorDoesNotStopTheNextRun)
+{
+	NAME clientNAME(0);
+	clientNAME.set_industry_group(2);
+	clientNAME.set_ecu_instance(3);
+	clientNAME.set_function_code(static_cast<std::uint8_t>(NAME::Function::RateControl));
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(clientNAME, 0, 0x88);
+
+	std::vector<isobus::NAMEFilter> tcNameFilters;
+	const isobus::NAMEFilter testFilter(isobus::NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(isobus::NAME::Function::TaskController));
+	tcNameFilters.push_back(testFilter);
+
+	auto tcPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, tcNameFilters);
+
+	CANNetworkManager::CANNetwork.update();
+
+	DerivedTestTCClient interfaceUnderTest(tcPartner, internalECU);
+	interfaceUnderTest.initialize(true);
+	const std::uint32_t firstRun = interfaceUnderTest.test_wrapper_get_run_number();
+
+	// The owner restarts the client while an error found during the first run is still on its way
+	// (a PGN callback that saw the client disconnect, held up before it stops the client).
+	interfaceUnderTest.terminate();
+	interfaceUnderTest.initialize(true);
+	interfaceUnderTest.test_wrapper_request_termination(firstRun);
+	EXPECT_FALSE(interfaceUnderTest.test_wrapper_get_termination_requested());
+
+	// An error found during the current run stops it, and initialize() starts it again, joining the
+	// worker that was told to exit before it starts a new one.
+	interfaceUnderTest.test_wrapper_request_termination(interfaceUnderTest.test_wrapper_get_run_number());
+	EXPECT_TRUE(interfaceUnderTest.test_wrapper_get_termination_requested());
+	interfaceUnderTest.initialize(true);
+	EXPECT_FALSE(interfaceUnderTest.test_wrapper_get_termination_requested());
+	EXPECT_TRUE(interfaceUnderTest.get_is_initialized());
+
+	interfaceUnderTest.terminate();
+	CANNetworkManager::CANNetwork.deactivate_control_function(tcPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
 static bool valueRequested = false;
 static bool valueCommanded = false;
 static std::uint16_t requestedDDI = 0;
@@ -1917,4 +2008,296 @@ TEST_F(TaskControllerClientTest, DefaultProcessDataTest)
 
 	CANHardwareInterface::stop();
 	CANNetworkManager::CANNetwork.update();
+}
+
+static std::uint32_t reenteringRequestValueCalls = 0;
+
+static bool request_value_and_trigger_another(std::uint16_t elementNumber, std::uint16_t DDI, std::int32_t &value, void *parentPointer)
+{
+	reenteringRequestValueCalls++;
+	if (1 == reenteringRequestValueCalls)
+	{
+		static_cast<TaskControllerClient *>(parentPointer)->on_value_changed_trigger(elementNumber, DDI + 1);
+	}
+	value = 1;
+	return true;
+}
+
+TEST_F(TaskControllerClientTest, RequestValueCallbackCanTriggerAnotherValue)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x87, 0, time_source);
+	auto TestPartnerTC = test_helpers::force_claim_partnered_control_function(0xF7, 0);
+
+	DerivedTestTCClient interfaceUnderTest(TestPartnerTC, internalECU);
+	interfaceUnderTest.initialize(false);
+	interfaceUnderTest.configure(std::make_shared<DeviceDescriptorObjectPool>(), 1, 32, 32, true, false, true, false, true);
+	interfaceUnderTest.add_request_value_callback(request_value_and_trigger_another, &interfaceUnderTest);
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Connected);
+
+	reenteringRequestValueCalls = 0;
+	interfaceUnderTest.on_value_changed_trigger(0x4, 0x3);
+	interfaceUnderTest.update();
+	interfaceUnderTest.update();
+	EXPECT_EQ(2u, reenteringRequestValueCalls);
+
+	interfaceUnderTest.terminate();
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.deactivate_control_function(TestPartnerTC);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+static std::uint32_t lateRequestValueCalls = 0;
+
+static bool late_request_value_callback(std::uint16_t, std::uint16_t, std::int32_t &value, void *)
+{
+	lateRequestValueCalls++;
+	value = 1;
+	return true;
+}
+
+static bool request_value_and_register_another(std::uint16_t elementNumber, std::uint16_t DDI, std::int32_t &value, void *parentPointer)
+{
+	bool retVal = false;
+	if (0x3 == DDI)
+	{
+		auto client = static_cast<TaskControllerClient *>(parentPointer);
+		client->add_request_value_callback(late_request_value_callback, nullptr);
+		client->on_value_changed_trigger(elementNumber, 0x10);
+		value = 1;
+		retVal = true;
+	}
+	return retVal;
+}
+
+TEST_F(TaskControllerClientTest, RequestValueCallbackRegisteredDuringDispatchIsCalled)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x87, 0, time_source);
+	auto TestPartnerTC = test_helpers::force_claim_partnered_control_function(0xF7, 0);
+
+	DerivedTestTCClient interfaceUnderTest(TestPartnerTC, internalECU);
+	interfaceUnderTest.initialize(false);
+	interfaceUnderTest.configure(std::make_shared<DeviceDescriptorObjectPool>(), 1, 32, 32, true, false, true, false, true);
+	interfaceUnderTest.add_request_value_callback(request_value_and_register_another, &interfaceUnderTest);
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Connected);
+
+	lateRequestValueCalls = 0;
+	interfaceUnderTest.on_value_changed_trigger(0x4, 0x3);
+	interfaceUnderTest.update();
+	interfaceUnderTest.update();
+	EXPECT_EQ(1u, lateRequestValueCalls);
+
+	interfaceUnderTest.terminate();
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.deactivate_control_function(TestPartnerTC);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+static std::int32_t valueSeenBySecondCallback = 0;
+
+static bool write_value_and_decline(std::uint16_t, std::uint16_t, std::int32_t &value, void *)
+{
+	value = 99;
+	return false;
+}
+
+static bool record_value_and_accept(std::uint16_t, std::uint16_t, std::int32_t &value, void *)
+{
+	valueSeenBySecondCallback = value;
+	value = 1;
+	return true;
+}
+
+TEST_F(TaskControllerClientTest, DeclinedRequestValueIsIgnored)
+{
+	VirtualCANPlugin serverTC;
+	serverTC.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x87, 0, time_source);
+	auto TestPartnerTC = test_helpers::force_claim_partnered_control_function(0xF7, 0);
+
+	DerivedTestTCClient interfaceUnderTest(TestPartnerTC, internalECU);
+	interfaceUnderTest.initialize(false);
+	interfaceUnderTest.configure(std::make_shared<DeviceDescriptorObjectPool>(), 1, 32, 32, true, false, true, false, true);
+	interfaceUnderTest.add_request_value_callback(write_value_and_decline, nullptr);
+	interfaceUnderTest.add_request_value_callback(record_value_and_accept, nullptr);
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Connected);
+
+	valueSeenBySecondCallback = -1;
+	interfaceUnderTest.on_value_changed_trigger(0x4, 0x3);
+	interfaceUnderTest.update();
+	EXPECT_EQ(0, valueSeenBySecondCallback);
+
+	// Maximum threshold of 16 for element 0x5A, DDI 0x3A19
+	valueSeenBySecondCallback = -1;
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_raw(0x18CB87F7, { 0xA7, 0x05, 0x19, 0x3A, 0x10, 0x00, 0x00, 0x00 }));
+	CANNetworkManager::CANNetwork.update();
+	interfaceUnderTest.update();
+	EXPECT_EQ(0, valueSeenBySecondCallback);
+
+	// With nobody answering, the declined 99 must not cross the threshold
+	interfaceUnderTest.remove_request_value_callback(record_value_and_accept, nullptr);
+	CANMessageFrame testFrame = {};
+	time_source.update_for_ms(5);
+	while (!serverTC.get_queue_empty())
+	{
+		serverTC.read_frame(testFrame);
+	}
+	interfaceUnderTest.update();
+	time_source.update_for_ms(5);
+	while (!serverTC.get_queue_empty())
+	{
+		serverTC.read_frame(testFrame);
+		EXPECT_NE(0x03, testFrame.data[0] & 0x0F); // Value
+	}
+
+	interfaceUnderTest.terminate();
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.deactivate_control_function(TestPartnerTC);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+static bool request_value_and_restart(std::uint16_t, std::uint16_t, std::int32_t &value, void *parentPointer)
+{
+	static_cast<TaskControllerClient *>(parentPointer)->restart();
+	value = 1;
+	return true;
+}
+
+static bool value_command_and_restart(std::uint16_t, std::uint16_t, std::int32_t, void *parentPointer)
+{
+	static_cast<TaskControllerClient *>(parentPointer)->restart();
+	return true;
+}
+
+TEST_F(TaskControllerClientTest, NoAnswerIsSentAfterACallbackRestartsTheClient)
+{
+	VirtualCANPlugin serverTC;
+	serverTC.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x88, 0, time_source);
+	auto TestPartnerTC = test_helpers::force_claim_partnered_control_function(0xF8, 0);
+
+	DerivedTestTCClient interfaceUnderTest(TestPartnerTC, internalECU);
+	interfaceUnderTest.initialize(false);
+	interfaceUnderTest.configure(std::make_shared<DeviceDescriptorObjectPool>(), 1, 32, 32, true, false, true, false, true);
+	interfaceUnderTest.add_request_value_callback(request_value_and_restart, &interfaceUnderTest);
+	interfaceUnderTest.add_value_command_callback(value_command_and_restart, &interfaceUnderTest);
+
+	CANMessageFrame testFrame = {};
+	const auto expect_no_answer_sent = [&]() {
+		time_source.update_for_ms(5);
+		while (!serverTC.get_queue_empty())
+		{
+			serverTC.read_frame(testFrame);
+			EXPECT_NE(0x03, testFrame.data[0] & 0x0F); // Value
+			EXPECT_NE(0x0D, testFrame.data[0] & 0x0F); // PDACK
+		}
+	};
+
+	time_source.update_for_ms(5);
+	while (!serverTC.get_queue_empty())
+	{
+		serverTC.read_frame(testFrame);
+	}
+
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Connected);
+	interfaceUnderTest.on_value_changed_trigger(0x4, 0x3);
+	interfaceUnderTest.update();
+	EXPECT_EQ(TaskControllerClient::StateMachineState::Disconnected, interfaceUnderTest.test_wrapper_get_state());
+	expect_no_answer_sent();
+
+	// Set value and acknowledge for element 4, DDI 3
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Connected);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_raw(0x18CB88F8, { 0x4A, 0x00, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00 }));
+	CANNetworkManager::CANNetwork.update();
+	interfaceUnderTest.update();
+	EXPECT_EQ(TaskControllerClient::StateMachineState::Disconnected, interfaceUnderTest.test_wrapper_get_state());
+	expect_no_answer_sent();
+
+	// Maximum threshold of 0 for element 4, DDI 3
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Connected);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_raw(0x18CB88F8, { 0x47, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00 }));
+	CANNetworkManager::CANNetwork.update();
+	interfaceUnderTest.update();
+	EXPECT_EQ(TaskControllerClient::StateMachineState::Disconnected, interfaceUnderTest.test_wrapper_get_state());
+	expect_no_answer_sent();
+
+	interfaceUnderTest.terminate();
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.deactivate_control_function(TestPartnerTC);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+static std::array<std::uint32_t, 3> defaultCallbackCalls;
+
+static bool default_callback_to_remove(std::uint16_t, std::uint16_t, TaskControllerClient::DefaultProcessDataSettings &, void *)
+{
+	defaultCallbackCalls[1]++;
+	return false;
+}
+
+static bool default_callback_removing_the_next(std::uint16_t, std::uint16_t, TaskControllerClient::DefaultProcessDataSettings &, void *parentPointer)
+{
+	defaultCallbackCalls[0]++;
+	static_cast<TaskControllerClient *>(parentPointer)->remove_default_process_data_requested_callback(default_callback_to_remove, nullptr);
+	return false;
+}
+
+static bool default_callback_after_removal(std::uint16_t, std::uint16_t, TaskControllerClient::DefaultProcessDataSettings &, void *)
+{
+	defaultCallbackCalls[2]++;
+	return false;
+}
+
+TEST_F(TaskControllerClientTest, DefaultProcessDataCallbackCanRemoveAnother)
+{
+	auto ddop = std::make_shared<DeviceDescriptorObjectPool>();
+	ddop->set_task_controller_compatibility_level(3);
+	ASSERT_TRUE(ddop->deserialize_binary_object_pool(DerivedTestTCClient::testBinaryDDOP, sizeof(DerivedTestTCClient::testBinaryDDOP)));
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x89, 0, time_source);
+	auto TestPartnerTC = test_helpers::force_claim_partnered_control_function(0xF9, 0);
+
+	DerivedTestTCClient interfaceUnderTest(TestPartnerTC, internalECU);
+	interfaceUnderTest.configure(ddop, 1, 32, 32, true, false, true, false, true);
+	interfaceUnderTest.initialize(false);
+	interfaceUnderTest.add_default_process_data_requested_callback(default_callback_removing_the_next, &interfaceUnderTest);
+	interfaceUnderTest.add_default_process_data_requested_callback(default_callback_to_remove, nullptr);
+	interfaceUnderTest.add_default_process_data_requested_callback(default_callback_after_removal, nullptr);
+	interfaceUnderTest.test_wrapper_set_state(TaskControllerClient::StateMachineState::Connected);
+
+	// Request default process data from element 0
+	defaultCallbackCalls.fill(0);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_raw(0x18CB89F9, { 0x02, 0x00, 0xFF, 0xDF, 0x00, 0x00, 0x00, 0x00 }));
+	CANNetworkManager::CANNetwork.update();
+	interfaceUnderTest.update();
+
+	EXPECT_GT(defaultCallbackCalls[0], 0u);
+	EXPECT_EQ(0u, defaultCallbackCalls[1]);
+	EXPECT_EQ(defaultCallbackCalls[0], defaultCallbackCalls[2]);
+
+	interfaceUnderTest.terminate();
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.deactivate_control_function(TestPartnerTC);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }

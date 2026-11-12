@@ -10,12 +10,12 @@
 #define ISOBUS_VIRTUAL_TERMINAL_OBJECTS_HPP
 
 #include "isobus/isobus/can_constants.hpp"
+#include "isobus/utility/to_string.hpp"
 
 #include <algorithm>
 #include <array>
 #include <map>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -564,8 +564,8 @@ namespace isobus
 		{
 			Highest = 0, ///< Most aggressive beeping
 			Medium = 1, ///< Medium beeping
-			Lowest = 3, ///< Low beeping
-			None = 4 ///< No beeping
+			Lowest = 2, ///< Low beeping
+			None = 3 ///< No beeping
 		};
 
 		/// @brief Constructor for a alarm mask object
@@ -713,7 +713,7 @@ namespace isobus
 		void set_hidden(bool value);
 
 	private:
-		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 9; ///< The fewest bytes of IOP data that can represent this object
+		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 10; ///< The fewest bytes of IOP data that can represent this object
 
 		bool hidden = false; ///< The hidden attribute state for this container object. True means it will be hidden when rendered.
 	};
@@ -1714,7 +1714,7 @@ namespace isobus
 		void set_option(Options option, bool value);
 
 	private:
-		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 16; ///< The fewest bytes of IOP data that can represent this object
+		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 17; ///< The fewest bytes of IOP data that can represent this object
 	};
 
 	/// @brief This object is used to format and output a numeric value based on a supplied integer value.
@@ -2912,6 +2912,10 @@ namespace isobus
 		/// @param[in] dataByte One byte of bitmap data
 		void add_raw_data(std::uint8_t dataByte);
 
+		/// @brief Reserves space for decoded pixels, at most actual width times actual height
+		/// @param[in] pixels The most pixels the encoded data can decode to
+		void reserve_raw_data(std::uint64_t pixels);
+
 		/// @brief Returns the number of bytes in the raw data that comprises the underlying bitmap
 		/// @returns The number of bytes in the raw data that comprises the underlying bitmap
 		std::uint32_t get_number_of_bytes_in_raw_data() const;
@@ -3497,7 +3501,7 @@ namespace isobus
 		void set_validation_type(ValidationType newValidationType);
 
 	private:
-		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 7; ///< The fewest bytes of IOP data that can represent this object
+		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 6; ///< The fewest bytes of IOP data that can represent this object
 
 		std::string validationString; ///< String containing all valid or invalid character codes
 		ValidationType validationType = ValidationType::ValidCharactersAreListed; ///< Describes how to interpret the validation string
@@ -4873,9 +4877,7 @@ namespace isobus
 		{
 			return "NULL";
 		}
-		std::ostringstream oss;
-		oss << object_id;
-		return oss.str();
+		return isobus::to_string(object_id);
 	}
 } // namespace isobus
 

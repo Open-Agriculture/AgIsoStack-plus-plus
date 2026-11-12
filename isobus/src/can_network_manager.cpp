@@ -39,7 +39,7 @@ namespace isobus
 
 	std::shared_ptr<InternalControlFunction> CANNetworkManager::create_internal_control_function(NAME desiredName, std::uint8_t CANPort, std::uint8_t preferredAddress)
 	{
-		LOCK_GUARD(Mutex, controlFunctionsMutex);
+		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 		auto controlFunction = std::make_shared<InternalControlFunction>(desiredName, preferredAddress, CANPort);
 		controlFunction->pgnRequestProtocol.reset(new ParameterGroupNumberRequestProtocol(controlFunction));
 		internalControlFunctions.push_back(controlFunction);
@@ -51,7 +51,7 @@ namespace isobus
 	{
 		auto controlFunction = std::shared_ptr<PartneredControlFunction>{};
 		{
-			LOCK_GUARD(Mutex, controlFunctionsMutex);
+			LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 			controlFunction = std::make_shared<PartneredControlFunction>(CANPort, NAMEFilters);
 			partneredControlFunctions.push_back(controlFunction);
 		}
@@ -61,8 +61,13 @@ namespace isobus
 
 	void CANNetworkManager::deactivate_control_function(std::shared_ptr<InternalControlFunction> controlFunction)
 	{
-		LOCK_GUARD(Mutex, controlFunctionsMutex);
+		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 		// We need to unregister the control function from the interfaces managed by the network manager first.
+		if (nullptr != controlFunction->pgnRequestProtocol)
+		{
+			// Someone else may still hold the protocol, and the destructor's sweep only reaches listed ICFs
+			controlFunction->pgnRequestProtocol->unregister_from_network();
+		}
 		controlFunction->pgnRequestProtocol.reset();
 		heartBeatInterfaces.at(controlFunction->get_can_port())->on_destroyed_internal_control_function(controlFunction);
 		internalControlFunctions.erase(std::remove(internalControlFunctions.begin(), internalControlFunctions.end(), controlFunction), internalControlFunctions.end());
@@ -71,7 +76,7 @@ namespace isobus
 
 	void CANNetworkManager::deactivate_control_function(std::shared_ptr<PartneredControlFunction> controlFunction)
 	{
-		LOCK_GUARD(Mutex, controlFunctionsMutex);
+		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 		partneredControlFunctions.erase(std::remove(partneredControlFunctions.begin(), partneredControlFunctions.end(), controlFunction), partneredControlFunctions.end());
 		deactivate_control_function(std::static_pointer_cast<ControlFunction>(controlFunction));
 	}
@@ -395,19 +400,19 @@ namespace isobus
 
 	std::list<std::shared_ptr<InternalControlFunction>> CANNetworkManager::get_internal_control_functions() const
 	{
-		LOCK_GUARD(Mutex, controlFunctionsMutex);
+		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 		return internalControlFunctions;
 	}
 
 	std::list<std::shared_ptr<PartneredControlFunction>> CANNetworkManager::get_partnered_control_functions() const
 	{
-		LOCK_GUARD(Mutex, controlFunctionsMutex);
+		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 		return partneredControlFunctions;
 	}
 
 	std::list<std::shared_ptr<ControlFunction>> isobus::CANNetworkManager::get_control_functions(bool includingOffline) const
 	{
-		LOCK_GUARD(Mutex, controlFunctionsMutex);
+		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 		std::list<std::shared_ptr<ControlFunction>> retVal;
 
 		for (std::uint8_t channelIndex = 0; channelIndex < CAN_PORT_MAXIMUM; channelIndex++)
@@ -438,7 +443,10 @@ namespace isobus
 			retVal.insert(retVal.end(), std::make_move_iterator(sessions.begin()), std::make_move_iterator(sessions.end()));
 		}
 
-		retVal.insert(retVal.end(), extendedTransportProtocols[canPortIndex]->get_sessions().begin(), extendedTransportProtocols[canPortIndex]->get_sessions().end());
+		{
+			auto sessions = extendedTransportProtocols[canPortIndex]->get_sessions();
+			retVal.insert(retVal.end(), std::make_move_iterator(sessions.begin()), std::make_move_iterator(sessions.end()));
+		}
 		return retVal;
 	}
 
@@ -539,6 +547,15 @@ namespace isobus
 		}
 	}
 
+	CANNetworkManager::~CANNetworkManager()
+	{
+		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
+		for (const auto &internalControlFunction : internalControlFunctions)
+		{
+			internalControlFunction->pgnRequestProtocol->unregister_from_network();
+		}
+	}
+
 	std::shared_ptr<ControlFunction> CANNetworkManager::create_external_control_function(NAME desiredName, std::uint8_t address, std::uint8_t CANPort)
 	{
 		auto controlFunction = std::make_shared<ControlFunction>(desiredName, address, CANPort, ControlFunction::Type::External);
@@ -556,7 +573,7 @@ namespace isobus
 		if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == message.get_identifier().get_parameter_group_number()) &&
 		    (channelIndex < CAN_PORT_MAXIMUM))
 		{
-			LOCK_GUARD(Mutex, controlFunctionsMutex);
+			LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 			std::uint8_t claimedAddress = message.get_identifier().get_source_address();
 			auto &targetControlFunction = controlFunctionTable[channelIndex][claimedAddress];
 
@@ -577,6 +594,7 @@ namespace isobus
 			if (targetControlFunction != nullptr)
 			{
 				targetControlFunction->claimedAddressSinceLastAddressClaimRequest = true;
+				targetControlFunction->missedAddressClaimRequests = 0;
 			}
 			else
 			{
@@ -595,6 +613,7 @@ namespace isobus
 					// the flag still false and is eligible for pruning again on the very next roll-call,
 					// which turns a single eviction into an unbroken offline/online cycle.
 					targetControlFunction->claimedAddressSinceLastAddressClaimRequest = true;
+					targetControlFunction->missedAddressClaimRequests = 0;
 
 					LOG_DEBUG("[NM]: %s CF '%016llx' is now active at address '%d' on channel '%d'.",
 					          targetControlFunction->get_type_string().c_str(),
@@ -630,7 +649,7 @@ namespace isobus
 
 	void CANNetworkManager::update_internal_cfs()
 	{
-		LOCK_GUARD(Mutex, controlFunctionsMutex);
+		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 		for (const auto &currentInternalControlFunction : internalControlFunctions)
 		{
 			if (currentInternalControlFunction->update_address_claiming())
@@ -663,7 +682,7 @@ namespace isobus
 
 	void CANNetworkManager::process_rx_message_for_address_claiming(const CANMessage &message) const
 	{
-		LOCK_GUARD(Mutex, controlFunctionsMutex);
+		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 		for (const auto &internalCF : internalControlFunctions)
 		{
 			internalCF->process_rx_message_for_address_claiming(message);
@@ -705,7 +724,7 @@ namespace isobus
 		    (CAN_DATA_LENGTH == rxFrame.dataLength) &&
 		    (rxFrame.channel < CAN_PORT_MAXIMUM))
 		{
-			LOCK_GUARD(Mutex, controlFunctionsMutex);
+			LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 
 			std::uint64_t claimedNAME;
 			std::shared_ptr<ControlFunction> foundControlFunction = nullptr;
@@ -865,7 +884,7 @@ namespace isobus
 
 	void CANNetworkManager::update_new_partners()
 	{
-		LOCK_GUARD(Mutex, controlFunctionsMutex);
+		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 		for (const auto &partner : partneredControlFunctions)
 		{
 			if (!partner->initialized)
@@ -895,6 +914,7 @@ namespace isobus
 						partner->initialized = true;
 						// The partner replaces this CF in the table, so it must not lose credit for a claim the CF already made
 						partner->claimedAddressSinceLastAddressClaimRequest = currentActiveControlFunction->claimedAddressSinceLastAddressClaimRequest;
+						partner->missedAddressClaimRequests = currentActiveControlFunction->missedAddressClaimRequests;
 						controlFunctionTable[partner->get_can_port()][partner->address] = std::shared_ptr<ControlFunction>(partner);
 						process_control_function_state_change_callback(partner, ControlFunctionState::Online);
 
@@ -976,6 +996,9 @@ namespace isobus
 
 		if ((address < NULL_CAN_ADDRESS) && (channelIndex < CAN_PORT_MAXIMUM))
 		{
+			// Under the lock: copying a shared_ptr while deactivate_control_function() assigns the same
+			// slot on another thread is a data race.
+			LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 			retVal = controlFunctionTable[channelIndex][address];
 		}
 		return retVal;
@@ -997,7 +1020,16 @@ namespace isobus
 
 	void CANNetworkManager::process_can_message_for_address_violations(const CANMessage &currentMessage)
 	{
-		for (const auto &internalCF : internalControlFunctions)
+		// A copy, as for the global PGN callbacks: deactivate_control_function() erases from the list
+		// under controlFunctionsMutex, possibly on another thread, and a node this loop stands on may go.
+		// The copy is deliberate: it costs an allocation per received message, which is small for the
+		// handful of control functions an application has, and it keeps the lock out of the callbacks.
+		std::list<std::shared_ptr<InternalControlFunction>> internalControlFunctionsCopy;
+		{
+			LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
+			internalControlFunctionsCopy = internalControlFunctions;
+		}
+		for (const auto &internalCF : internalControlFunctionsCopy)
 		{
 			if ((nullptr != internalCF) &&
 			    internalCF->process_rx_message_for_address_violation(currentMessage))
@@ -1059,8 +1091,14 @@ namespace isobus
 		}
 		else if ((messageDestination != nullptr) && (messageDestination->get_type() == ControlFunction::Type::Internal))
 		{
-			// Message is destined to us
-			for (const auto &partner : partneredControlFunctions)
+			// Message is destined to us. A copy, as above: deactivate_control_function() erases from the
+			// list under controlFunctionsMutex, possibly on another thread, while this loop walks it.
+			std::list<std::shared_ptr<PartneredControlFunction>> partnersCopy;
+			{
+				LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
+				partnersCopy = partneredControlFunctions;
+			}
+			for (const auto &partner : partnersCopy)
 			{
 				if ((nullptr != partner) &&
 				    (partner->get_can_port() == message.get_can_port_index()) &&
@@ -1111,14 +1149,18 @@ namespace isobus
 
 	void CANNetworkManager::prune_inactive_control_functions()
 	{
-		constexpr std::uint32_t MAX_ADDRESS_CLAIM_RESOLUTION_TIME = 755; // This is 250ms + RTxD + 250ms
+		// ISO 11783-3 5.12.2: a CF expecting a response waits at least T3 (1.25 s) before giving up
+		constexpr std::uint32_t ADDRESS_CLAIM_RESPONSE_TIMEOUT = 1250;
+		// ISO 11783-5 requires a CF to answer a request for address claimed, but does not say that one
+		// which stays silent has left the network, so one missed request is not enough to take it offline
+		constexpr std::uint8_t MISSED_REQUESTS_BEFORE_OFFLINE = 2;
 
-		LOCK_GUARD(Mutex, controlFunctionsMutex);
+		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 		for (std::uint_fast8_t channelIndex = 0; channelIndex < CAN_PORT_MAXIMUM; channelIndex++)
 		{
 			auto &lastAddressClaimRequestTime = lastAddressClaimRequestTimestamp_ms[channelIndex];
 			if ((0 != lastAddressClaimRequestTime) &&
-			    (SystemTiming::time_expired_ms(lastAddressClaimRequestTime, MAX_ADDRESS_CLAIM_RESOLUTION_TIME)))
+			    (SystemTiming::time_expired_ms(lastAddressClaimRequestTime, ADDRESS_CLAIM_RESPONSE_TIMEOUT)))
 			{
 				for (auto &tableEntry : controlFunctionTable[channelIndex])
 				{
@@ -1127,6 +1169,14 @@ namespace isobus
 					{
 						continue;
 					}
+
+					if ((tableEntry->missedAddressClaimRequests + 1) < MISSED_REQUESTS_BEFORE_OFFLINE)
+					{
+						tableEntry->missedAddressClaimRequests++;
+						LOG_DEBUG("[NM]: Control function with address %u and NAME %016llx did not answer a request for address claim on channel %u.", tableEntry->get_address(), tableEntry->get_NAME().get_full_name(), channelIndex);
+						continue;
+					}
+					tableEntry->missedAddressClaimRequests = MISSED_REQUESTS_BEFORE_OFFLINE;
 
 					auto controlFunction = tableEntry;
 					if (ControlFunction::Type::Internal != controlFunction->get_type())

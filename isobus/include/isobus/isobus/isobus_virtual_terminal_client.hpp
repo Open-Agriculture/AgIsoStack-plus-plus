@@ -17,13 +17,16 @@
 #include "isobus/utility/processing_flags.hpp"
 #include "isobus/utility/thread_synchronization.hpp"
 
+#include <array>
 #include <functional>
 #include <map>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+#include <atomic>
 #include <thread>
 #endif
 
@@ -254,7 +257,7 @@ namespace isobus
 		{
 			NoError = 0, ///< No error occurred
 			NoInputFieldOpen = 1, ///< No input field is open
-			OtherError = 5 ///< Error is not one of the above
+			OtherError = 16 ///< Any other error, reported even if bit 0 is also set
 		};
 
 		/// @brief Enumerates the different events that can be associated with a macro
@@ -372,6 +375,27 @@ namespace isobus
 			AuxiliaryTypeTwoFunctionType functionType; ///< The type of function
 		};
 
+		/// @brief Callback to load stored auxiliary function assignments for a device
+		/// @param[in] deviceName The NAME of the auxiliary input device
+		/// @param[in] modelIdentificationCode Model identification code of the device
+		/// @param[in] parentPointer Generic context pointer, usually the VirtualTerminalClient
+		/// @returns Vector of stored assignments for this device, empty if none stored
+		using AuxiliaryAssignmentLoadCallback = std::vector<AssignedAuxiliaryFunction> (*)(
+		  std::uint64_t deviceName,
+		  std::uint16_t modelIdentificationCode,
+		  void *parentPointer);
+
+		/// @brief Callback to store auxiliary function assignments for a device
+		/// @param[in] deviceName The NAME of the auxiliary input device
+		/// @param[in] modelIdentificationCode Model identification code of the device
+		/// @param[in] assignments Vector of assignments to store
+		/// @param[in] parentPointer Generic context pointer, usually the VirtualTerminalClient
+		using AuxiliaryAssignmentStoreCallback = void (*)(
+		  std::uint64_t deviceName,
+		  std::uint16_t modelIdentificationCode,
+		  const std::vector<AssignedAuxiliaryFunction> &assignments,
+		  void *parentPointer);
+
 		/// @brief The constructor for a VirtualTerminalClient
 		/// @param[in] partner The VT server control function
 		/// @param[in] clientSource The internal control function to communicate from
@@ -394,8 +418,12 @@ namespace isobus
 		bool get_is_initialized() const;
 
 		/// @brief Check whether the client is connected to the VT server
-		/// @returns true if cconnected, false otherwise
+		/// @returns true if connected, false otherwise
 		bool get_is_connected() const;
+
+		/// @brief Returns the current state machine state
+		/// @returns The current internal state machine state
+		StateMachineState get_state() const;
 
 		/// @brief Terminates the client and joins the worker thread if applicable
 		void terminate();
@@ -517,6 +545,31 @@ namespace isobus
 			std::uint16_t value2; ///< The second value
 		};
 
+		/// @brief Flags describing why a preferred auxiliary assignment failed
+		/// @details VTRejected is combined with every defined error bit in the VT response (ISO 11783-6, J.7.8).
+		/// Reserved response bits do not have specific flags, but a nonzero response always includes VTRejected.
+		/// Local failures contain exactly one of ResponseTimeout, ObsoleteAssignment, or InvalidPreferences.
+		enum class AuxiliaryAssignmentFailureReason : std::uint16_t
+		{
+			InvalidAuxiliaryInputUnit = 0x01, ///< VT reported invalid auxiliary input unit(s)
+			InvalidFunctionObjectID = 0x02, ///< VT reported invalid auxiliary function object ID(s)
+			InvalidInputObjectID = 0x04, ///< VT reported invalid auxiliary input object ID(s)
+			DuplicateFunctionObjectID = 0x08, ///< VT reported a duplicate auxiliary function object ID
+			OtherVTError = 0x10, ///< VT reported another error
+			ResponseTimeout = 0x0100, ///< No response after the final transmission attempt
+			ObsoleteAssignment = 0x0200, ///< No response before timeout for a transaction whose referenced devices became unavailable
+			InvalidPreferences = 0x0400, ///< Stored preferences failed validation or could not be serialized
+			VTRejected = 0x0800 ///< VT returned a nonzero error response
+		};
+
+		/// @brief Event raised when a preferred auxiliary assignment transaction fails
+		/// @details One event is emitted per failure; reason may contain several VT rejection flags.
+		struct AuxiliaryAssignmentFailureEvent
+		{
+			VirtualTerminalClient *parentPointer; ///< The client whose assignments failed
+			AuxiliaryAssignmentFailureReason reason; ///< Failure reason flags, inspect individual flags using operator&
+		};
+
 		/// @brief The event dispatcher for when a soft key is pressed or released
 		/// @returns A reference to the event dispatcher, used to add listeners
 		EventDispatcher<VTKeyEvent> &get_vt_soft_key_event_dispatcher();
@@ -571,17 +624,48 @@ namespace isobus
 		/// @brief Set the model identification code of our auxiliary input device.
 		/// @details The model identification code is used to allow other devices identify
 		/// whether our device differs from a previous versions. If the model identification code
-		/// is different, the preferred assignments are reset.
+		/// is different, the preferred assignments are reset. Configure it before initialize();
+		/// AUX-N settings cannot be changed while the client is initialized.
 		/// @param[in] modelIdentificationCode The model identification code
 		void set_auxiliary_input_model_identification_code(std::uint16_t modelIdentificationCode);
+
+		/// @brief Registers callbacks for loading and storing auxiliary function assignments
+		/// @details
+		/// - Lifecycle: Configure before initialize(); callbacks cannot change until terminate(). Reconfiguration
+		///   invalidates cached preferences. Enable Functions separately with set_auxiliary_functions_enabled(true).
+		/// - Execution: Load in update() or synchronously before preference modification. Stores run in update()
+		///   or terminate(), independently of responses; termination flushes accepted changes.
+		/// - Threading: Callbacks are serialized outside the device state lock. Do not reenter AUX-N preference operations.
+		/// - Timing: Keep callbacks and contention bounded, and update() frequent, for one-second responses and
+		///   100 ms maintenance. Enqueue slow storage asynchronously.
+		/// - Responses: An eight-entry FIFO retries failed sends. Overflow refuses the newest command before applying
+		///   it; overflow and missed deadlines are logged. See the Auxiliary Control API guide for details.
+		/// @param[in] loadCallback Callback function to load stored assignments (optional)
+		/// @param[in] storeCallback Callback function to store assignments (optional)
+		/// @param[in] context User context pointer passed to callbacks (optional)
+		void set_auxiliary_assignment_callbacks(AuxiliaryAssignmentLoadCallback loadCallback,
+		                                        AuxiliaryAssignmentStoreCallback storeCallback,
+		                                        void *context = nullptr);
+
+		/// @brief Enables or disables AUX-N function handling
+		/// @details Configure this before initialize() to use AUX-N Functions. The configured partnered VT must be function
+		/// instance 0. Applications supply valid object pools and function/input object IDs.
+		/// The setting cannot be changed while initialized. Applications should register a listener for assignment
+		/// failures and alert the operator.
+		/// @param[in] enabled true to enable AUX-N function handling, false to disable it
+		void set_auxiliary_functions_enabled(bool enabled);
+
+		/// @brief Gets the event dispatcher for failed preferred assignment transactions
+		/// @returns A reference to the event dispatcher
+		EventDispatcher<AuxiliaryAssignmentFailureEvent> &get_auxiliary_assignment_failure_event_dispatcher();
 
 		/// @brief Get whether the VT has enabled the learn mode for the auxiliary input
 		/// @returns true if the VT has enabled the learn mode for the auxiliary input
 		bool get_auxiliary_input_learn_mode_enabled() const;
 
 		/// @brief Add a new auxiliary input to be managed by this virtual terminal object.
-		/// @details This function should be called for each auxiliary input that is available in the pool,
-		/// and will receive updates using update_auxiliary_input().
+		/// @details Register each local auxiliary input to enable AUX-N Input maintenance. Applications supply valid object
+		/// IDs and can send updates using update_auxiliary_input().
 		/// @param[in] auxiliaryInputID The ID of the auxiliary input
 		void add_auxiliary_input_object_id(const std::uint16_t auxiliaryInputID);
 
@@ -663,8 +747,11 @@ namespace isobus
 		/// @param[in] parentObjectID The ID of the object's parent object
 		/// @param[in] relativeXPositionChange The amount to change the X position by (px)
 		/// @param[in] relativeYPositionChange The amount to change the Y position by (px)
+		/// @param[in] autoScale Scale the values with the factor autoscaling applied to the parent object, which positions its children (see get_object_scale_factor()).
+		/// The scaled change is truncated and limited to -127 to +128 px, so a small step can become 0 and a large move is cut short.
+		/// Use send_change_child_position() when the position must be exact, as F.14 recommends.
 		/// @returns true if the message is being sent successfully
-		bool send_change_child_location(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint8_t relativeXPositionChange, std::uint8_t relativeYPositionChange);
+		bool send_change_child_location(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint8_t relativeXPositionChange, std::uint8_t relativeYPositionChange, bool autoScale = false);
 
 		/// @brief Sends the change child position command
 		/// @details The new position is set relative to the parent object's position.
@@ -681,8 +768,9 @@ namespace isobus
 		/// @param[in] parentObjectID The ID of the object's parent object
 		/// @param[in] xPosition The new X position of the object (px)
 		/// @param[in] yPosition The new Y position of the object (px)
+		/// @param[in] autoScale Scale the values with the factor autoscaling applied to the parent object, which positions its children (see get_object_scale_factor())
 		/// @returns true if the message is being sent successfully
-		bool send_change_child_position(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint16_t xPosition, std::uint16_t yPosition);
+		bool send_change_child_position(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint16_t xPosition, std::uint16_t yPosition, bool autoScale = false);
 
 		/// @brief Sends the change size command
 		/// @details A value of 0 for width or height or both
@@ -690,8 +778,9 @@ namespace isobus
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] newWidth The new width of the object
 		/// @param[in] newHeight The new height of the object
+		/// @param[in] autoScale Scale the values with the factor autoscaling applied to this object (see get_object_scale_factor())
 		/// @returns true if the message is being sent successfully
-		bool send_change_size_command(std::uint16_t objectID, std::uint16_t newWidth, std::uint16_t newHeight);
+		bool send_change_size_command(std::uint16_t objectID, std::uint16_t newWidth, std::uint16_t newHeight, bool autoScale = false);
 
 		/// @brief Sends the change background colour command
 		/// @param[in] objectID The ID of the target object
@@ -733,8 +822,9 @@ namespace isobus
 		/// @param[in] width_px The width to change the output line to
 		/// @param[in] height_px The height to change the output line to
 		/// @param[in] direction The line direction (refer to output line object attributes)
+		/// @param[in] autoScale Scale the values with the factor autoscaling applied to this object (see get_object_scale_factor())
 		/// @returns true if the message is being sent successfully
-		bool send_change_endpoint(std::uint16_t objectID, std::uint16_t width_px, std::uint16_t height_px, LineDirection direction);
+		bool send_change_endpoint(std::uint16_t objectID, std::uint16_t width_px, std::uint16_t height_px, LineDirection direction, bool autoScale = false);
 
 		/// @brief Sends the change font attributes command
 		/// @details This command is used to change the Font Attributes in a Font Attributes object.
@@ -855,8 +945,9 @@ namespace isobus
 		/// @param[in] pointIndex The index of the point in the polygon to edit
 		/// @param[in] newXValue The new X axis value (px)
 		/// @param[in] newYValue The new Y axis value (px)
+		/// @param[in] autoScale Scale the values with the factor autoscaling applied to this object (see get_object_scale_factor())
 		/// @returns true if the message is being sent successfully
-		bool send_change_polygon_point(std::uint16_t objectID, std::uint8_t pointIndex, std::uint16_t newXValue, std::uint16_t newYValue);
+		bool send_change_polygon_point(std::uint16_t objectID, std::uint8_t pointIndex, std::uint16_t newXValue, std::uint16_t newYValue, bool autoScale = false);
 
 		/// @brief Sends the change polygon scale command
 		/// @details This command is used by a Working Set to change the scale of a complete Output Polygon object. This
@@ -864,8 +955,9 @@ namespace isobus
 		/// @param[in] objectID The ID of the target object
 		/// @param[in] widthAttribute New width attribute
 		/// @param[in] heightAttribute New height attribute
+		/// @param[in] autoScale Scale the values with the factor autoscaling applied to this object (see get_object_scale_factor())
 		/// @returns true if the message is being sent successfully
-		bool send_change_polygon_scale(std::uint16_t objectID, std::uint16_t widthAttribute, std::uint16_t heightAttribute);
+		bool send_change_polygon_scale(std::uint16_t objectID, std::uint16_t widthAttribute, std::uint16_t heightAttribute, bool autoScale = false);
 
 		/// @brief Sends the select colour map or palette command
 		/// @param[in] objectID The object to select
@@ -1242,6 +1334,18 @@ namespace isobus
 		                             std::uint32_t originalDataMaskDimensions_px,
 		                             std::uint32_t originalSoftKyeDesignatorHeight_px);
 
+		/// @brief Returns the factor autoscaling applies to an object on the VT the client is connecting or connected to
+		/// @details Objects shown on soft keys are scaled with the soft key factor, all others with
+		/// the data mask factor of their pool. Working Set objects, and other objects autoscaling leaves
+		/// alone, have a factor of 1. The factors are set when the client starts uploading the pools,
+		/// or starts loading them from the VT's memory, and are cleared when it disconnects.
+		/// Use it to scale values in commands that take pixels, or pass `autoScale` to the commands
+		/// that support it. Those are scaled when they are sent, with the factors of the VT they go to,
+		/// so a command queued while not connected is still scaled right.
+		/// @param[in] objectID The ID of the object
+		/// @returns The factor, or 1 for an object that is not scaled, or while there is no VT
+		float get_object_scale_factor(std::uint16_t objectID) const;
+
 		/// @brief Assigns an object pool to the client where the client will get data in chunks during upload.
 		/// @details This is probably better for huge pools if you are RAM constrained, or if your
 		/// pool is stored on some external device that you need to get data from in pages.
@@ -1259,6 +1363,55 @@ namespace isobus
 
 		/// @brief Used to determine the language and unit systems in use by the VT server
 		LanguageCommandInterface languageCommandInterface;
+
+	private:
+		/// @brief Immutable command and bookkeeping for one Preferred Assignment transaction
+		struct AuxiliaryAssignmentTransaction
+		{
+			std::vector<std::uint8_t> message; ///< Command bytes
+			std::vector<std::pair<std::uint64_t, std::uint16_t>> devices; ///< Referenced device NAMEs and model codes
+			std::uint8_t attemptCount = 0; ///< Successful transmission count
+			std::uint32_t timestamp_ms = 0; ///< Last transmission time
+			bool obsolete = false; ///< Whether referenced devices became unavailable
+
+			/// @brief Checks for an outstanding response
+			/// @returns true if a command was transmitted
+			bool outstanding() const
+			{
+				return attemptCount != 0;
+			}
+			/// @brief Clears the transaction
+			void reset()
+			{
+				message.clear();
+				devices.clear();
+				attemptCount = 0;
+				timestamp_ms = 0;
+				obsolete = false;
+			}
+		};
+
+		/// @brief Preferences queued for persistence
+		struct AuxiliaryPreferenceSnapshot
+		{
+			std::uint64_t name; ///< Device NAME
+			std::uint16_t modelIdentificationCode; ///< Device model code
+			std::vector<AssignedAuxiliaryFunction> functions; ///< Stored preferred assignments
+		};
+
+		/// @brief Assignment response queued for transmission
+		struct AuxiliaryAssignmentResponse
+		{
+			std::uint16_t functionObjectID; ///< Function object ID
+			bool hasError; ///< Whether assignment failed
+			bool isAlreadyAssigned; ///< Whether assignment already exists
+			std::uint32_t receivedTimestamp_ms; ///< Command reception time
+			bool deadlineReported; ///< Whether response deadline was reported
+		};
+
+		/// @brief Checks whether the VT has accepted the input pool
+		/// @returns true in store-version or connected states
+		bool get_auxiliary_input_pool_ready() const;
 
 	protected:
 		/// @brief Enumerates the command types for graphics context objects
@@ -1320,20 +1473,33 @@ namespace isobus
 			bool uploaded; ///< The upload state of this pool
 		};
 
+		/// @brief An object in one of the working set's pools, as found by get_soft_key_scaled_object_ids()
+		struct ObjectPoolEntry
+		{
+			const std::vector<std::uint8_t> *pool; ///< The pool that holds the object
+			std::size_t offset; ///< The offset of the object in that pool
+			std::uint32_t size; ///< The size of the object, in bytes
+			VirtualTerminalObjectType type; ///< The type of the object
+		};
+
 		/// @brief A struct for storing information about an auxiliary input device
 		struct AssignedAuxiliaryInputDevice
 		{
-			const std::uint64_t name; ///< The NAME of the unit
-			const std::uint16_t modelIdentificationCode; ///< The model identification code
+			std::uint64_t name; ///< The NAME of the unit
+			std::uint16_t modelIdentificationCode; ///< The model identification code
 			std::vector<AssignedAuxiliaryFunction> functions; ///< The functions assigned to this auxiliary input device (only applicable for listeners of input)
+			std::uint32_t lastMaintenanceMessageTimestamp; ///< The timestamp of the last received maintenance message, in milliseconds
+			std::vector<AssignedAuxiliaryFunction> preferredFunctions; ///< Stored preferences, independent of temporary active assignments
+			bool preferredAssignmentsLoaded; ///< Whether persisted preferences have been loaded or updated
+			bool ready; ///< Whether this device currently reports Ready
 		};
 
 		/// @brief Struct for storing the state of an auxiliary input on our device
 		struct AuxiliaryInputState
 		{
-			std::uint64_t lastStatusUpdate; ///< The time of the last status update, in milliseconds
+			std::uint64_t lastStatusUpdate; ///< The time of the last successfully submitted status update, in milliseconds
 			bool enabled; ///< Whether the auxiliary input is enabled by the VT
-			bool hasInteraction; ///< Whether the auxiliary input is currently interacted with
+			bool hasInteraction; ///< Whether an interaction is pending successful status submission
 			bool controlLocked; ///< Whether the auxiliary input is currently locked
 			std::uint16_t value1; ///< The first value of the auxiliary input. See Table J.5 of Part 6 of the standard for details
 			std::uint16_t value2; ///< The second value of the auxiliary input. See Table J.5 of Part 6 of the standard for details
@@ -1435,9 +1601,61 @@ namespace isobus
 		/// @returns true if the message was sent
 		bool send_working_set_master() const;
 
-		/// @brief Send the preferred auxiliary control type 2 assignment command
-		/// @returns true if the message was sent successfully
-		bool send_auxiliary_functions_preferred_assignment() const;
+		/// @brief Loads and validates preferences for detected input devices
+		/// @details The caller must hold auxiliaryPreferenceOperationMutex and must not hold auxiliaryAssignmentMutex.
+		/// Loading is deferred during outstanding transactions; callbacks run outside the device state lock.
+		/// @returns false if a loaded preference list is invalid, otherwise true
+		bool ensure_auxiliary_preferences_loaded();
+		/// @brief Persists queued preference snapshots outside the CAN receive callback
+		void store_pending_auxiliary_preferences();
+		/// @brief Retries assignment responses in receive order; caller holds auxiliaryAssignmentMutex
+		void send_pending_auxiliary_assignment_responses_locked();
+		/// @brief Builds a complete validated transaction snapshot; caller holds auxiliaryAssignmentMutex
+		/// @returns true if the snapshot is valid
+		bool prepare_auxiliary_assignment_transaction_locked();
+
+		/// @brief Advances the preferred assignment transaction independently of the VT connection state machine
+		/// @details Sends a complete assignment set, waits for acknowledgement, and retries after two seconds up to
+		/// three successful transmissions. Obsolete snapshots are not retransmitted. Missing responses report failure
+		/// without consuming newly pending synchronization; a valid rejection completes the transaction.
+		void update_auxiliary_assignment_transaction();
+
+		/// @brief Applies an Auxiliary Assignment Type 2 command and sends its assignment response
+		/// @details Assigns, replaces, or removes active mappings and updates stored preferences when requested.
+		/// The caller must validate the command source and its 14-byte payload length before calling this method.
+		/// @param[in] message The validated assignment command received from the partnered VT
+		void handle_auxiliary_assignment_command(const CANMessage &message);
+
+		/// @brief Applies a validated assignment command while holding auxiliaryAssignmentMutex
+		/// @details Updates active mappings and, when requested, preferred mappings. The caller holds
+		/// auxiliaryAssignmentMutex. Store records are collected for callbacks after releasing the state lock.
+		/// @param[in] deviceName NAME of the input device in the command
+		/// @param[in] storeAsPreferred true when the command requests a persistent preference update
+		/// @param[in] functionType Function type encoded by the command
+		/// @param[in] inputObjectID Assigned input object ID
+		/// @param[in] functionObjectID Assigned function object ID
+		/// @param[out] toStore Updated device preferences to persist after releasing auxiliaryAssignmentMutex
+		/// @param[out] isAlreadyAssigned true when the same device, function ID, and input ID were already assigned
+		/// @returns true when the command contains invalid values or references an unavailable device
+		bool apply_auxiliary_assignment_command_locked(std::uint64_t deviceName,
+		                                               bool storeAsPreferred,
+		                                               std::uint8_t functionType,
+		                                               std::uint16_t inputObjectID,
+		                                               std::uint16_t functionObjectID,
+		                                               std::vector<AuxiliaryPreferenceSnapshot> &toStore,
+		                                               bool &isAlreadyAssigned);
+
+		/// @brief Removes a function ID from a device's active and preferred assignments
+		/// @details The caller must hold auxiliaryAssignmentMutex. Preferred mappings are only removed when requested.
+		/// @param[in,out] device Device whose mappings are updated
+		/// @param[in] functionObjectID Function object ID to remove
+		/// @param[in] updatePreferred true to remove the function from stored preferences
+		void erase_auxiliary_function_assignment(AssignedAuxiliaryInputDevice &device, std::uint16_t functionObjectID, bool updatePreferred);
+
+		/// @brief Clears active assignments when an auxiliary input device becomes unavailable
+		/// @details The caller must hold auxiliaryAssignmentMutex. Preferred assignments are preserved.
+		/// @param[in,out] device Device whose active assignments are cleared
+		void mark_auxiliary_input_device_unavailable(AssignedAuxiliaryInputDevice &device);
 
 		/// @brief Send the auxiliary control type 2 assignment reponse message
 		/// @param[in] functionObjectID The object ID of the function
@@ -1516,15 +1734,95 @@ namespace isobus
 		/// @returns true if all object pools scaled with no error
 		bool scale_object_pools();
 
+		/// @brief The factors autoscaling applies to one pool, and the objects it applies them to
+		struct CommandScalingPool
+		{
+			std::vector<std::uint16_t> objectIDs; ///< The sorted IDs of every object in the pool
+			std::vector<std::uint16_t> unscaledObjectIDs; ///< The sorted IDs of the pool's objects that autoscaling leaves alone, such as the Working Set
+			float dataMaskScaleFactor = 1.0f; ///< The factor for the objects outside the soft keys
+			float softKeyScaleFactor = 1.0f; ///< The factor for the soft keys and the objects they show
+		};
+
+		/// @brief What the commands with `autoScale` need to know about the scaled pools
+		struct CommandScaling
+		{
+			std::vector<CommandScalingPool> pools; ///< One entry per object pool, in pool order
+			std::vector<std::uint16_t> softKeyObjectIDs; ///< The sorted IDs of the keys and the objects they show
+		};
+
+		/// @brief Makes a read/write copy of every object pool in its scaledObjectPool
+		/// @returns true if every pool was copied
+		bool copy_object_pools();
+
+		/// @brief Works out the command scaling for the VT from the copies copy_object_pools() made
+		/// @details Reads the copies before they are scaled: object IDs and sizes don't change with scaling.
+		/// @returns The factors and the objects they apply to
+		CommandScaling build_command_scaling();
+
+		/// @brief Sets the command scaling for a VT that loads the pools from its memory, which skips scale_object_pools()
+		void prepare_command_scaling_for_loaded_pools();
+
+		/// @brief Returns the factor for an object, the caller holding commandScalingMutex
+		/// @param[in] objectID The ID of the object
+		/// @returns The factor, or 1
+		float get_object_scale_factor_locked(std::uint16_t objectID) const;
+
+		/// @brief Scales the pixel values of one of the commands that take `autoScale`, for the VT it is sent to
+		/// @param[in] command The command as the application gave it
+		/// @returns The command with its values scaled, or as given if it is not one of those commands
+		std::vector<std::uint8_t> scale_command(const std::vector<std::uint8_t> &command) const;
+
+		/// @brief Finds the objects drawn on soft keys, so they can be scaled with the soft key factor
+		/// @details Starts from the children of every Key and follows Containers and Object Pointers,
+		/// but not Output Lists, Animations or Working Set objects. Fonts also used outside the keys
+		/// are left out, so data mask text keeps its size. Other objects shown both on and off the keys,
+		/// such as a Picture Graphic, get the soft key factor everywhere.
+		/// @param[in] pools Every pool of the working set, including the ones that are not auto-scaled
+		/// @returns The sorted IDs of the objects shown on keys, and of the fonts only those objects use
+		static std::vector<std::uint16_t> get_soft_key_scaled_object_ids(const std::vector<std::vector<std::uint8_t> *> &pools);
+
 		/// @brief Returns if the specified object type can be scaled
 		/// @param[in] type The object type to check
 		/// @returns true if the object is inherently scalable
 		static bool get_is_object_scalable(VirtualTerminalObjectType type);
 
+		/// @brief Scales a width or height for a command, like autoscaling does
+		/// @details A value above 0 stays at least 1: under F.18 a size of 0 hides the object, and
+		/// a Change Polygon Scale to 0 would collapse its points for good.
+		/// @param[in] value The value to scale (px)
+		/// @param[in] scaleFactor The factor to scale with
+		/// @returns The scaled value, limited to what the command can carry
+		static std::uint16_t scale_command_dimension(std::uint16_t value, float scaleFactor);
+
+		/// @brief Scales an unsigned coordinate for a command, like autoscaling does
+		/// @param[in] value The value to scale (px)
+		/// @param[in] scaleFactor The factor to scale with
+		/// @returns The scaled value, limited to what the command can carry
+		static std::uint16_t scale_command_coordinate(std::uint16_t value, float scaleFactor);
+
+		/// @brief Scales a child position for a command, which the pool holds as a signed value
+		/// @param[in] value The position to scale (px)
+		/// @param[in] scaleFactor The factor to scale with
+		/// @returns The scaled position, limited to what the command can carry
+		static std::uint16_t scale_command_position(std::uint16_t value, float scaleFactor);
+
+		/// @brief Scales a relative position change for the change child location command
+		/// @param[in] value The position change, with its offset of 127
+		/// @param[in] scaleFactor The factor to scale with
+		/// @returns The scaled position change with its offset, limited to -127 to +128 px
+		static std::uint8_t scale_command_position_change(std::uint8_t value, float scaleFactor);
+
 		/// @brief Returns the closest font to the one you passed in, in decending order
 		/// @param[in] originalFont The original font that you want to scale
 		/// @returns The best available font that the VT reported it has available
 		FontSize get_font_or_next_smallest_font(FontSize originalFont) const;
+
+		/// @brief Scales the height of a proportional font, keeping it between 8 pixels and the
+		/// height of the largest font the VT reported it has available
+		/// @param[in] originalHeight The original font height in pixels
+		/// @param[in] scaleFactor The factor by which to scale the font
+		/// @returns The scaled font height in pixels
+		std::uint8_t scale_proportional_font_height(std::uint8_t originalHeight, float scaleFactor) const;
 
 		/// @brief Remaps a font to some other font based on a scale factor
 		/// This is not a one-size-fits-all solution, but should usually result in a compatible font
@@ -1574,14 +1872,16 @@ namespace isobus
 		/// @brief Tries to send a command to the VT server, and queues it if it fails
 		/// @param[in] data The data to send, including the function-code
 		/// @param[in] replace If true, the message will replace any existing message with the same priority and function-code
+		/// @param[in] autoScale If true, the command's pixel values are scaled when it is sent (see scale_command())
 		/// @returns true if the message was sent/queued successfully
-		bool queue_command(const std::vector<std::uint8_t> &data, bool replace = false);
+		bool queue_command(const std::vector<std::uint8_t> &data, bool replace = false, bool autoScale = false);
 
 		/// @brief Replaces the first message in the queue with the same function-code and priority, and removes the rest
 		/// @note This will not queue a message if one does not already exist.
 		/// @param[in] data The data to send, including the function-code
+		/// @param[in] autoScale If true, the command's pixel values are scaled when it is sent
 		/// @returns true if the message was replaced successfully
-		bool replace_command(const std::vector<std::uint8_t> &data);
+		bool replace_command(const std::vector<std::uint8_t> &data, bool autoScale);
 
 		/// @brief Tests whether two VT commands focus on changing/requesting the same thing
 		/// @param[in] first The first command to compare
@@ -1595,6 +1895,17 @@ namespace isobus
 		/// @brief The worker thread will execute this function when it runs, if applicable
 		void worker_thread_function();
 
+		/// @brief The body of terminate(): removes the callbacks, tells the worker to exit and marks the client
+		/// disconnected
+		/// @param[in] joinWorker Whether to join the worker thread; false when called from the worker itself
+		void stop(bool joinWorker);
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		/// @brief Joins and deletes the worker thread, if there is one. Called with `workerThreadMutex` held,
+		/// never from the worker itself.
+		void join_worker_thread();
+#endif
+
 		/// @brief A method to print the End of Object pool response message error field with LOG_ERROR
 		/// @param[in] errorCodes byte 2 from the End of Object Pool response
 		/// @param[in] objectPoolErrorCodes byte 7 from the End of Object Pool response
@@ -1603,6 +1914,8 @@ namespace isobus
 		static constexpr std::uint32_t VT_STATUS_TIMEOUT_MS = 3000; ///< The max allowable time between VT status messages before its considered offline
 		static constexpr std::uint32_t WORKING_SET_MAINTENANCE_TIMEOUT_MS = 1000; ///< The delay between working set maintenance messages
 		static constexpr std::uint32_t AUXILIARY_MAINTENANCE_TIMEOUT_MS = 100; ///< The delay between auxiliary maintenance messages
+		static constexpr std::uint32_t AUXILIARY_ASSIGNMENT_RESPONSE_TIMEOUT_MS = 2000; ///< Timeout for Preferred Assignment OK response per ISO 11783
+		static constexpr std::uint32_t AUXILIARY_INPUT_DEVICE_TIMEOUT_MS = 300; ///< Timeout before a remote auxiliary input device is considered offline
 
 		std::shared_ptr<PartneredControlFunction> partnerControlFunction; ///< The partner control function this client will send to
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function the client uses to send from
@@ -1618,6 +1931,7 @@ namespace isobus
 		std::uint8_t currentCommandFunctionCode = 0; ///< The VT server's current command function code
 
 		std::uint8_t consecutiveNonParsingVTStatusMessages = 0; ///< Consecutive VT status messages with parsing clear while awaiting an end of object pool or load version response, capped at three
+		bool objectPoolRejected = false; ///< The VT rejected the pool in its End of Object Pool response, so it is not sent again until the VT goes away or the client restarts
 
 		std::uint8_t connectedVTVersion = 0; ///< The VT server's supported max version
 
@@ -1642,24 +1956,42 @@ namespace isobus
 		StateMachineState state = StateMachineState::Disconnected; ///< The current client state machine state
 		CurrentObjectPoolUploadState currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized; ///< The current upload state of the object pool being processed
 		std::uint32_t stateMachineTimestamp_ms = 0; ///< Timestamp from the last state machine update
+		std::uint32_t auxiliaryAssignmentSessionGeneration = 0; ///< Rejects callback results and commands from an ended VT session
+		AuxiliaryAssignmentTransaction auxiliaryAssignmentTransaction; ///< Current command snapshot and retry state
+		bool auxiliaryAssignmentPending = false; ///< Whether a complete Preferred Assignment command is pending
+		bool auxiliaryFunctionsEnabled = false; ///< Whether AUX-N function handling is enabled
+		static constexpr std::size_t AUXILIARY_ASSIGNMENT_RESPONSE_QUEUE_CAPACITY = 8; ///< Maximum queued assignment responses
+		std::array<AuxiliaryAssignmentResponse, AUXILIARY_ASSIGNMENT_RESPONSE_QUEUE_CAPACITY> auxiliaryAssignmentResponses{}; ///< Pending assignment responses
+		std::size_t auxiliaryAssignmentResponseHead = 0; ///< Oldest queued response index
+		std::size_t auxiliaryAssignmentResponseCount = 0; ///< Queued response count
+		Mutex auxiliaryAssignmentMutex; ///< Protects assigned device state and preferred assignment transaction state
+		Mutex auxiliaryPreferenceOperationMutex; ///< Serializes load, mutation, and store operations
 		std::uint32_t lastWorkingSetMaintenanceTimestamp_ms = 0; ///< The timestamp from the last time we sent the maintenance message
 		std::uint32_t lastAuxiliaryMaintenanceTimestamp_ms = 0; ///< The timestamp from the last time we sent the maintenance message
 		std::vector<ObjectPoolDataStruct> objectPools; ///< A container to hold all object pools that have been assigned to the interface
+		CommandScaling commandScaling; ///< The factors for the commands with `autoScale`, for the VT the client is connecting or connected to
+		mutable Mutex commandScalingMutex; ///< Protects commandScaling, which the update thread replaces while the application sends commands
 		std::vector<std::uint8_t> unsupportedFunctions; ///< Holds the functions unsupported by the server.
 		std::vector<AssignedAuxiliaryInputDevice> assignedAuxiliaryInputDevices; ///< A container to hold all auxiliary input devices known
 		std::uint16_t ourModelIdentificationCode = 1; ///< The model identification code of this input device
 		std::map<std::uint16_t, AuxiliaryInputState> ourAuxiliaryInputs; ///< The inputs on this auxiliary input device
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-		std::thread *workerThread = nullptr; ///< The worker thread that updates this interface
+		std::atomic<std::thread *> workerThread{ nullptr }; ///< The worker thread that updates this interface
+		Mutex workerThreadMutex; ///< Held through initialize() and terminate(), so one caller at a time starts or stops the worker. The worker never takes it.
 #endif
 		bool firstTimeInState = false; ///< Stores if the current update cycle is the first time a state machine state has been processed
-		bool initialized = false; ///< Stores the client initialization state
+		std::atomic<bool> initialized{ false }; ///< Stores the client initialization state
 		bool sendWorkingSetMaintenance = false; ///< Used internally to enable and disable cyclic sending of the working set maintenance message
-		bool sendAuxiliaryMaintenance = false; ///< Used internally to enable and disable cyclic sending of the auxiliary maintenance message
-		bool shouldTerminate = false; ///< Used to determine if the client should exit and join the worker thread
+		std::atomic<bool> shouldTerminate{ false }; ///< Used to determine if the client should exit and join the worker thread
 
 		// Command queue
-		std::vector<std::vector<std::uint8_t>> commandQueue; ///< A queue of commands to send to the VT server
+		/// @brief A command waiting to be sent to the VT server
+		struct QueuedCommand
+		{
+			std::vector<std::uint8_t> data; ///< The command as the application gave it, including the function-code
+			bool autoScale; ///< Scale the command's pixel values when it is sent
+		};
+		std::vector<QueuedCommand> commandQueue; ///< A queue of commands to send to the VT server
 		bool commandAwaitingResponse = false; ///< Determines if we are currently waiting for a response to a command
 		std::uint32_t lastCommandTimestamp_ms = 0; ///< The timestamp of the last command sent
 		std::vector<std::array<std::uint8_t, 32>> pendingExtendedVersionDeletes; ///< Extended version labels still to be deleted from the VT
@@ -1678,6 +2010,11 @@ namespace isobus
 		EventDispatcher<VTUserLayoutHideShowEvent> userLayoutHideShowEventDispatcher; ///< A list of all user layout hide/show callbacks
 		EventDispatcher<VTAudioSignalTerminationEvent> audioSignalTerminationEventDispatcher; ///< A list of all control audio signal termination callbacks
 		EventDispatcher<AuxiliaryFunctionEvent> auxiliaryFunctionEventDispatcher; ///< A list of all auxiliary function callbacks
+		EventDispatcher<AuxiliaryAssignmentFailureEvent> auxiliaryAssignmentFailureEventDispatcher; ///< Listeners alerted when a preferred assignment transaction fails
+		AuxiliaryAssignmentLoadCallback auxiliaryAssignmentLoadCallback = nullptr; ///< Callback to load stored assignments
+		AuxiliaryAssignmentStoreCallback auxiliaryAssignmentStoreCallback = nullptr; ///< Callback to store assignments
+		void *auxiliaryAssignmentCallbackContext = nullptr; ///< User context for storage callbacks
+		std::vector<AuxiliaryPreferenceSnapshot> auxiliaryAssignmentPendingStores; ///< Preference snapshots waiting for application persistence
 
 		// Object Pool info
 		DataChunkCallback objectPoolDataCallback = nullptr; ///< The callback to use to get pool data
@@ -1693,6 +2030,26 @@ namespace isobus
 		/// @param[in] versionLabel The 32 character version label to delete
 		void queue_extended_version_delete(const std::array<std::uint8_t, 32> &versionLabel);
 	};
+
+	/// @brief Combines auxiliary assignment failure reason flags
+	/// @param[in] lhs First set of flags
+	/// @param[in] rhs Second set of flags
+	/// @returns The combined flags
+	constexpr VirtualTerminalClient::AuxiliaryAssignmentFailureReason operator|(VirtualTerminalClient::AuxiliaryAssignmentFailureReason lhs,
+	                                                                            VirtualTerminalClient::AuxiliaryAssignmentFailureReason rhs)
+	{
+		return static_cast<VirtualTerminalClient::AuxiliaryAssignmentFailureReason>(static_cast<std::uint16_t>(lhs) | static_cast<std::uint16_t>(rhs));
+	}
+
+	/// @brief Selects auxiliary assignment failure reason flags common to both operands
+	/// @param[in] lhs Flags to inspect
+	/// @param[in] rhs Flags to select
+	/// @returns The common flags; compare with rhs to check whether all selected flags are present
+	constexpr VirtualTerminalClient::AuxiliaryAssignmentFailureReason operator&(VirtualTerminalClient::AuxiliaryAssignmentFailureReason lhs,
+	                                                                            VirtualTerminalClient::AuxiliaryAssignmentFailureReason rhs)
+	{
+		return static_cast<VirtualTerminalClient::AuxiliaryAssignmentFailureReason>(static_cast<std::uint16_t>(lhs) & static_cast<std::uint16_t>(rhs));
+	}
 
 } // namespace isobus
 

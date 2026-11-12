@@ -25,6 +25,47 @@
 
 namespace isobus
 {
+	/// @brief Checks under the registry's lock whether a callback is still registered, as one removed during a dispatch must not be called from the copy.
+	/// @param[in] registryMutex The mutex that guards the registry
+	/// @param[in] registry The list of registered callbacks
+	/// @param[in] callback The callback to look for
+	/// @returns true if the callback is still in the registry
+	template<typename Container>
+	static bool is_registered(Mutex &registryMutex, const Container &registry, const typename Container::value_type &callback)
+	{
+		(void)registryMutex; // Unused when threads are disabled
+		LOCK_GUARD(Mutex, registryMutex);
+		return (registry.end() != std::find(registry.begin(), registry.end(), callback));
+	}
+
+	/// @brief Takes the oldest command off a queue and copies the callbacks for it under one lock, so that a callback registered while handling an earlier command sees this one.
+	/// @param[in] mutex The mutex that guards the queue and the registry
+	/// @param[in,out] queue The queue to take the command from
+	/// @param[out] command The command that was taken off the queue
+	/// @param[in] registry The list of registered callbacks
+	/// @param[out] callbacks The copy of the registry
+	/// @returns true if a command was taken, false if the queue was empty
+	template<typename Queue, typename Container>
+	static bool pop_queued_command(Mutex &mutex, Queue &queue, typename Queue::value_type &command, const Container &registry, Container &callbacks)
+	{
+		bool retVal = false;
+		(void)mutex; // Unused when threads are disabled
+		LOCK_GUARD(Mutex, mutex);
+		if (!queue.empty())
+		{
+			command = queue.front();
+			queue.pop_front();
+			callbacks = registry;
+			retVal = true;
+		}
+		return retVal;
+	}
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+	/// @brief The client whose worker runs on this thread. Not get_id(): on ESP-IDF it aborts outside pthreads.
+	static thread_local const TaskControllerClient *workerThreadOwner = nullptr;
+#endif
+
 	TaskControllerClient::TaskControllerClient(std::shared_ptr<PartneredControlFunction> partner, std::shared_ptr<InternalControlFunction> clientSource, std::shared_ptr<PartneredControlFunction> primaryVT) :
 	  languageCommandInterface(clientSource, partner),
 	  partnerControlFunction(partner),
@@ -43,6 +84,22 @@ namespace isobus
 		// You cannot use this interface without having valid control functions.
 		assert(nullptr != myControlFunction);
 		assert(nullptr != partnerControlFunction);
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		if (this == workerThreadOwner)
+		{
+			LOG_ERROR("[TC]: initialize() cannot be called from the client's own worker thread.");
+			return;
+		}
+		LOCK_GUARD(Mutex, workerThreadMutex);
+		if (shouldTerminate)
+		{
+			// Stopped after an error (request_termination()): the worker has been told to exit, and is
+			// joined before a new one starts, so the old one cannot carry on beside it.
+			join_worker_thread();
+		}
+#endif
+		LOCK_GUARD(Mutex, runMutex);
 
 		partnerControlFunction->add_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData), process_rx_message, this);
 		partnerControlFunction->add_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge), process_rx_message, this);
@@ -66,7 +123,10 @@ namespace isobus
 			{
 				workerThread = new std::thread([this]() { worker_thread_function(); });
 			}
+#else
+			(void)spawnThread;
 #endif
+			runNumber++;
 			initialized = true;
 		}
 	}
@@ -256,27 +316,75 @@ namespace isobus
 
 	void TaskControllerClient::terminate()
 	{
-		if (initialized)
-		{
-			if (nullptr != partnerControlFunction)
-			{
-				partnerControlFunction->remove_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData), process_rx_message, this);
-				partnerControlFunction->remove_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge), process_rx_message, this);
-				CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData), process_rx_message, this);
-			}
-
-			shouldTerminate = true;
-
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			if ((nullptr != workerThread) && (workerThread->get_id() != std::this_thread::get_id()))
-			{
-				workerThread->join();
-				delete workerThread;
-				workerThread = nullptr;
-			}
+		if (this == workerThreadOwner)
+		{
+			// From the worker itself (a callback it runs). It cannot join itself, nor wait for
+			// workerThreadMutex, which an owner joining it may hold. It exits after this update, and the
+			// owner's terminate() or initialize(), or the destructor, joins it.
+			request_termination(runNumber);
+			return;
+		}
+		// Held through the whole call, so a second caller waits until the first has finished: it cannot
+		// return to an owner that destroys the client while the first is still inside.
+		LOCK_GUARD(Mutex, workerThreadMutex);
 #endif
+		{
+			LOCK_GUARD(Mutex, runMutex);
+			if (initialized)
+			{
+				remove_callbacks();
+				shouldTerminate = true;
+				runNumber++;
+			}
+		}
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		// Also a worker that stopped after an error, while initialized stays set.
+		join_worker_thread();
+#endif
+	}
+
+	void TaskControllerClient::request_termination(std::uint32_t run)
+	{
+		LOCK_GUARD(Mutex, runMutex);
+		if (initialized && (!shouldTerminate) && (run == runNumber))
+		{
+			remove_callbacks();
+			shouldTerminate = true;
 		}
 	}
+
+	void TaskControllerClient::remove_callbacks()
+	{
+		if (nullptr != partnerControlFunction)
+		{
+			partnerControlFunction->remove_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData), process_rx_message, this);
+			partnerControlFunction->remove_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge), process_rx_message, this);
+			CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProcessData), process_rx_message, this);
+		}
+	}
+
+	std::uint32_t TaskControllerClient::get_run_number() const
+	{
+		return runNumber;
+	}
+
+	bool TaskControllerClient::get_termination_requested() const
+	{
+		return shouldTerminate;
+	}
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+	void TaskControllerClient::join_worker_thread()
+	{
+		std::thread *thread = workerThread.exchange(nullptr);
+		if (nullptr != thread)
+		{
+			thread->join();
+			delete thread;
+		}
+	}
+#endif
 
 	std::shared_ptr<InternalControlFunction> TaskControllerClient::get_internal_control_function() const
 	{
@@ -448,12 +556,19 @@ namespace isobus
 
 	void TaskControllerClient::update()
 	{
+		const std::uint32_t run = runNumber; // An error found below stops this run only (request_termination())
 		DeviceDescriptorObjectPool *pool = nullptr;
 
 		// Check if we need to check all default process data requests before proceeding to queue/state processing.
 		if (shouldProcessAllDefaultProcessDataRequests)
 		{
 			shouldProcessAllDefaultProcessDataRequests = false;
+
+			std::vector<DefaultProcessDataRequestCallbackInfo> defaultCallbacks;
+			{
+				LOCK_GUARD(Mutex, clientMutex);
+				defaultCallbacks = defaultProcessDataRequestedCallbacks;
+			}
 
 			if (nullptr != clientDDOP)
 			{
@@ -510,9 +625,10 @@ namespace isobus
 								auto processData = std::static_pointer_cast<task_controller_object::DeviceProcessDataObject>(childObject);
 								DefaultProcessDataSettings settings;
 
-								for (const auto &callback : defaultProcessDataRequestedCallbacks)
+								for (const auto &callback : defaultCallbacks)
 								{
-									if (callback.callback(deviceElement->get_element_number(), processData->get_ddi(), settings, callback.parent))
+									if (is_registered(clientMutex, defaultProcessDataRequestedCallbacks, callback) &&
+									    callback.callback(deviceElement->get_element_number(), processData->get_ddi(), settings, callback.parent))
 									{
 										populate_any_triggers_from_settings(processData, deviceElement->get_element_number(), processData->get_ddi(), settings);
 										break;
@@ -712,7 +828,7 @@ namespace isobus
 						else
 						{
 							LOG_ERROR("[TC]: Cannot proceed with connection to TC due to invalid DDOP. Check log for [DDOP] events. TC client will now terminate.");
-							terminate();
+							request_termination(run);
 						}
 					}
 					else
@@ -733,7 +849,7 @@ namespace isobus
 						    (ddopStructureLabel.empty()))
 						{
 							LOG_ERROR("[TC]: Failed to parse the DDOP. Ensure you provided a valid device object. TC client will now terminate.");
-							terminate();
+							request_termination(run);
 						}
 					}
 					else
@@ -958,7 +1074,7 @@ namespace isobus
 				{
 					LOG_ERROR("[TC]: Timeout sending object pool deactivate. Client terminated.");
 					set_state(StateMachineState::Disconnected);
-					terminate();
+					request_termination(run);
 				}
 			}
 			break;
@@ -977,7 +1093,7 @@ namespace isobus
 					{
 						LOG_ERROR("[TC]: Timeout waiting for deactivate object pool response. Client terminated.");
 						set_state(StateMachineState::Disconnected);
-						terminate();
+						request_termination(run);
 					}
 				}
 			}
@@ -1405,31 +1521,31 @@ namespace isobus
 
 	void TaskControllerClient::process_queued_commands()
 	{
-		LOCK_GUARD(Mutex, clientMutex);
+		// Called on copies, unlocked, so that a callback can call back into this client without deadlocking.
+		// A restart or DDOP change during a callback drops the queued commands, so each answer checks the state under the lock it is sent with.
+		std::vector<RequestValueCommandCallbackInfo> requestCallbacks;
+		std::vector<ValueCommandCallbackInfo> commandCallbacks;
 		bool transmitSuccessful = true;
+		ProcessDataCallbackInfo currentRequest = { 0, 0, 0, 0, false, false };
 
-		while (!queuedValueRequests.empty() && transmitSuccessful)
+		while (transmitSuccessful && pop_queued_command(clientMutex, queuedValueRequests, currentRequest, requestValueCallbacks, requestCallbacks))
 		{
-			const auto &currentRequest = queuedValueRequests.front();
-
-			for (auto &currentCallback : requestValueCallbacks)
+			std::int32_t newValue = 0;
+			if (request_value(requestCallbacks, currentRequest.elementNumber, currentRequest.ddi, newValue))
 			{
-				std::int32_t newValue = 0;
-				if (currentCallback.callback(currentRequest.elementNumber, currentRequest.ddi, newValue, currentCallback.parent))
+				LOCK_GUARD(Mutex, clientMutex);
+				if (StateMachineState::Connected == currentState)
 				{
 					transmitSuccessful = send_value_command(currentRequest.elementNumber, currentRequest.ddi, newValue);
-					break;
 				}
 			}
-			queuedValueRequests.pop_front();
 		}
-		while (!queuedValueCommands.empty() && transmitSuccessful)
+		while (transmitSuccessful && pop_queued_command(clientMutex, queuedValueCommands, currentRequest, valueCommandsCallbacks, commandCallbacks))
 		{
-			const auto &currentRequest = queuedValueCommands.front();
-
-			for (auto &currentCallback : valueCommandsCallbacks)
+			for (const auto &currentCallback : commandCallbacks)
 			{
-				if (currentCallback.callback(currentRequest.elementNumber, currentRequest.ddi, currentRequest.processDataValue, currentCallback.parent))
+				if (is_registered(clientMutex, valueCommandsCallbacks, currentCallback) &&
+				    currentCallback.callback(currentRequest.elementNumber, currentRequest.ddi, currentRequest.processDataValue, currentCallback.parent))
 				{
 					break;
 				}
@@ -1438,33 +1554,62 @@ namespace isobus
 			//! @todo process PDACKs better
 			if (currentRequest.ackRequested)
 			{
-				transmitSuccessful = send_pdack(currentRequest.elementNumber, currentRequest.ddi);
+				LOCK_GUARD(Mutex, clientMutex);
+				if (StateMachineState::Connected == currentState)
+				{
+					transmitSuccessful = send_pdack(currentRequest.elementNumber, currentRequest.ddi);
+				}
 			}
-			queuedValueCommands.pop_front();
 		}
+	}
+
+	bool TaskControllerClient::request_value(const std::vector<RequestValueCommandCallbackInfo> &callbacks, std::uint16_t elementNumber, std::uint16_t DDI, std::int32_t &value)
+	{
+		bool retVal = false;
+		for (const auto &currentCallback : callbacks)
+		{
+			std::int32_t newValue = 0;
+			if (is_registered(clientMutex, requestValueCallbacks, currentCallback) &&
+			    currentCallback.callback(elementNumber, DDI, newValue, currentCallback.parent))
+			{
+				value = newValue;
+				retVal = true;
+				break;
+			}
+		}
+		return retVal;
 	}
 
 	void TaskControllerClient::process_queued_threshold_commands()
 	{
-		bool transmitSuccessful = false;
+		std::vector<RequestValueCommandCallbackInfo> callbacks;
+		{
+			LOCK_GUARD(Mutex, clientMutex);
+			// This runs on every update, and most clients have no measurements to dispatch.
+			// Returning under the lock leaves a measurement added after this check for the next update.
+			if (measurementTimeIntervalCommands.empty() &&
+			    measurementMaximumThresholdCommands.empty() &&
+			    measurementMinimumThresholdCommands.empty() &&
+			    measurementOnChangeThresholdCommands.empty())
+			{
+				return;
+			}
+			callbacks = requestValueCallbacks;
+		}
 
+		// A callback can restart the client, which clears these lists under the loop, so each answer checks the state under the lock it is sent with and stops there.
 		for (auto &measurementTimeCommand : measurementTimeIntervalCommands)
 		{
-			if (SystemTiming::time_expired_ms(static_cast<std::uint32_t>(measurementTimeCommand.lastValue), static_cast<std::uint32_t>(measurementTimeCommand.processDataValue)))
+			std::int32_t newValue = 0;
+			if (SystemTiming::time_expired_ms(static_cast<std::uint32_t>(measurementTimeCommand.lastValue), static_cast<std::uint32_t>(measurementTimeCommand.processDataValue)) &&
+			    request_value(callbacks, measurementTimeCommand.elementNumber, measurementTimeCommand.ddi, newValue))
 			{
-				// Time to update this time interval variable
-				transmitSuccessful = false;
-				for (auto &currentCallback : requestValueCallbacks)
+				LOCK_GUARD(Mutex, clientMutex);
+				if (StateMachineState::Connected != currentState)
 				{
-					std::int32_t newValue = 0;
-					if (currentCallback.callback(measurementTimeCommand.elementNumber, measurementTimeCommand.ddi, newValue, currentCallback.parent))
-					{
-						transmitSuccessful = send_value_command(measurementTimeCommand.elementNumber, measurementTimeCommand.ddi, newValue);
-						break;
-					}
+					return;
 				}
-
-				if (transmitSuccessful)
+				if (send_value_command(measurementTimeCommand.elementNumber, measurementTimeCommand.ddi, newValue))
 				{
 					measurementTimeCommand.lastValue = static_cast<std::int32_t>(SystemTiming::get_timestamp_ms());
 				}
@@ -1472,27 +1617,23 @@ namespace isobus
 		}
 		for (auto &measurementMaxCommand : measurementMaximumThresholdCommands)
 		{
-			// Get the current process data value
 			std::int32_t newValue = 0;
-			for (auto &currentCallback : requestValueCallbacks)
+			if (request_value(callbacks, measurementMaxCommand.elementNumber, measurementMaxCommand.ddi, newValue))
 			{
-				if (currentCallback.callback(measurementMaxCommand.elementNumber, measurementMaxCommand.ddi, newValue, currentCallback.parent))
+				LOCK_GUARD(Mutex, clientMutex);
+				if (StateMachineState::Connected != currentState)
 				{
-					break;
+					return;
 				}
-			}
-
-			if (!measurementMaxCommand.thresholdPassed)
-			{
-				if ((newValue > measurementMaxCommand.processDataValue) &&
-				    (send_value_command(measurementMaxCommand.elementNumber, measurementMaxCommand.ddi, newValue)))
+				if (!measurementMaxCommand.thresholdPassed)
 				{
-					measurementMaxCommand.thresholdPassed = true;
+					if ((newValue > measurementMaxCommand.processDataValue) &&
+					    (send_value_command(measurementMaxCommand.elementNumber, measurementMaxCommand.ddi, newValue)))
+					{
+						measurementMaxCommand.thresholdPassed = true;
+					}
 				}
-			}
-			else
-			{
-				if (newValue < measurementMaxCommand.processDataValue)
+				else if (newValue < measurementMaxCommand.processDataValue)
 				{
 					measurementMaxCommand.thresholdPassed = false;
 				}
@@ -1500,27 +1641,23 @@ namespace isobus
 		}
 		for (auto &measurementMinCommand : measurementMinimumThresholdCommands)
 		{
-			// Get the current process data value
 			std::int32_t newValue = 0;
-			for (auto &currentCallback : requestValueCallbacks)
+			if (request_value(callbacks, measurementMinCommand.elementNumber, measurementMinCommand.ddi, newValue))
 			{
-				if (currentCallback.callback(measurementMinCommand.elementNumber, measurementMinCommand.ddi, newValue, currentCallback.parent))
+				LOCK_GUARD(Mutex, clientMutex);
+				if (StateMachineState::Connected != currentState)
 				{
-					break;
+					return;
 				}
-			}
-
-			if (!measurementMinCommand.thresholdPassed)
-			{
-				if ((newValue < measurementMinCommand.processDataValue) &&
-				    (send_value_command(measurementMinCommand.elementNumber, measurementMinCommand.ddi, newValue)))
+				if (!measurementMinCommand.thresholdPassed)
 				{
-					measurementMinCommand.thresholdPassed = true;
+					if ((newValue < measurementMinCommand.processDataValue) &&
+					    (send_value_command(measurementMinCommand.elementNumber, measurementMinCommand.ddi, newValue)))
+					{
+						measurementMinCommand.thresholdPassed = true;
+					}
 				}
-			}
-			else
-			{
-				if (newValue > measurementMinCommand.processDataValue)
+				else if (newValue > measurementMinCommand.processDataValue)
 				{
 					measurementMinCommand.thresholdPassed = false;
 				}
@@ -1528,28 +1665,27 @@ namespace isobus
 		}
 		for (auto &measurementChangeCommand : measurementOnChangeThresholdCommands)
 		{
-			// Get the current process data value
 			std::int32_t newValue = 0;
-			for (auto &currentCallback : requestValueCallbacks)
+			if (request_value(callbacks, measurementChangeCommand.elementNumber, measurementChangeCommand.ddi, newValue))
 			{
-				if (currentCallback.callback(measurementChangeCommand.elementNumber, measurementChangeCommand.ddi, newValue, currentCallback.parent))
+				LOCK_GUARD(Mutex, clientMutex);
+				if (StateMachineState::Connected != currentState)
 				{
-					break;
+					return;
 				}
-			}
+				std::int64_t lowerLimit = (static_cast<std::int64_t>(measurementChangeCommand.lastValue) - measurementChangeCommand.processDataValue);
+				if (lowerLimit < 0)
+				{
+					lowerLimit = 0;
+				}
 
-			std::int64_t lowerLimit = (static_cast<std::int64_t>(measurementChangeCommand.lastValue) - measurementChangeCommand.processDataValue);
-			if (lowerLimit < 0)
-			{
-				lowerLimit = 0;
-			}
-
-			if ((newValue != measurementChangeCommand.lastValue) &&
-			    ((newValue >= (measurementChangeCommand.lastValue + measurementChangeCommand.processDataValue)) ||
-			     (newValue <= lowerLimit)) &&
-			    (send_value_command(measurementChangeCommand.elementNumber, measurementChangeCommand.ddi, newValue)))
-			{
-				measurementChangeCommand.lastValue = newValue;
+				if ((newValue != measurementChangeCommand.lastValue) &&
+				    ((newValue >= (measurementChangeCommand.lastValue + measurementChangeCommand.processDataValue)) ||
+				     (newValue <= lowerLimit)) &&
+				    (send_value_command(measurementChangeCommand.elementNumber, measurementChangeCommand.ddi, newValue)))
+				{
+					measurementChangeCommand.lastValue = newValue;
+				}
 			}
 		}
 	}
@@ -1561,7 +1697,9 @@ namespace isobus
 		    (nullptr != message.get_source_control_function()))
 		{
 			auto parentTC = static_cast<TaskControllerClient *>(parentPointer);
+			const std::uint32_t run = parentTC->runNumber; // An error found below stops this run only (request_termination())
 			auto &clientMutex = parentTC->clientMutex;
+			(void)clientMutex;
 			const auto &messageData = message.get_data();
 
 			switch (message.get_identifier().get_parameter_group_number())
@@ -1759,7 +1897,7 @@ namespace isobus
 										else
 										{
 											LOG_ERROR("[TC]: Server states that there is not enough memory available for our DDOP. Client will terminate.");
-											parentTC->terminate();
+											parentTC->request_termination(run);
 										}
 									}
 									else
@@ -1828,7 +1966,7 @@ namespace isobus
 											}
 											parentTC->set_state(StateMachineState::Disconnected);
 											LOG_ERROR("[TC]: Client terminated.");
-											parentTC->terminate();
+											parentTC->request_termination(run);
 										}
 									}
 									else if (StateMachineState::WaitForObjectPoolDeactivateResponse == parentTC->get_state())
@@ -1885,7 +2023,7 @@ namespace isobus
 												LOG_ERROR("[TC]: DDOP upload completed but TC had some unknown error.");
 											}
 											LOG_ERROR("[TC]: Client terminated.");
-											parentTC->terminate();
+											parentTC->request_termination(run);
 										}
 									}
 									else
@@ -2423,6 +2561,7 @@ namespace isobus
 	void TaskControllerClient::worker_thread_function()
 	{
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		workerThreadOwner = this;
 		for (;;)
 		{
 			if (shouldTerminate)

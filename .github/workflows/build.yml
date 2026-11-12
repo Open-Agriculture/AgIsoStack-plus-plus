@@ -9,6 +9,7 @@ on:
 
 env:
   BUILD_TYPE: Debug
+  CMAKE_BUILD_PARALLEL_LEVEL: 4
 
 jobs:
   build_test_analyze:
@@ -22,10 +23,10 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
-      - name: Set up Python 3.8 for gcovr
+      - name: Set up Python 3.12 for gcovr
         uses: actions/setup-python@v6
         with:
-          python-version: 3.8
+          python-version: "3.12"
           cache: "pip"
       - name: install gcovr
         run: |
@@ -65,7 +66,7 @@ jobs:
       - name: Compile
         run: |
           mkdir build
-          cmake -S . -B build -DBUILD_EXAMPLES=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+          cmake -S . -B build -DBUILD_EXAMPLES=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} "-DCAN_DRIVER=WindowsPCANBasic;WindowsCandleLight"
           cmake --build build --config ${{ env.BUILD_TYPE }}
       - name: Test
         run: |
@@ -91,7 +92,7 @@ jobs:
           ctest -C ${{ env.BUILD_TYPE }} --rerun-failed --output-on-failure
 
   linux_no_threads_build:
-    name: Ubuntu Build (no std threads)
+    name: Ubuntu Build, Test (no std threads)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -105,8 +106,34 @@ jobs:
             -DCAN_STACK_DISABLE_THREADS=ON \
             -DCMAKE_CXX_STANDARD=11 \
             -DCMAKE_CXX_STANDARD_REQUIRED=ON \
+            -DBUILD_TESTING=ON \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
 
       - name: Build (no threads)
         run: |
           cmake --build build --config ${{ env.BUILD_TYPE }}
+
+      - name: Test (no threads)
+        run: |
+          cd build
+          ctest -C ${{ env.BUILD_TYPE }} --output-on-failure
+
+  sanitizers:
+    name: Ubuntu Build, Test (ASan + UBSan)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Compile
+        run: |
+          cmake -S . -B build -DBUILD_TESTING=ON -DCAN_DRIVER=SocketCAN -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+          cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+
+      - name: Test
+        working-directory: ${{github.workspace}}/build
+        env:
+          UBSAN_OPTIONS: print_stacktrace=1
+        run: ctest -C ${{ env.BUILD_TYPE }} --output-on-failure

@@ -19,7 +19,10 @@ if(NOT CAN_DRIVER)
   )
 endif()
 
-if(BUILD_TESTING AND NOT "VirtualCAN" IN_LIST CAN_DRIVER)
+# VirtualCAN needs threads; the single-threaded tests bring their own driver
+if(BUILD_TESTING
+   AND NOT CAN_STACK_DISABLE_THREADS
+   AND NOT "VirtualCAN" IN_LIST CAN_DRIVER)
   message(STATUS "Including VirtualCAN driver for testing.")
   list(APPEND CAN_DRIVER "VirtualCAN")
 endif()
@@ -37,6 +40,14 @@ set(HARDWARE_INTEGRATION_INCLUDE
 if("SocketCAN" IN_LIST CAN_DRIVER)
   list(APPEND HARDWARE_INTEGRATION_SRC "socket_can_interface.cpp")
   list(APPEND HARDWARE_INTEGRATION_INCLUDE "socket_can_interface.hpp")
+endif()
+if("WindowsCandleLight" IN_LIST CAN_DRIVER)
+  if(NOT WIN32)
+    message(FATAL_ERROR "WindowsCandleLight requires Windows and WinUSB")
+  endif()
+  list(APPEND HARDWARE_INTEGRATION_SRC "candlelight_windows_plugin.cpp"
+       "candlelight_bittiming.hpp" "candlelight_overlapped.hpp")
+  list(APPEND HARDWARE_INTEGRATION_INCLUDE "candlelight_windows_plugin.hpp")
 endif()
 if("WindowsPCANBasic" IN_LIST CAN_DRIVER)
   list(APPEND HARDWARE_INTEGRATION_SRC "pcan_basic_windows_plugin.cpp")
@@ -132,6 +143,9 @@ target_link_libraries(HardwareIntegration PRIVATE ${PROJECT_NAME}::Utility
                                                   ${PROJECT_NAME}::Isobus)
 if(ESP_PLATFORM)
   target_link_libraries(HardwareIntegration PRIVATE idf::driver)
+endif()
+if("WindowsCandleLight" IN_LIST CAN_DRIVER)
+  target_link_libraries(HardwareIntegration PRIVATE setupapi winusb)
 endif()
 
 if("WindowsPCANBasic" IN_LIST CAN_DRIVER)
