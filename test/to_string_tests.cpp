@@ -14,6 +14,7 @@
 #include <limits>
 #include <sstream>
 #include <string>
+#include <type_traits>
 
 namespace
 {
@@ -132,6 +133,79 @@ TEST(TO_STRING_TESTS, TextIsCopied)
 	expect_like_stream("literal");
 	expect_like_stream(std::string());
 	EXPECT_EQ("literal", isobus::to_string("literal"));
+}
+
+namespace
+{
+	enum PlainEnum
+	{
+		PlainNegative = -3,
+		PlainZero = 0,
+		PlainLarge = 70000
+	};
+
+	enum ByteEnum : std::uint8_t
+	{
+		ByteLetter = 65,
+		ByteMaximum = 255
+	};
+
+	enum SignedByteEnum : std::int8_t
+	{
+		SignedByteLetter = 65,
+		SignedByteMinimum = -128
+	};
+
+	enum WideEnum : std::uint64_t
+	{
+		WideMaximum = 0xFFFFFFFFFFFFFFFFULL
+	};
+
+	enum BoolEnum : bool
+	{
+		BoolFalse = false,
+		BoolTrue = true
+	};
+
+	enum class ScopedEnum
+	{
+		Value = 1
+	};
+} // namespace
+
+TEST(TO_STRING_TESTS, UnscopedEnumsMatchStream)
+{
+	expect_like_stream(PlainNegative);
+	expect_like_stream(PlainZero);
+	expect_like_stream(PlainLarge);
+	expect_like_stream(WideMaximum);
+	expect_like_stream(BoolFalse);
+	expect_like_stream(BoolTrue);
+
+	const PlainEnum constant = PlainLarge;
+	volatile PlainEnum changing = PlainNegative;
+	expect_like_stream(constant);
+	EXPECT_EQ("-3", isobus::to_string(changing));
+}
+
+TEST(TO_STRING_TESTS, ByteSizedEnumsAreWrittenAsNumbers)
+{
+	// A stream writes these as a character on some compilers (GCC 15, MSVC 19.51) and as a number
+	// on others (GCC 8), so there is no single stream behaviour to match. An enumeration is a value,
+	// so to_string writes the number on every compiler.
+	EXPECT_EQ("65", isobus::to_string(ByteLetter));
+	EXPECT_EQ("255", isobus::to_string(ByteMaximum));
+	EXPECT_EQ("65", isobus::to_string(SignedByteLetter));
+	EXPECT_EQ("-128", isobus::to_string(SignedByteMinimum));
+}
+
+TEST(TO_STRING_TESTS, ScopedEnumsAreNotConverted)
+{
+	// A stream has no operator<< for a scoped enumeration either, so isobus::to_string(ScopedEnum::Value)
+	// stops at the static_assert. This checks that the type is still sent there.
+	static_assert(std::is_same<isobus::to_string_detail::TagFor<ScopedEnum>::Type, isobus::to_string_detail::UnsupportedTag>::value,
+	              "A scoped enumeration must not be converted");
+	EXPECT_EQ("1", isobus::to_string(static_cast<int>(ScopedEnum::Value)));
 }
 
 TEST(TO_STRING_TESTS, NullCharacterPointerIsEmpty)

@@ -7,6 +7,17 @@
 /// default `std::ostringstream` gives, but no stream is used: streams link the standard library's
 /// locale support into the program, which costs more than 100 KB of code on a microcontroller and
 /// needs wide character functions that newlib-nano does not have.
+///
+/// Some details:
+/// - An unscoped enumeration is written as its number, also when its underlying type is a character
+///   type. A stream writes those as a character on some compilers and as a number on others.
+///   A scoped enumeration (`enum class`) is not converted; cast it to an integer first.
+/// - Floating point numbers are formatted with `snprintf`, so they follow the C locale. After
+///   `setlocale(LC_ALL, "")`, which Qt does on Linux, for example, the decimal separator can be a
+///   comma. A default stream uses the "C" locale whatever `setlocale` is set to.
+/// - newlib-nano's `printf` functions only format floating point numbers when the program is
+///   linked with `-u _printf_float`. Without it, a floating point number gives an empty string.
+///   A stream needs it too, because it formats floating point numbers with `vsnprintf`.
 /// @author Adrian Del Grosso
 ///
 /// @copyright 2022 The Open-Agriculture Developers
@@ -43,6 +54,10 @@ namespace isobus
 		struct FloatingPointTag
 		{
 		};
+		/// @brief Selects unscoped enumerations, which are written as their number
+		struct UnscopedEnumTag
+		{
+		};
 		/// @brief Selects every other type, which isobus::to_string does not convert
 		struct UnsupportedTag
 		{
@@ -65,6 +80,9 @@ namespace isobus
 			static constexpr bool IS_CHARACTER = std::is_same<Plain, char>::value ||
 			  std::is_same<Plain, signed char>::value ||
 			  std::is_same<Plain, unsigned char>::value;
+			/// @brief True for unscoped enumerations. Only those convert to an integer implicitly;
+			/// a scoped enumeration (`enum class`) doesn't.
+			static constexpr bool IS_UNSCOPED_ENUM = std::is_enum<Plain>::value && std::is_convertible<Plain, long long>::value;
 
 			/// @brief The selected tag
 			using Type = typename std::conditional<
@@ -79,7 +97,10 @@ namespace isobus
 			      typename std::conditional<
 			        std::is_integral<Plain>::value,
 			        IntegerTag,
-			        typename std::conditional<std::is_floating_point<Plain>::value, FloatingPointTag, UnsupportedTag>::type>::type>::type>::type>::type;
+			        typename std::conditional<
+			          std::is_floating_point<Plain>::value,
+			          FloatingPointTag,
+			          typename std::conditional<IS_UNSCOPED_ENUM, UnscopedEnumTag, UnsupportedTag>::type>::type>::type>::type>::type>::type;
 		};
 
 		/// @brief Writes an unsigned number in decimal
@@ -196,9 +217,17 @@ namespace isobus
 		}
 
 		template<typename T>
+		std::string convert(const T &value, UnscopedEnumTag)
+		{
+			// Through the integer path also for a character-sized underlying type, so the number is written
+			using Underlying = typename std::underlying_type<typename std::remove_cv<T>::type>::type;
+			return convert(static_cast<Underlying>(value), IntegerTag());
+		}
+
+		template<typename T>
 		std::string convert(const T &, UnsupportedTag)
 		{
-			static_assert(!std::is_same<T, T>::value, "isobus::to_string converts numbers and strings only. Cast an enumeration to an integer first.");
+			static_assert(!std::is_same<T, T>::value, "isobus::to_string converts numbers, unscoped enumerations and strings only. Cast a scoped enumeration (enum class) to an integer first.");
 			return std::string();
 		}
 	} // namespace to_string_detail
