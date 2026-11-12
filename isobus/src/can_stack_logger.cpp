@@ -9,8 +9,6 @@
 //================================================================================================
 #include "isobus/isobus/can_stack_logger.hpp"
 
-#include <iostream>
-
 namespace isobus
 {
 	CANStackLogger *CANStackLogger::logger = nullptr;
