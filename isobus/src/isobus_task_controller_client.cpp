@@ -25,6 +25,29 @@
 
 namespace isobus
 {
+	/// @brief Takes the oldest command off a queue and copies the callbacks for it under one lock, so that a callback registered while handling an earlier command sees this one.
+	/// @param[in] mutex The mutex that guards the queue and the registry
+	/// @param[in,out] queue The queue to take the command from
+	/// @param[out] command The command that was taken off the queue
+	/// @param[in] registry The list of registered callbacks
+	/// @param[out] callbacks The copy of the registry
+	/// @returns true if a command was taken, false if the queue was empty
+	template<typename Queue, typename Container>
+	static bool pop_queued_command(Mutex &mutex, Queue &queue, typename Queue::value_type &command, const Container &registry, Container &callbacks)
+	{
+		bool retVal = false;
+		(void)mutex; // Unused when threads are disabled
+		LOCK_GUARD(Mutex, mutex);
+		if (!queue.empty())
+		{
+			command = queue.front();
+			queue.pop_front();
+			callbacks = registry;
+			retVal = true;
+		}
+		return retVal;
+	}
+
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 	/// @brief The client whose worker runs on this thread. Not get_id(): on ESP-IDF it aborts outside pthreads.
 	static thread_local const TaskControllerClient *workerThreadOwner = nullptr;
@@ -528,6 +551,12 @@ namespace isobus
 		{
 			shouldProcessAllDefaultProcessDataRequests = false;
 
+			std::vector<DefaultProcessDataRequestCallbackInfo> defaultCallbacks;
+			{
+				LOCK_GUARD(Mutex, clientMutex);
+				defaultCallbacks = defaultProcessDataRequestedCallbacks;
+			}
+
 			if (nullptr != clientDDOP)
 			{
 				// Already have a DDOP, so we can process the requests.
@@ -583,9 +612,10 @@ namespace isobus
 								auto processData = std::static_pointer_cast<task_controller_object::DeviceProcessDataObject>(childObject);
 								DefaultProcessDataSettings settings;
 
-								for (const auto &callback : defaultProcessDataRequestedCallbacks)
+								for (const auto &callback : defaultCallbacks)
 								{
-									if (callback.callback(deviceElement->get_element_number(), processData->get_ddi(), settings, callback.parent))
+									if (is_registered(clientMutex, defaultProcessDataRequestedCallbacks, callback) &&
+									    callback.callback(deviceElement->get_element_number(), processData->get_ddi(), settings, callback.parent))
 									{
 										populate_any_triggers_from_settings(processData, deviceElement->get_element_number(), processData->get_ddi(), settings);
 										break;
@@ -1478,31 +1508,31 @@ namespace isobus
 
 	void TaskControllerClient::process_queued_commands()
 	{
-		LOCK_GUARD(Mutex, clientMutex);
+		// Called on copies, unlocked, so that a callback can call back into this client without deadlocking.
+		// A restart or DDOP change during a callback drops the queued commands, so each answer checks the state under the lock it is sent with.
+		std::vector<RequestValueCommandCallbackInfo> requestCallbacks;
+		std::vector<ValueCommandCallbackInfo> commandCallbacks;
 		bool transmitSuccessful = true;
+		ProcessDataCallbackInfo currentRequest = { 0, 0, 0, 0, false, false };
 
-		while (!queuedValueRequests.empty() && transmitSuccessful)
+		while (transmitSuccessful && pop_queued_command(clientMutex, queuedValueRequests, currentRequest, requestValueCallbacks, requestCallbacks))
 		{
-			const auto &currentRequest = queuedValueRequests.front();
-
-			for (auto &currentCallback : requestValueCallbacks)
+			std::int32_t newValue = 0;
+			if (request_value(requestCallbacks, currentRequest.elementNumber, currentRequest.ddi, newValue))
 			{
-				std::int32_t newValue = 0;
-				if (currentCallback.callback(currentRequest.elementNumber, currentRequest.ddi, newValue, currentCallback.parent))
+				LOCK_GUARD(Mutex, clientMutex);
+				if (StateMachineState::Connected == currentState)
 				{
 					transmitSuccessful = send_value_command(currentRequest.elementNumber, currentRequest.ddi, newValue);
-					break;
 				}
 			}
-			queuedValueRequests.pop_front();
 		}
-		while (!queuedValueCommands.empty() && transmitSuccessful)
+		while (transmitSuccessful && pop_queued_command(clientMutex, queuedValueCommands, currentRequest, valueCommandsCallbacks, commandCallbacks))
 		{
-			const auto &currentRequest = queuedValueCommands.front();
-
-			for (auto &currentCallback : valueCommandsCallbacks)
+			for (const auto &currentCallback : commandCallbacks)
 			{
-				if (currentCallback.callback(currentRequest.elementNumber, currentRequest.ddi, currentRequest.processDataValue, currentCallback.parent))
+				if (is_registered(clientMutex, valueCommandsCallbacks, currentCallback) &&
+				    currentCallback.callback(currentRequest.elementNumber, currentRequest.ddi, currentRequest.processDataValue, currentCallback.parent))
 				{
 					break;
 				}
@@ -1511,33 +1541,62 @@ namespace isobus
 			//! @todo process PDACKs better
 			if (currentRequest.ackRequested)
 			{
-				transmitSuccessful = send_pdack(currentRequest.elementNumber, currentRequest.ddi);
+				LOCK_GUARD(Mutex, clientMutex);
+				if (StateMachineState::Connected == currentState)
+				{
+					transmitSuccessful = send_pdack(currentRequest.elementNumber, currentRequest.ddi);
+				}
 			}
-			queuedValueCommands.pop_front();
 		}
+	}
+
+	bool TaskControllerClient::request_value(const std::vector<RequestValueCommandCallbackInfo> &callbacks, std::uint16_t elementNumber, std::uint16_t DDI, std::int32_t &value)
+	{
+		bool retVal = false;
+		for (const auto &currentCallback : callbacks)
+		{
+			std::int32_t newValue = 0;
+			if (is_registered(clientMutex, requestValueCallbacks, currentCallback) &&
+			    currentCallback.callback(elementNumber, DDI, newValue, currentCallback.parent))
+			{
+				value = newValue;
+				retVal = true;
+				break;
+			}
+		}
+		return retVal;
 	}
 
 	void TaskControllerClient::process_queued_threshold_commands()
 	{
-		bool transmitSuccessful = false;
+		std::vector<RequestValueCommandCallbackInfo> callbacks;
+		{
+			LOCK_GUARD(Mutex, clientMutex);
+			// This runs on every update, and most clients have no measurements to dispatch.
+			// Returning under the lock leaves a measurement added after this check for the next update.
+			if (measurementTimeIntervalCommands.empty() &&
+			    measurementMaximumThresholdCommands.empty() &&
+			    measurementMinimumThresholdCommands.empty() &&
+			    measurementOnChangeThresholdCommands.empty())
+			{
+				return;
+			}
+			callbacks = requestValueCallbacks;
+		}
 
+		// A callback can restart the client, which clears these lists under the loop, so each answer checks the state under the lock it is sent with and stops there.
 		for (auto &measurementTimeCommand : measurementTimeIntervalCommands)
 		{
-			if (SystemTiming::time_expired_ms(static_cast<std::uint32_t>(measurementTimeCommand.lastValue), static_cast<std::uint32_t>(measurementTimeCommand.processDataValue)))
+			std::int32_t newValue = 0;
+			if (SystemTiming::time_expired_ms(static_cast<std::uint32_t>(measurementTimeCommand.lastValue), static_cast<std::uint32_t>(measurementTimeCommand.processDataValue)) &&
+			    request_value(callbacks, measurementTimeCommand.elementNumber, measurementTimeCommand.ddi, newValue))
 			{
-				// Time to update this time interval variable
-				transmitSuccessful = false;
-				for (auto &currentCallback : requestValueCallbacks)
+				LOCK_GUARD(Mutex, clientMutex);
+				if (StateMachineState::Connected != currentState)
 				{
-					std::int32_t newValue = 0;
-					if (currentCallback.callback(measurementTimeCommand.elementNumber, measurementTimeCommand.ddi, newValue, currentCallback.parent))
-					{
-						transmitSuccessful = send_value_command(measurementTimeCommand.elementNumber, measurementTimeCommand.ddi, newValue);
-						break;
-					}
+					return;
 				}
-
-				if (transmitSuccessful)
+				if (send_value_command(measurementTimeCommand.elementNumber, measurementTimeCommand.ddi, newValue))
 				{
 					measurementTimeCommand.lastValue = static_cast<std::int32_t>(SystemTiming::get_timestamp_ms());
 				}
@@ -1545,27 +1604,23 @@ namespace isobus
 		}
 		for (auto &measurementMaxCommand : measurementMaximumThresholdCommands)
 		{
-			// Get the current process data value
 			std::int32_t newValue = 0;
-			for (auto &currentCallback : requestValueCallbacks)
+			if (request_value(callbacks, measurementMaxCommand.elementNumber, measurementMaxCommand.ddi, newValue))
 			{
-				if (currentCallback.callback(measurementMaxCommand.elementNumber, measurementMaxCommand.ddi, newValue, currentCallback.parent))
+				LOCK_GUARD(Mutex, clientMutex);
+				if (StateMachineState::Connected != currentState)
 				{
-					break;
+					return;
 				}
-			}
-
-			if (!measurementMaxCommand.thresholdPassed)
-			{
-				if ((newValue > measurementMaxCommand.processDataValue) &&
-				    (send_value_command(measurementMaxCommand.elementNumber, measurementMaxCommand.ddi, newValue)))
+				if (!measurementMaxCommand.thresholdPassed)
 				{
-					measurementMaxCommand.thresholdPassed = true;
+					if ((newValue > measurementMaxCommand.processDataValue) &&
+					    (send_value_command(measurementMaxCommand.elementNumber, measurementMaxCommand.ddi, newValue)))
+					{
+						measurementMaxCommand.thresholdPassed = true;
+					}
 				}
-			}
-			else
-			{
-				if (newValue < measurementMaxCommand.processDataValue)
+				else if (newValue < measurementMaxCommand.processDataValue)
 				{
 					measurementMaxCommand.thresholdPassed = false;
 				}
@@ -1573,27 +1628,23 @@ namespace isobus
 		}
 		for (auto &measurementMinCommand : measurementMinimumThresholdCommands)
 		{
-			// Get the current process data value
 			std::int32_t newValue = 0;
-			for (auto &currentCallback : requestValueCallbacks)
+			if (request_value(callbacks, measurementMinCommand.elementNumber, measurementMinCommand.ddi, newValue))
 			{
-				if (currentCallback.callback(measurementMinCommand.elementNumber, measurementMinCommand.ddi, newValue, currentCallback.parent))
+				LOCK_GUARD(Mutex, clientMutex);
+				if (StateMachineState::Connected != currentState)
 				{
-					break;
+					return;
 				}
-			}
-
-			if (!measurementMinCommand.thresholdPassed)
-			{
-				if ((newValue < measurementMinCommand.processDataValue) &&
-				    (send_value_command(measurementMinCommand.elementNumber, measurementMinCommand.ddi, newValue)))
+				if (!measurementMinCommand.thresholdPassed)
 				{
-					measurementMinCommand.thresholdPassed = true;
+					if ((newValue < measurementMinCommand.processDataValue) &&
+					    (send_value_command(measurementMinCommand.elementNumber, measurementMinCommand.ddi, newValue)))
+					{
+						measurementMinCommand.thresholdPassed = true;
+					}
 				}
-			}
-			else
-			{
-				if (newValue > measurementMinCommand.processDataValue)
+				else if (newValue > measurementMinCommand.processDataValue)
 				{
 					measurementMinCommand.thresholdPassed = false;
 				}
@@ -1601,28 +1652,27 @@ namespace isobus
 		}
 		for (auto &measurementChangeCommand : measurementOnChangeThresholdCommands)
 		{
-			// Get the current process data value
 			std::int32_t newValue = 0;
-			for (auto &currentCallback : requestValueCallbacks)
+			if (request_value(callbacks, measurementChangeCommand.elementNumber, measurementChangeCommand.ddi, newValue))
 			{
-				if (currentCallback.callback(measurementChangeCommand.elementNumber, measurementChangeCommand.ddi, newValue, currentCallback.parent))
+				LOCK_GUARD(Mutex, clientMutex);
+				if (StateMachineState::Connected != currentState)
 				{
-					break;
+					return;
 				}
-			}
+				std::int64_t lowerLimit = (static_cast<std::int64_t>(measurementChangeCommand.lastValue) - measurementChangeCommand.processDataValue);
+				if (lowerLimit < 0)
+				{
+					lowerLimit = 0;
+				}
 
-			std::int64_t lowerLimit = (static_cast<std::int64_t>(measurementChangeCommand.lastValue) - measurementChangeCommand.processDataValue);
-			if (lowerLimit < 0)
-			{
-				lowerLimit = 0;
-			}
-
-			if ((newValue != measurementChangeCommand.lastValue) &&
-			    ((newValue >= (measurementChangeCommand.lastValue + measurementChangeCommand.processDataValue)) ||
-			     (newValue <= lowerLimit)) &&
-			    (send_value_command(measurementChangeCommand.elementNumber, measurementChangeCommand.ddi, newValue)))
-			{
-				measurementChangeCommand.lastValue = newValue;
+				if ((newValue != measurementChangeCommand.lastValue) &&
+				    ((newValue >= (measurementChangeCommand.lastValue + measurementChangeCommand.processDataValue)) ||
+				     (newValue <= lowerLimit)) &&
+				    (send_value_command(measurementChangeCommand.elementNumber, measurementChangeCommand.ddi, newValue)))
+				{
+					measurementChangeCommand.lastValue = newValue;
+				}
 			}
 		}
 	}

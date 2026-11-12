@@ -9,6 +9,7 @@
 #include "isobus/hardware_integration/socket_can_interface.hpp"
 #endif
 
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <future>
@@ -63,7 +64,7 @@ TEST(HARDWARE_INTERFACE_TESTS, ReceiveMessageFromHardware)
 	fakeFrame.data[0] = 0x01;
 	fakeFrame.channel = 0;
 
-	int messageCount = 0;
+	std::atomic_int messageCount = { 0 };
 	std::function<void(const CANMessageFrame &)> receivedCallback = [&messageCount](const CANMessageFrame &frame) {
 		messageCount += 1;
 
@@ -81,6 +82,42 @@ TEST(HARDWARE_INTERFACE_TESTS, ReceiveMessageFromHardware)
 	EXPECT_TRUE(future.wait_for(std::chrono::seconds(5)) != std::future_status::timeout);
 
 	CANHardwareInterface::stop();
+}
+
+TEST(HARDWARE_INTERFACE_TESTS, FrameListenerCanCallTheInterface)
+{
+	auto device = std::make_shared<VirtualCANPlugin>();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, device);
+	CANHardwareInterface::start(false);
+
+	auto received = std::make_shared<std::atomic_bool>(false);
+	CANHardwareInterface::get_can_frame_received_event_dispatcher().add_listener([received](const CANMessageFrame &) {
+		// Refused while the interface runs, but it takes the interface's lock to check that
+		CANHardwareInterface::set_number_of_can_channels(1);
+		*received = true;
+	});
+
+	CANMessageFrame frame = {};
+	frame.identifier = 0x613;
+	frame.dataLength = 1;
+	device->write_frame_as_if_received(frame);
+
+	// A listener that deadlocks never returns, so update() runs on a thread the test can abandon
+	auto finished = std::make_shared<std::promise<void>>();
+	std::future<void> result = finished->get_future();
+	std::thread([received, finished]() {
+		while (!*received)
+		{
+			CANHardwareInterface::update();
+			std::this_thread::yield();
+		}
+		finished->set_value();
+	}).detach();
+	ASSERT_EQ(std::future_status::ready, result.wait_for(std::chrono::seconds(1)));
+
+	CANHardwareInterface::stop();
+	CANHardwareInterface::set_number_of_can_channels(0);
 }
 
 TEST(HARDWARE_INTERFACE_TESTS, MessageFrameSentEventListener)
@@ -102,7 +139,7 @@ TEST(HARDWARE_INTERFACE_TESTS, MessageFrameSentEventListener)
 	CANMessageFrame receiveFrame;
 	memset(&receiveFrame, 0, sizeof(CANMessageFrame));
 
-	int messageCount = 0;
+	std::atomic_int messageCount = { 0 };
 	std::function<void(const CANMessageFrame &)> sendCallback = [&messageCount](const CANMessageFrame &frame) {
 		messageCount += 1;
 
@@ -126,7 +163,7 @@ TEST(HARDWARE_INTERFACE_TESTS, PeriodicUpdateEventListener)
 {
 	CANHardwareInterface::start();
 
-	int updateCount = 0;
+	std::atomic_int updateCount = { 0 };
 	std::function<void()> periodicCallback = [&updateCount]() {
 		updateCount += 1;
 	};
