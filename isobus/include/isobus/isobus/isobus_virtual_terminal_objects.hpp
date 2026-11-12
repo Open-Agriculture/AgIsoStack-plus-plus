@@ -10,12 +10,12 @@
 #define ISOBUS_VIRTUAL_TERMINAL_OBJECTS_HPP
 
 #include "isobus/isobus/can_constants.hpp"
+#include "isobus/utility/to_string.hpp"
 
 #include <algorithm>
 #include <array>
 #include <map>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -4877,9 +4877,7 @@ namespace isobus
 		{
 			return "NULL";
 		}
-		std::ostringstream oss;
-		oss << object_id;
-		return oss.str();
+		return isobus::to_string(object_id);
 	}
 } // namespace isobus
 

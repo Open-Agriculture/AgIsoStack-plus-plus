@@ -19,6 +19,9 @@
 #include "helpers/messaging_helpers.hpp"
 #include "helpers/test_fixture.hpp"
 
+#include <chrono>
+#include <future>
+
 using namespace isobus;
 
 // clang-format off
@@ -2132,4 +2135,50 @@ TEST_F(TaskControllerServerTest, B6CommandBusyState_ObjectPoolActivateDeactivate
 	EXPECT_EQ(0x00, testFrame.data[6]); // Cleared
 
 	CANHardwareInterface::stop();
+}
+
+class QueueingTcServer : public DerivedTcServer
+{
+public:
+	using DerivedTcServer::DerivedTcServer;
+
+	void on_client_version_received(std::shared_ptr<ControlFunction> clientControlFunction, std::uint8_t version) override
+	{
+		DerivedTcServer::on_client_version_received(clientControlFunction, version);
+		// Queues a message from another thread while this virtual runs, as the network manager's thread would
+		queuedFromOtherThread = std::async(std::launch::async, [this, clientControlFunction]() {
+			test_receive_message(test_helpers::create_message_broadcast(6, 0xFE0D, clientControlFunction, { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }), this);
+		});
+		queuedWhileVirtualRan = (std::future_status::ready == queuedFromOtherThread.wait_for(std::chrono::seconds(1)));
+	}
+
+	std::future<void> queuedFromOtherThread;
+	bool queuedWhileVirtualRan = false;
+};
+
+TEST_F(TaskControllerServerTest, MessageCanBeQueuedWhileAVirtualRuns)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x98, 0, time_source);
+	auto partnerClient = test_helpers::force_claim_partnered_control_function(0x99, 0);
+
+	QueueingTcServer server(internalECU, 4, 255, 16, TaskControllerOptions());
+	server.initialize();
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(6, 0xFE0D, partnerClient, { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(5, 0xCB00, internalECU, partnerClient, { 0x10, 0x04, 0xFF, 0x1F, 0x00, 0x01, 0x20, 0x10 }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+
+	ASSERT_TRUE(server.lastClientVersionReceived);
+	server.queuedFromOtherThread.wait();
+	EXPECT_TRUE(server.queuedWhileVirtualRan);
+
+	server.terminate();
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.deactivate_control_function(partnerClient);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }

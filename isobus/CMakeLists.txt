@@ -36,6 +36,7 @@ set(ISOBUS_SRC
     "isobus_task_controller_client_objects.cpp"
     "isobus_task_controller_client.cpp"
     "isobus_device_descriptor_object_pool.cpp"
+    "isobus_device_descriptor_object_pool_xml.cpp"
     "isobus_shortcut_button_interface.cpp"
     "isobus_ground_based_speed.cpp"
     "isobus_functionalities.cpp"
