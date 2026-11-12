@@ -227,6 +227,10 @@ if("MacCANPCAN" IN_LIST CAN_DRIVER)
     PRIVATE ${CMAKE_CURRENT_LIST_DIR}/lib/Mac/libPCBUSB.0.12.dylib)
 endif()
 
+if("proemion" IN_LIST CAN_DRIVER AND WIN32)
+  target_link_libraries(HardwareIntegration PRIVATE ws2_32)
+endif()
+
 if("TouCAN" IN_LIST CAN_DRIVER)
   if(MSVC)
     # See https://gitlab.kitware.com/cmake/cmake/-/issues/15170

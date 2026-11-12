@@ -16,6 +16,8 @@
 #include "isobus/hardware_integration/can_hardware_plugin.hpp"
 #include "isobus/isobus/can_message_frame.hpp"
 
+#include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
@@ -75,13 +77,13 @@ namespace isobus
 		std::string get_name() const override;
 
 		/// @brief Returns whether the TCP connection is currently valid
-		/// @returns true if connected
+		/// @returns true if connected, or while reconnecting after a connection that worked was lost
 		bool get_is_valid() const override;
 
 		/// @brief Opens the TCP connection and configures the CAN bitrate to 250 kbit/s
 		void open() override;
 
-		/// @brief Closes the TCP connection
+		/// @brief Closes the TCP connection and stops reconnecting
 		void close() override;
 
 		/// @brief Reads one CAN frame from the CANlink device
@@ -93,6 +95,18 @@ namespace isobus
 		/// @param[in] canFrame CAN frame to transmit
 		/// @returns true if the frame was accepted by the TCP socket
 		bool write_frame(const CANMessageFrame &canFrame) override;
+
+		/// @brief Returns why the connection last failed, suitable to show to the user
+		/// @returns A description of the last failure, or an empty string if there is none
+		std::string get_last_error() const override;
+
+		/// @brief Changes the device address. Only takes effect the next time the interface is opened.
+		/// @param[in] interface Interface specification in the form IP or IP:port
+		void set_interface(const std::string &interface);
+
+		/// @brief Returns the device address as it was given
+		/// @returns The interface specification in the form IP or IP:port
+		std::string get_interface() const;
 
 	private:
 		/// @brief DEFAULT_TCP_PORT The default TCP port
@@ -116,6 +130,15 @@ namespace isobus
 		static constexpr std::uint8_t COMMAND_GET_BITRATE = 0x56;
 		/// @brief Message type for set bitrate command
 		static constexpr std::uint8_t COMMAND_SET_BITRATE = 0x57;
+
+		/// @brief How long to wait for the TCP connection, so a missing device does not block the caller for the OS default of ~20 s
+		static constexpr int CONNECT_TIMEOUT_MS = 3000;
+		/// @brief How long to wait for the reply to a bitrate command. Generous, since the first round trip over WiFi can be slow.
+		static constexpr int BITRATE_REPLY_TIMEOUT_MS = 1500;
+		/// @brief How long to wait before the first attempt to reconnect after the connection was lost. Doubles after each failed attempt.
+		static constexpr int FIRST_RECONNECT_DELAY_MS = 1000;
+		/// @brief The longest wait between attempts to reconnect. Short, since an attempt only costs a name lookup and a TCP connect.
+		static constexpr int MAX_RECONNECT_DELAY_MS = 3000;
 
 		/**
 		 * @brief parse_interface Parse the hostname:port supplied by the user
@@ -148,6 +171,36 @@ namespace isobus
 		 * @return
 		 */
 		bool set_bitrate(BitrateKeys bitrate);
+
+		/**
+		 * @brief wait_for_bitrate_reply Waits for the device to report its bitrate, counting the CAN frames that arrive meanwhile
+		 * and logging any other message, so unexpected replies can be diagnosed
+		 * @param bitrate [out] The bitrate the device reported
+		 * @return True if the device reported its bitrate in time
+		 */
+		bool wait_for_bitrate_reply(BitrateKeys &bitrate);
+
+		/**
+		 * @brief report_lost_connection Closes the socket and reports why, with statistics that tell a drop by the
+		 * device apart from the reader falling behind
+		 * @param reason Why the connection was lost
+		 */
+		void report_lost_connection(const std::string &reason);
+
+		/**
+		 * @brief disconnect Closes the socket, without changing whether the driver should reconnect
+		 */
+		void disconnect();
+
+		/**
+		 * @brief on_connected Resets the statistics of the connection that was just made
+		 */
+		void on_connected();
+
+		/**
+		 * @brief try_reconnect Reconnects once the backoff delay has passed, otherwise waits a little so the caller does not spin
+		 */
+		void try_reconnect();
 
 		/**
 		 * @brief create_pdu Creates a valid PDU from the data provided (adds message boundaries, checksum)
@@ -197,6 +250,12 @@ namespace isobus
 		static std::uint8_t calculate_checksum(const std::uint8_t *data, std::size_t length);
 
 		/**
+		 * @brief set_last_error Stores why the connection failed and logs it
+		 * @param error Description of the failure
+		 */
+		void set_last_error(const std::string &error);
+
+		/**
 		 * @brief get_timestamp_us Helper function to return the host device uptime in us
 		 * @return Uptime in us
 		 */
@@ -218,9 +277,10 @@ namespace isobus
 		std::uint16_t tcpPort = DEFAULT_TCP_PORT;
 
 		/**
-		 * @brief socketFd Socket descriptor
+		 * @brief socketFd Socket descriptor, or -1 when closed.
+		 * Wide enough to hold a Winsock SOCKET handle, whose INVALID_SOCKET value is also -1 in this type.
 		 */
-		int socketFd = -1;
+		std::atomic<std::intptr_t> socketFd{ -1 };
 
 		/**
 		 * @brief receiveBuffer Buffer for the received data over TCP
@@ -228,9 +288,38 @@ namespace isobus
 		std::vector<std::uint8_t> receiveBuffer;
 
 		/**
-		 * @brief transmitMutex Mutex for CAN transmission
+		 * @brief canFramesSeenWhileConfiguring Valid CAN frames received while the bitrate was being configured,
+		 * which proves the device already listens at the bus's bitrate
+		 */
+		std::size_t canFramesSeenWhileConfiguring = 0;
+
+		std::chrono::steady_clock::time_point connectedAt; ///< When the current connection was made
+		std::chrono::steady_clock::time_point lastDataReceivedAt; ///< When data last arrived from the device
+		std::chrono::steady_clock::time_point lastReadCallAt; ///< When read_frame was last called, to spot the reader falling behind
+		std::int64_t longestReadPauseMs = 0; ///< Longest gap between read_frame calls on the current connection
+		std::uint64_t framesReceived = 0; ///< CAN frames received on the current connection
+		std::atomic<std::uint64_t> framesSent{ 0 }; ///< CAN frames sent on the current connection, counted by the transmit thread
+
+		std::atomic<bool> keepConnected{ false }; ///< Whether the connection was opened successfully and not closed since, so a loss should be recovered from
+		std::atomic<bool> reconnecting{ false }; ///< Whether a working connection was lost and is being made again
+		int reconnectDelayMs = FIRST_RECONNECT_DELAY_MS; ///< How long to wait after the next failed attempt to reconnect
+		std::chrono::steady_clock::time_point nextReconnectAt; ///< When to try reconnecting next
+		bool lastConnectMayBeTemporary = false; ///< Whether the last connection attempt failed because the device could not be found or did not answer
+
+		/**
+		 * @brief transmitMutex Mutex for CAN transmission, also held while the socket is closed
 		 */
 		std::mutex transmitMutex;
+
+		/**
+		 * @brief lastError Why the connection last failed, read by other threads
+		 */
+		std::string lastError;
+
+		/**
+		 * @brief lastErrorMutex Protects lastError
+		 */
+		mutable std::mutex lastErrorMutex;
 	};
 }
 
