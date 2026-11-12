@@ -174,17 +174,10 @@ namespace isobus
 			if ((message_parameter_group_number == callback.get_parameter_group_number()) &&
 			    (nullptr != callback.get_callback()) &&
 			    ((nullptr == callback.get_internal_control_function()) ||
-			     (callback.get_internal_control_function()->get_address() == message.get_identifier().get_destination_address())))
+			     (callback.get_internal_control_function()->get_address() == message.get_identifier().get_destination_address())) &&
+			    is_registered(parameterGroupNumberCallbacksMutex, parameterGroupNumberCallbacks, callback))
 			{
-				bool stillRegistered = false;
-				{
-					LOCK_GUARD(Mutex, parameterGroupNumberCallbacksMutex);
-					stillRegistered = (parameterGroupNumberCallbacks.end() != std::find(parameterGroupNumberCallbacks.begin(), parameterGroupNumberCallbacks.end(), callback));
-				}
-				if (stillRegistered)
-				{
-					callback.get_callback()(message, callback.get_parent());
-				}
+				callback.get_callback()(message, callback.get_parent());
 			}
 		}
 	}

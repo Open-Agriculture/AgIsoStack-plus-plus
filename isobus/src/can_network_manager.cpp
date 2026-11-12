@@ -27,19 +27,6 @@
 
 namespace isobus
 {
-	/// @brief Checks under the registry's lock whether a callback is still registered, as one removed during a dispatch must not be called from the copy.
-	/// @param[in] registryMutex The mutex that guards the registry
-	/// @param[in] registry The list of registered callbacks
-	/// @param[in] callback The callback to look for
-	/// @returns true if the callback is still in the registry
-	template<typename Container>
-	static bool is_registered(Mutex &registryMutex, const Container &registry, const typename Container::value_type &callback)
-	{
-		(void)registryMutex; // Unused when threads are disabled
-		LOCK_GUARD(Mutex, registryMutex);
-		return (registry.end() != std::find(registry.begin(), registry.end(), callback));
-	}
-
 	CANNetworkManager CANNetworkManager::CANNetwork;
 
 	void CANNetworkManager::initialize()
