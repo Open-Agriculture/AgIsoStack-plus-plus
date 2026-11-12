@@ -87,13 +87,17 @@ namespace isobus
 
 		static FlexCANT4Plugin *openPlugins[3]; ///< The plugin that opened each channel, for the interrupt handlers
 
+		// The controllers, each created on the first open() of its channel and kept from then on,
+		// because FlexCAN_T4 can't stop its interrupt. A FlexCAN_T4 object holds its frame queues,
+		// so it is large: a program only pays for the channels it opens, and on the heap, not in
+		// static RAM.
 #if defined(__IMXRT1062__)
-		static FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_512> can0;
-		static FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_512> can1;
-		static FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_512> can2;
+		static FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_512> *can0;
+		static FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_512> *can1;
+		static FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_512> *can2;
 #elif defined(__MK20DX256__) || defined(__MK64FX512__) || defined(__MK66FX1M0__)
-		static FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_512> can0;
-		static FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_512> can1;
+		static FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_512> *can0;
+		static FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_512> *can1;
 #endif
 		std::uint8_t selectedChannel; ///< The channel that this plugin is assigned to
 		bool isOpen = false; ///< Tracks if the connection is open/connected
