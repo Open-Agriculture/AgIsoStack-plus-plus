@@ -40,7 +40,7 @@ jobs:
           build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build build/ --config ${{ env.BUILD_TYPE }}
       - name: Run
         working-directory: ${{github.workspace}}/build
-        run: ctest -C ${{ env.BUILD_TYPE }} --rerun-failed --output-on-failure
+        run: ctest -C ${{ env.BUILD_TYPE }} --rerun-failed --output-on-failure --parallel
       - name: Collect coverage into one XML report
         run: |
           gcovr --sonarqube --exclude-throw-branches --gcov-ignore-parse-errors=negative_hits.warn_once_per_file > coverage.xml
@@ -71,7 +71,7 @@ jobs:
       - name: Test
         run: |
           cd build
-          ctest -C ${{ env.BUILD_TYPE }} --rerun-failed --output-on-failure
+          ctest -C ${{ env.BUILD_TYPE }} --rerun-failed --output-on-failure --parallel
 
   mac_os_build:
     name: Mac OS Build, Test
@@ -89,7 +89,7 @@ jobs:
       - name: Test
         run: |
           cd build
-          ctest -C ${{ env.BUILD_TYPE }} --rerun-failed --output-on-failure
+          ctest -C ${{ env.BUILD_TYPE }} --rerun-failed --output-on-failure --parallel
 
   linux_no_threads_build:
     name: Ubuntu Build, Test (no std threads)
@@ -137,7 +137,7 @@ jobs:
         working-directory: ${{github.workspace}}/build
         run: |
           sudo sysctl vm.mmap_rnd_bits=28
-          ctest -C ${{ env.BUILD_TYPE }} --output-on-failure -E Death
+          ctest -C ${{ env.BUILD_TYPE }} --output-on-failure -E Death --parallel
 
   sanitizers:
     name: Ubuntu Build, Test (ASan + UBSan)
@@ -157,4 +157,4 @@ jobs:
         working-directory: ${{github.workspace}}/build
         env:
           UBSAN_OPTIONS: print_stacktrace=1
-        run: ctest -C ${{ env.BUILD_TYPE }} --output-on-failure
+        run: ctest -C ${{ env.BUILD_TYPE }} --output-on-failure --parallel
