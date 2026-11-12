@@ -12,6 +12,7 @@
 
 #include "isobus/utility/thread_synchronization.hpp"
 
+#include <atomic>
 #include <memory>
 #include <string>
 
@@ -155,6 +156,14 @@ namespace isobus
 		/// @param[in] newLogLevel The new logging level
 		static void set_log_level(LoggingLevel newLogLevel);
 
+		/// @brief Checks if text logged at a level would reach a log sink
+		/// @details The `LOG_*` macros check this first and skip formatting and evaluating their arguments
+		/// when it returns false. A message that passes can still be dropped if the sink or level changes
+		/// before it reaches the sink.
+		/// @param[in] level The log level to check
+		/// @returns true if a log sink is set and the level is not below the current log level
+		static bool is_logged(LoggingLevel level);
+
 		/// @brief Override this to make a log sink for your application
 		/// @param[in] level The severity level of the log text
 		/// @param[in] logText The information being logged
@@ -166,8 +175,8 @@ namespace isobus
 		/// @returns true if the logger is not `nullptr` or false if it is `nullptr`
 		static bool get_can_stack_logger(CANStackLogger *&canStackLogger);
 
-		static CANStackLogger *logger; ///< A static pointer to an instance of a logger
-		static LoggingLevel currentLogLevel; ///< The current log level. Logs for levels below the current one will be dropped.
+		static std::atomic<CANStackLogger *> logger; ///< A static pointer to an instance of a logger
+		static std::atomic<LoggingLevel> currentLogLevel; ///< The current log level. Logs for levels below the current one will be dropped.
 		static Mutex loggerMutex; ///< A mutex that protects the logger so it can be used from multiple threads
 	};
 } // namespace isobus
@@ -190,26 +199,38 @@ namespace isobus
 /// @param logString A log statement
 #define LOG_DEBUG(...)
 #else
+/// @brief Calls a CANStackLogger function only if its level would be logged
+/// @details The arguments are not evaluated when is_logged() rejects the statement, so they must not have side effects
+/// @param[in] level The LoggingLevel of the log statement
+/// @param[in] function The CANStackLogger function to call
+#define CAN_STACK_LOG_IF_LOGGED(level, function, ...)                                   \
+	do                                                                                    \
+	{                                                                                     \
+		if (isobus::CANStackLogger::is_logged(isobus::CANStackLogger::LoggingLevel::level)) \
+		{                                                                                   \
+			isobus::CANStackLogger::function(__VA_ARGS__);                                    \
+		}                                                                                   \
+	} while (false)
 /// @brief A macro which logs a string at "critical" logging level
 /// @param[in] logString A log statement
 /// @param[in] args (optional) A list of printf style arguments to format the logString with
-#define LOG_CRITICAL(...) isobus::CANStackLogger::critical(__VA_ARGS__)
+#define LOG_CRITICAL(...) CAN_STACK_LOG_IF_LOGGED(Critical, critical, __VA_ARGS__)
 /// @brief A macro which logs a string at "error" logging level
 /// @param[in] logString A log statement
 /// @param[in] args (optional) A list of printf style arguments to format the logString with
-#define LOG_ERROR(...) isobus::CANStackLogger::error(__VA_ARGS__)
+#define LOG_ERROR(...) CAN_STACK_LOG_IF_LOGGED(Error, error, __VA_ARGS__)
 /// @brief A macro which logs a string at "warning" logging level
 /// @param[in] logString A log statement
 /// @param[in] args (optional) A list of printf style arguments to format the logString with
-#define LOG_WARNING(...) isobus::CANStackLogger::warn(__VA_ARGS__)
+#define LOG_WARNING(...) CAN_STACK_LOG_IF_LOGGED(Warning, warn, __VA_ARGS__)
 /// @brief A macro which logs a string at "info" logging level
 /// @param[in] logString A log statement
 /// @param[in] args (optional) A list of printf style arguments to format the logString with
-#define LOG_INFO(...) isobus::CANStackLogger::info(__VA_ARGS__)
+#define LOG_INFO(...) CAN_STACK_LOG_IF_LOGGED(Info, info, __VA_ARGS__)
 /// @brief A macro which logs a string at "debug" logging level
 /// @param[in] logString A log statement
 /// @param[in] args (optional) A list of printf style arguments to format the logString with
-#define LOG_DEBUG(...) isobus::CANStackLogger::debug(__VA_ARGS__)
+#define LOG_DEBUG(...) CAN_STACK_LOG_IF_LOGGED(Debug, debug, __VA_ARGS__)
 #endif
 //! @endcond
 
