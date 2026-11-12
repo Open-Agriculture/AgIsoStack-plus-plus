@@ -227,7 +227,7 @@ namespace isobus
 
 	void DiagnosticProtocol::set_ecu_id_field(ECUIdentificationFields field, const std::string &value)
 	{
-		if (field <= ECUIdentificationFields::NumberOfFields)
+		if (field < ECUIdentificationFields::NumberOfFields)
 		{
 			ecuIdentificationFields[static_cast<std::size_t>(field)] = value + "*";
 		}

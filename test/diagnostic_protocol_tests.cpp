@@ -76,6 +76,8 @@ TEST_F(DiagnosticProtocolTest, MessageEncoding)
 		protocolUnderTest.set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::PartNumber, "1234");
 		protocolUnderTest.set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::SerialNumber, "9876");
 		protocolUnderTest.set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::Type, "AgISOStack");
+		// Out of range, must be ignored rather than written past the end of the field list
+		protocolUnderTest.set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::NumberOfFields, "Out of range");
 
 		// Use a PGN request to trigger sending it from the protocol
 		testFrame.dataLength = 3;
