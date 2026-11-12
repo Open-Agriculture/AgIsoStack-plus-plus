@@ -62,9 +62,9 @@ namespace isobus
 		}
 	}
 
-	FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_512> *FlexCANT4Plugin::can0 = nullptr;
-	FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_512> *FlexCANT4Plugin::can1 = nullptr;
-	FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_512> *FlexCANT4Plugin::can2 = nullptr;
+	FlexCAN_T4<CAN1, RX_SIZE_2, TX_SIZE_512> *FlexCANT4Plugin::can0 = nullptr;
+	FlexCAN_T4<CAN2, RX_SIZE_2, TX_SIZE_512> *FlexCANT4Plugin::can1 = nullptr;
+	FlexCAN_T4<CAN3, RX_SIZE_2, TX_SIZE_512> *FlexCANT4Plugin::can2 = nullptr;
 
 	FlexCANT4Plugin *FlexCANT4Plugin::openPlugins[3] = { nullptr, nullptr, nullptr };
 
