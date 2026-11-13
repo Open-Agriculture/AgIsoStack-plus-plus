@@ -297,6 +297,11 @@ namespace isobus
 		/// @returns The bitfield of supported large fonts
 		virtual std::uint8_t get_supported_large_fonts_bitfield() const;
 
+		/// @brief By default, the VT server will report that it supports normal, bold, italic, proportional
+		/// If you want to override this, you can override this function.
+		/// @returns The bitfield of supported font styles
+		virtual std::uint8_t get_supported_font_styles_bitfield() const;
+
 		/// @brief This function is called when the Identify VT version message is received
 		virtual void identify_vt();
 
