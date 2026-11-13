@@ -30,9 +30,12 @@ namespace isobus
 		{
 			if (nullptr == controller)
 			{
-				// malloc rather than new, so the nullptr check stays: the compiler may assume a
-				// plain new never returns nullptr, and the Teensy core's new just returns malloc's result
-				void *memory = std::malloc(sizeof(Controller));
+				// calloc rather than new. The nullptr check stays: the compiler may assume a plain new
+				// never returns nullptr, and the Teensy core's new just returns malloc's result. And the
+				// memory is zeroed: FlexCAN_T4's constructor leaves its handler pointers and filter tables
+				// as they are, because the library expects a static (zero-initialized) object. In memory
+				// that isn't zero, its interrupt calls a garbage transmit handler on the first sent frame.
+				void *memory = std::calloc(1, sizeof(Controller));
 				if (nullptr != memory)
 				{
 					controller = new (memory) Controller();
