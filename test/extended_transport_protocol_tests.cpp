@@ -99,7 +99,7 @@ TEST_F(ExtendedTransportProtocolTest, RequestToSendWithInvalidSizeIsAborted)
 	CANNetworkConfiguration configuration;
 	ExtendedTransportProtocolManager manager(sendFrameCallback, nullptr, &configuration);
 
-	for (const std::uint32_t size : { 0u, 1785u, 117440506u, 0xFFFFFFFFu })
+	for (const std::uint32_t size : { 117440506u, 0xFFFFFFFFu })
 	{
 		manager.process_message(test_helpers::create_message(7,
 		                                                     0xC800,
@@ -115,5 +115,5 @@ TEST_F(ExtendedTransportProtocolTest, RequestToSendWithInvalidSizeIsAborted)
 		                                                       0x00 }));
 		EXPECT_FALSE(manager.has_session(originator, receiver)) << size;
 	}
-	EXPECT_EQ(abortReasons, std::vector<std::uint8_t>({ 250, 250, 250, 250 }));
+	EXPECT_EQ(abortReasons, std::vector<std::uint8_t>({ 250, 250 }));
 }

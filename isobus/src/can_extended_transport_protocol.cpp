@@ -14,7 +14,6 @@
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/can_message.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
-#include "isobus/isobus/can_transport_protocol.hpp"
 #include "isobus/utility/system_timing.hpp"
 #include "isobus/utility/to_string.hpp"
 
@@ -143,12 +142,11 @@ namespace isobus
 			            parameterGroupNumber);
 			send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, parameterGroupNumber, ConnectionAbortReason::AlreadyInCMSession);
 		}
-		else if ((totalMessageSize <= TransportProtocolManager::MAX_PROTOCOL_DATA_LENGTH) || (totalMessageSize > MAX_PROTOCOL_DATA_LENGTH))
+		else if (totalMessageSize > MAX_PROTOCOL_DATA_LENGTH)
 		{
-			LOG_WARNING("[ETP]: Replying with abort to Request To Send (RTS) for 0x%05X, message size (%u) is outside %u to %u bytes.",
+			LOG_WARNING("[ETP]: Replying with abort to Request To Send (RTS) for 0x%05X, message size (%u) is greater than the maximum (%u).",
 			            parameterGroupNumber,
 			            totalMessageSize,
-			            TransportProtocolManager::MAX_PROTOCOL_DATA_LENGTH + 1,
 			            MAX_PROTOCOL_DATA_LENGTH);
 			send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, parameterGroupNumber, ConnectionAbortReason::AnyOtherError);
 		}
