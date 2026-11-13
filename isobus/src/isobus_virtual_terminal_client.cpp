@@ -4367,6 +4367,13 @@ namespace isobus
 			while ((poolIterator != objectPool.scaledObjectPool.end()) &&
 			       retVal)
 			{
+				// Sized first, so that resize_object() never writes past the end of a truncated pool
+				const std::uint32_t objectSize = get_number_bytes_in_object(&poolIterator[0], static_cast<std::uint32_t>(objectPool.scaledObjectPool.end() - poolIterator));
+				if (0 == objectSize)
+				{
+					retVal = false;
+					break;
+				}
 				const std::uint16_t objectID = read_little_endian_uint16(&poolIterator[0]);
 
 				if ((VirtualTerminalObjectType::Key == static_cast<VirtualTerminalObjectType>(poolIterator[2])) ||
@@ -4383,8 +4390,6 @@ namespace isobus
 					                        static_cast<VirtualTerminalObjectType>(poolIterator[2]));
 				}
 
-				std::uint32_t objectSize = get_number_bytes_in_object(&poolIterator[0], static_cast<std::uint32_t>(objectPool.scaledObjectPool.end() - poolIterator));
-				retVal &= (0 != objectSize);
 				if (retVal)
 				{
 					if (get_is_object_scalable(static_cast<VirtualTerminalObjectType>(*(poolIterator + 2))))
@@ -4892,7 +4897,6 @@ namespace isobus
 
 			case VirtualTerminalObjectType::OutputList:
 			case VirtualTerminalObjectType::ExternalReferenceNAME:
-			case VirtualTerminalObjectType::ObjectLabelRefrenceList:
 			{
 				retVal = 12;
 			}
@@ -4913,7 +4917,6 @@ namespace isobus
 			break;
 
 			case VirtualTerminalObjectType::SoftKeyMask:
-			case VirtualTerminalObjectType::ColourMap:
 			case VirtualTerminalObjectType::InputAttributes:
 			{
 				retVal = 6;
@@ -5009,6 +5012,8 @@ namespace isobus
 			case VirtualTerminalObjectType::ExtendedInputAttributes:
 			case VirtualTerminalObjectType::ObjectPointer:
 			case VirtualTerminalObjectType::Macro:
+			case VirtualTerminalObjectType::ColourMap:
+			case VirtualTerminalObjectType::ObjectLabelRefrenceList:
 			{
 				retVal = 5;
 			}
@@ -5053,6 +5058,29 @@ namespace isobus
 	}
 
 	std::uint32_t VirtualTerminalClient::get_number_bytes_in_object(std::uint8_t *buffer, std::uint32_t bufferLength)
+	{
+		constexpr std::uint32_t OBJECT_HEADER_LENGTH = 3;
+		std::uint32_t retVal = 0;
+
+		if ((bufferLength < OBJECT_HEADER_LENGTH) ||
+		    (get_minimum_object_length(static_cast<VirtualTerminalObjectType>(buffer[2])) > bufferLength))
+		{
+			LOG_ERROR("[VT]: The object pool ends inside an object");
+		}
+		else
+		{
+			retVal = get_declared_object_length(buffer, bufferLength);
+
+			if (retVal > bufferLength)
+			{
+				LOG_ERROR("[VT]: Object " + isobus::to_string(static_cast<int>(buffer[0] | (buffer[1] << 8))) + " runs past the end of the object pool");
+				retVal = 0;
+			}
+		}
+		return retVal;
+	}
+
+	std::uint32_t VirtualTerminalClient::get_declared_object_length(std::uint8_t *buffer, std::uint32_t bufferLength)
 	{
 		auto currentObjectType = static_cast<VirtualTerminalObjectType>(buffer[2]);
 		std::uint32_t retVal = get_minimum_object_length(currentObjectType);
@@ -5119,7 +5147,7 @@ namespace isobus
 			case VirtualTerminalObjectType::InputString:
 			{
 				const std::uint32_t sizeOfValue = buffer[16];
-				const std::uint32_t sizeOfMacros = (buffer[18 + sizeOfValue] * 2);
+				const std::uint32_t sizeOfMacros = ((18 + sizeOfValue) < bufferLength) ? (buffer[18 + sizeOfValue] * 2) : 0;
 				retVal += (sizeOfValue + sizeOfMacros);
 			}
 			break;
@@ -5142,7 +5170,7 @@ namespace isobus
 			case VirtualTerminalObjectType::OutputString:
 			{
 				const std::uint32_t sizeOfValue = (static_cast<std::uint16_t>(buffer[14]) | static_cast<std::uint16_t>(buffer[15] << 8));
-				const std::uint32_t sizeOfMacros = (buffer[16 + sizeOfValue] * 2);
+				const std::uint32_t sizeOfMacros = ((16 + sizeOfValue) < bufferLength) ? (buffer[16 + sizeOfValue] * 2) : 0;
 				retVal += (sizeOfMacros + sizeOfValue);
 			}
 			break;
@@ -5219,7 +5247,8 @@ namespace isobus
 				                                     (static_cast<std::uint32_t>(buffer[13]) << 8) |
 				                                     (static_cast<std::uint32_t>(buffer[14]) << 16) |
 				                                     (static_cast<std::uint32_t>(buffer[15]) << 24));
-				retVal += (sizeOfRawData + sizeOfMacros);
+				// Capped, so that a huge length can't wrap the sum back under bufferLength
+				retVal += (std::min(sizeOfRawData, bufferLength) + sizeOfMacros);
 			}
 			break;
 
@@ -5253,7 +5282,7 @@ namespace isobus
 			case VirtualTerminalObjectType::InputAttributes:
 			{
 				const std::uint32_t sizeOfValidationString = buffer[4];
-				const std::uint32_t sizeOfMacros = (buffer[5 + sizeOfValidationString] * 2);
+				const std::uint32_t sizeOfMacros = ((5 + sizeOfValidationString) < bufferLength) ? (buffer[5 + sizeOfValidationString] * 2) : 0;
 				retVal += (sizeOfMacros + sizeOfValidationString);
 			}
 			break;
@@ -5312,7 +5341,7 @@ namespace isobus
 
 			case VirtualTerminalObjectType::ObjectLabelRefrenceList:
 			{
-				const std::uint32_t sizeOfLabeledObjects = ((static_cast<std::uint16_t>(buffer[4]) | static_cast<std::uint16_t>(buffer[5]) << 8) * 7);
+				const std::uint32_t sizeOfLabeledObjects = ((static_cast<std::uint16_t>(buffer[3]) | static_cast<std::uint16_t>(buffer[4]) << 8) * 7);
 				retVal += sizeOfLabeledObjects;
 			}
 			break;
@@ -5334,6 +5363,7 @@ namespace isobus
 
 			case VirtualTerminalObjectType::AuxiliaryFunctionType1:
 			case VirtualTerminalObjectType::AuxiliaryFunctionType2:
+			case VirtualTerminalObjectType::AuxiliaryInputType2:
 			{
 				const std::uint32_t sizeOfObjects = (buffer[5] * 6);
 				retVal += sizeOfObjects;
@@ -5341,7 +5371,6 @@ namespace isobus
 			break;
 
 			case VirtualTerminalObjectType::AuxiliaryInputType1:
-			case VirtualTerminalObjectType::AuxiliaryInputType2:
 			{
 				const std::uint32_t sizeOfObjects = (buffer[6] * 6);
 				retVal += sizeOfObjects;

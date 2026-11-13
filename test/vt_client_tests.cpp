@@ -1952,11 +1952,11 @@ TEST_F(VirtualTerminalTest, ObjectMetadataTests)
 	EXPECT_EQ(5, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::ExtendedInputAttributes));
 	EXPECT_EQ(5, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::ObjectPointer));
 	EXPECT_EQ(5, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::Macro));
-	EXPECT_EQ(6, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::ColourMap));
+	EXPECT_EQ(5, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::ColourMap));
 	EXPECT_EQ(34, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::GraphicsContext));
 	EXPECT_EQ(17, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::WindowMask));
 	EXPECT_EQ(10, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::KeyGroup));
-	EXPECT_EQ(12, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::ObjectLabelRefrenceList));
+	EXPECT_EQ(5, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::ObjectLabelRefrenceList));
 	EXPECT_EQ(13, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::ExternalObjectDefinition));
 	EXPECT_EQ(12, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::ExternalReferenceNAME));
 	EXPECT_EQ(9, clientUnderTest.test_wrapper_get_minimum_object_length(VirtualTerminalObjectType::ExternalObjectPointer));
@@ -2812,9 +2812,10 @@ TEST_F(VirtualTerminalTest, ResizeOutputList)
 	testObject[11] = 1;
 	EXPECT_EQ(14, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject, sizeof(testObject)));
 
-	// Add a full list of child objects and re-check the length
+	// A full list of child objects runs past the end of this buffer
 	testObject[10] = 255;
-	EXPECT_EQ(524, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject, sizeof(testObject)));
+	EXPECT_EQ(0, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject, sizeof(testObject)));
+	EXPECT_EQ(524, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject, 524));
 
 	EXPECT_EQ(true, clientUnderTest.test_wrapper_resize_object(testObject, 0.5f, VirtualTerminalObjectType::OutputList));
 	EXPECT_EQ(testWidth / 2, static_cast<std::uint16_t>(testObject[3]) | (static_cast<std::uint16_t>(testObject[4]) << 8));
@@ -2932,6 +2933,56 @@ TEST_F(VirtualTerminalTest, NumberBytesInExtendedInputAttributes)
 	// Cut off inside the second code plane's ranges, then inside its header
 	EXPECT_EQ(0, clientUnderTest.test_wrapper_get_number_bytes_in_object(testPool, 28));
 	EXPECT_EQ(0, clientUnderTest.test_wrapper_get_number_bytes_in_object(testPool, 20));
+}
+
+TEST_F(VirtualTerminalTest, TestNumberBytesInVariableLengthObjects)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	// Colour Map with 2 indexes
+	std::uint8_t colourMap[] = { 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::ColourMap), 0x02, 0x00, 0x00, 0x01 };
+	EXPECT_EQ(7, clientUnderTest.test_wrapper_get_number_bytes_in_object(colourMap, sizeof(colourMap)));
+
+	// Object Label Reference List with 1 labelled object
+	std::uint8_t labels[] = { 0x02, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::ObjectLabelRefrenceList), 0x01, 0x00, 0x01, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0xFF };
+	EXPECT_EQ(12, clientUnderTest.test_wrapper_get_number_bytes_in_object(labels, sizeof(labels)));
+
+	// Auxiliary Input Type 2 with 1 object. It has no input ID, so its object count is at buffer[5], not buffer[6] like Type 1
+	std::uint8_t auxiliaryInput[] = { 0x03, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::AuxiliaryInputType2), 0x00, 0x00, 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00 };
+	EXPECT_EQ(12, clientUnderTest.test_wrapper_get_number_bytes_in_object(auxiliaryInput, sizeof(auxiliaryInput)));
+}
+
+TEST_F(VirtualTerminalTest, TestNumberBytesInTruncatedObjects)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	std::uint8_t header[] = { 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::OutputRectangle) };
+	EXPECT_EQ(0, clientUnderTest.test_wrapper_get_number_bytes_in_object(header, 2));
+	EXPECT_EQ(0, clientUnderTest.test_wrapper_get_number_bytes_in_object(header, sizeof(header)));
+
+	// Input Attributes whose validation string claims 200 bytes, so its macro count is past the end
+	std::uint8_t inputAttributes[] = { 0x02, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::InputAttributes), 0x00, 200, 'A' };
+	EXPECT_EQ(0, clientUnderTest.test_wrapper_get_number_bytes_in_object(inputAttributes, sizeof(inputAttributes)));
+
+	// Picture Graphic whose raw data length would wrap the size around to 5
+	std::uint8_t pictureGraphic[17] = { 0x03, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::PictureGraphic) };
+	pictureGraphic[12] = 0xF4;
+	pictureGraphic[13] = 0xFF;
+	pictureGraphic[14] = 0xFF;
+	pictureGraphic[15] = 0xFF;
+	EXPECT_EQ(0, clientUnderTest.test_wrapper_get_number_bytes_in_object(pictureGraphic, sizeof(pictureGraphic)));
+}
+
+TEST_F(VirtualTerminalTest, ScalingATruncatedPoolFails)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+	std::vector<std::uint8_t> testPool = test_helpers::read_vt3_test_pool();
+	ASSERT_FALSE(testPool.empty());
+	testPool.pop_back();
+
+	clientUnderTest.set_object_pool(0, &testPool);
+	clientUnderTest.set_object_pool_scaling(0, 240, 240);
+	EXPECT_FALSE(clientUnderTest.test_wrapper_scale_object_pools());
 }
 
 TEST_F(VirtualTerminalTest, TestNumberBytesInInvalidObjects)

@@ -1842,6 +1842,12 @@ namespace isobus
 		/// @returns The total number of bytes present in the VT object at the specified location, or 0 if it can't be sized
 		static std::uint32_t get_number_bytes_in_object(std::uint8_t *buffer, std::uint32_t bufferLength);
 
+		/// @brief Returns the number of bytes that a VT object's own fields declare, which can be more than bufferLength
+		/// @param[in] buffer A pointer to the start of the VT object, holding at least the object's minimum length
+		/// @param[in] bufferLength The number of bytes that can be read from buffer
+		/// @returns The number of bytes that the VT object declares
+		static std::uint32_t get_declared_object_length(std::uint8_t *buffer, std::uint32_t bufferLength);
+
 		/// @brief Resizes the most common VT object format by some scale factor
 		/// @param[in] buffer A pointer to the start of the VT object
 		/// @param[in] scaleFactor The scale factor to use when scaling the object, with 1.0 being the original scale

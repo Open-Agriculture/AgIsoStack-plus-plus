@@ -2773,6 +2773,119 @@ TEST_F(VirtualTerminalServerMessagingTest, MacroBlanksAStringWithAnEmptyChangeSt
 	EXPECT_EQ("  ", std::static_pointer_cast<StringVariable>(workingSet->get_object_by_id(0x1234))->get_value());
 }
 
+/// @brief A managed working set whose macros change one string variable, so that a test can see which of them ran
+class MacroNestingTest : public VirtualTerminalServerMessagingTest
+{
+protected:
+	void SetUp() override
+	{
+		VirtualTerminalServerMessagingTest::SetUp();
+		stringVariable->set_id(0x1234);
+		stringVariable->set_value("  ");
+		ASSERT_TRUE(workingSet->add_object(stringVariable));
+		server.add_managed_working_set(workingSet);
+	}
+
+	void add_macro(std::uint16_t id, const std::vector<std::vector<std::uint8_t>> &commands)
+	{
+		auto macro = std::make_shared<Macro>();
+		macro->set_id(id);
+		for (const auto &command : commands)
+		{
+			ASSERT_TRUE(macro->add_command_packet(command));
+		}
+		ASSERT_TRUE(workingSet->add_object(macro));
+	}
+
+	static std::vector<std::uint8_t> execute(std::uint8_t id)
+	{
+		return { static_cast<std::uint8_t>(Macro::Command::ExecuteMacro), id, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+	}
+
+	static std::vector<std::uint8_t> set_string(char value)
+	{
+		return { static_cast<std::uint8_t>(Macro::Command::ChangeStringValue), 0x34, 0x12, 0x02, 0x00, static_cast<std::uint8_t>(value), static_cast<std::uint8_t>(value), 0xFF };
+	}
+
+	DerivedTestVTServer server{ test_helpers::create_mock_internal_control_function(0x80) };
+	std::shared_ptr<TestWorkingSet> workingSet = std::make_shared<TestWorkingSet>(test_helpers::create_mock_control_function(0x81));
+	std::shared_ptr<StringVariable> stringVariable = std::make_shared<StringVariable>();
+};
+
+// A circular reference must not recurse until the stack overflows, which would take the VT down for every working set
+TEST_F(MacroNestingTest, MacroThatExecutesItselfDoesNotRecurse)
+{
+	add_macro(1, { set_string('A'), execute(1) });
+
+	EXPECT_TRUE(server.execute_macro_for_test(1, workingSet));
+	EXPECT_EQ("AA", stringVariable->get_value());
+}
+
+TEST_F(MacroNestingTest, MacrosThatExecuteEachOtherDoNotRecurse)
+{
+	add_macro(1, { execute(2) });
+	add_macro(2, { execute(1), set_string('B') });
+
+	EXPECT_TRUE(server.execute_macro_for_test(1, workingSet));
+	EXPECT_EQ("BB", stringVariable->get_value());
+
+	// Nothing is left marked as running, so they run again
+	stringVariable->set_value("  ");
+	EXPECT_TRUE(server.execute_macro_for_test(2, workingSet));
+	EXPECT_EQ("BB", stringVariable->get_value());
+}
+
+TEST_F(MacroNestingTest, MacroExecutesAnotherMacro)
+{
+	add_macro(1, { set_string('A'), execute(2) });
+	add_macro(2, { set_string('C') });
+
+	EXPECT_TRUE(server.execute_macro_for_test(1, workingSet));
+	EXPECT_EQ("CC", stringVariable->get_value());
+}
+
+/// @brief A server that runs macro 1 of another working set the first time it is told to set the audio volume
+class NestingTestVTServer : public DerivedTestVTServer
+{
+public:
+	using DerivedTestVTServer::DerivedTestVTServer;
+
+	void set_audio_volume(std::uint8_t, std::shared_ptr<ControlFunction>) override
+	{
+		auto workingSet = otherWorkingSet;
+		otherWorkingSet = nullptr;
+		if (nullptr != workingSet)
+		{
+			nestedMacroRan = execute_macro_for_test(1, workingSet);
+		}
+	}
+
+	std::shared_ptr<VirtualTerminalServerManagedWorkingSet> otherWorkingSet;
+	bool nestedMacroRan = false;
+};
+
+TEST_F(VirtualTerminalServerMessagingTest, EqualMacroIDsInOtherWorkingSetsAreNotCircular)
+{
+	auto serverControlFunction = test_helpers::create_mock_internal_control_function(0x80);
+	NestingTestVTServer server(serverControlFunction);
+	auto workingSetA = std::make_shared<TestWorkingSet>(test_helpers::create_mock_control_function(0x81));
+	auto workingSetB = std::make_shared<TestWorkingSet>(test_helpers::create_mock_control_function(0x82));
+
+	for (const auto &workingSet : { workingSetA, workingSetB })
+	{
+		auto macro = std::make_shared<Macro>();
+		macro->set_id(1);
+		ASSERT_TRUE(macro->add_command_packet({ static_cast<std::uint8_t>(Macro::Command::SetAudioVolume), 50, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+		ASSERT_TRUE(workingSet->add_object(macro));
+		server.add_managed_working_set(workingSet);
+	}
+	server.otherWorkingSet = workingSetB;
+
+	// Macro 1 of A sets the volume, which runs macro 1 of B while A's is still running
+	EXPECT_TRUE(server.execute_macro_for_test(1, workingSetA));
+	EXPECT_TRUE(server.nestedMacroRan);
+}
+
 TEST_F(VirtualTerminalServerMessagingTest, AudioCommandsAreForwardedToTheApplication)
 {
 	VirtualCANPlugin testPlugin;

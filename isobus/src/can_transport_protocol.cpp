@@ -143,9 +143,9 @@ namespace isobus
 			LOG_WARNING("[TP]: Ignoring Broadcast Announcement Message (BAM) for 0x%05X, configured maximum number of sessions reached.",
 			            parameterGroupNumber);
 		}
-		else if (totalMessageSize > MAX_PROTOCOL_DATA_LENGTH)
+		else if ((totalMessageSize <= CAN_DATA_LENGTH) || (totalMessageSize > MAX_PROTOCOL_DATA_LENGTH))
 		{
-			LOG_WARNING("[TP]: Ignoring Broadcast Announcement Message (BAM) for 0x%05X, message size (%hu) is greater than the maximum (%hu).",
+			LOG_WARNING("[TP]: Ignoring Broadcast Announcement Message (BAM) for 0x%05X, message size (%hu) is outside 9 to %u bytes.",
 			            parameterGroupNumber,
 			            totalMessageSize,
 			            MAX_PROTOCOL_DATA_LENGTH);
@@ -203,6 +203,14 @@ namespace isobus
 			LOG_WARNING("[TP]: Replying with abort to Request To Send (RTS) for 0x%05X, configured maximum number of sessions reached.", parameterGroupNumber);
 			send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, parameterGroupNumber, ConnectionAbortReason::AlreadyInCMSession);
 		}
+		else if ((totalMessageSize <= CAN_DATA_LENGTH) || (totalMessageSize > MAX_PROTOCOL_DATA_LENGTH))
+		{
+			LOG_WARNING("[TP]: Replying with abort to Request To Send (RTS) for 0x%05X, message size (%hu) is outside 9 to %u bytes.",
+			            parameterGroupNumber,
+			            totalMessageSize,
+			            MAX_PROTOCOL_DATA_LENGTH);
+			send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, parameterGroupNumber, ConnectionAbortReason::TotalMessageSizeTooBig);
+		}
 		else
 		{
 			auto oldSession = get_session(source, destination);
@@ -221,8 +229,6 @@ namespace isobus
 					close_session(oldSession, false);
 				}
 			}
-
-			auto data = std::unique_ptr<CANMessageData>(new CANMessageDataVector(totalMessageSize));
 
 			if (clearToSendPacketMax > configuration->get_number_of_packets_per_cts_message())
 			{
