@@ -1743,6 +1743,42 @@ TEST_F(VirtualTerminalTest, AutoscalingFollowsObjectPointersOnKeys)
 	EXPECT_EQ(VirtualTerminalClient::FontSize::Size8x8, font_size_of(scaled, POINTED_FONT, clientUnderTest));
 }
 
+// An Animation is scaled like the other objects that show children: with the data mask factor on
+// a mask, and with the soft key factor, frames included, on a key.
+TEST_F(VirtualTerminalTest, AutoscalingScalesAnimations)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	constexpr std::uint16_t MASK_FRAME = 230;
+	constexpr std::uint16_t KEY_FRAME = 231;
+	constexpr std::uint16_t MASK_ANIMATION = 240;
+	constexpr std::uint16_t KEY_ANIMATION = 241;
+	std::vector<std::uint8_t> pool;
+	append_font_attributes(pool, 120, VirtualTerminalClient::FontSize::Size8x8);
+	append_output_string(pool, MASK_FRAME, 60, 120);
+	append_output_string(pool, KEY_FRAME, 60, 120);
+	append_animation(pool, MASK_ANIMATION, MASK_FRAME);
+	append_animation(pool, KEY_ANIMATION, KEY_FRAME);
+	append_key(pool, 320, KEY_ANIMATION);
+
+	clientUnderTest.set_object_pool(0, &pool);
+	clientUnderTest.set_object_pool_scaling(0, 200, 60);
+	clientUnderTest.test_wrapper_set_supported_fonts(0xFF, 0xFF);
+	clientUnderTest.test_wrapper_set_screen(480, 90);
+	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
+
+	const std::vector<std::uint8_t> &scaled = clientUnderTest.test_wrapper_get_scaled_pool(0);
+	EXPECT_EQ(120, width_of(scaled, MASK_ANIMATION, clientUnderTest));
+	EXPECT_EQ(144, width_of(scaled, MASK_FRAME, clientUnderTest));
+	EXPECT_EQ(75, width_of(scaled, KEY_ANIMATION, clientUnderTest));
+	EXPECT_EQ(90, width_of(scaled, KEY_FRAME, clientUnderTest));
+
+	// The child list keeps its object IDs
+	const int offset = find_object(scaled, KEY_ANIMATION, clientUnderTest);
+	ASSERT_GE(offset, 0);
+	EXPECT_EQ(KEY_FRAME, scaled[offset + 17] | (scaled[offset + 18] << 8));
+}
+
 // The pools of a working set are uploaded together, so a key in one pool can show a label from
 // another, and a font in the keys' pool can also be used by a mask in another pool. The search
 // for soft key objects has to look across all pools, or the label overflows its key and the
@@ -1851,6 +1887,22 @@ TEST_F(VirtualTerminalTest, SoftKeyScaledObjectIdsFollowContainersOnKeys)
 
 	const std::vector<std::uint16_t> ids = DerivedTestVTClient::test_wrapper_get_soft_key_scaled_object_ids({ &pool });
 	EXPECT_EQ((std::vector<std::uint16_t>{ LABEL_FONT, CONTAINER_LABEL, CONTAINER }), ids);
+}
+
+// An Animation on a key is scaled with the soft key factor, so the frames it shows must be too
+TEST_F(VirtualTerminalTest, SoftKeyScaledObjectIdsFollowAnimationsOnKeys)
+{
+	constexpr std::uint16_t LABEL_FONT = 160;
+	constexpr std::uint16_t FRAME = 280;
+	constexpr std::uint16_t ANIMATION = 290;
+	std::vector<std::uint8_t> pool;
+	append_font_attributes(pool, LABEL_FONT, VirtualTerminalClient::FontSize::Size8x8);
+	append_output_string(pool, FRAME, 60, LABEL_FONT);
+	append_animation(pool, ANIMATION, FRAME);
+	append_key(pool, 360, ANIMATION);
+
+	const std::vector<std::uint16_t> ids = DerivedTestVTClient::test_wrapper_get_soft_key_scaled_object_ids({ &pool });
+	EXPECT_EQ((std::vector<std::uint16_t>{ LABEL_FONT, FRAME, ANIMATION }), ids);
 }
 
 TEST_F(VirtualTerminalTest, FullPoolAutoscalingWithPointer)
@@ -2274,7 +2326,8 @@ TEST_F(VirtualTerminalTest, AutoScaledCommandsAreScaledOnTheBus)
 	EXPECT_EQ(ValuePair(144, 24), command_values(commands.front(), 3));
 }
 
-// Autoscaling leaves a Working Set and an Animation alone, so commands on them aren't scaled either
+// Autoscaling leaves a Working Set alone, so commands on it aren't scaled either. An Animation is
+// scaled like the objects around it, so commands on it and its children are too.
 TEST_F(VirtualTerminalTest, AutoScaledCommandsLeaveObjectsTheUploadDoesNotScale)
 {
 	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
@@ -2291,13 +2344,15 @@ TEST_F(VirtualTerminalTest, AutoScaledCommandsLeaveObjectsTheUploadDoesNotScale)
 	ASSERT_TRUE(clientUnderTest.test_wrapper_scale_object_pools());
 
 	EXPECT_FLOAT_EQ(1.0f, clientUnderTest.get_object_scale_factor(1));
-	EXPECT_FLOAT_EQ(1.0f, clientUnderTest.get_object_scale_factor(600));
+	EXPECT_FLOAT_EQ(2.4f, clientUnderTest.get_object_scale_factor(600));
 	EXPECT_FLOAT_EQ(2.4f, clientUnderTest.get_object_scale_factor(400));
 
 	EXPECT_TRUE(clientUnderTest.send_change_child_position(400, 1, 10, 20, true));
 	EXPECT_EQ(ValuePair(10, 20), command_values(clientUnderTest.test_wrapper_take_queued_command(), 5));
 	EXPECT_TRUE(clientUnderTest.send_change_size_command(600, 50, 20, true));
-	EXPECT_EQ(ValuePair(50, 20), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+	EXPECT_EQ(ValuePair(120, 48), command_values(clientUnderTest.test_wrapper_take_queued_command(), 3));
+	EXPECT_TRUE(clientUnderTest.send_change_child_position(400, 600, 10, 20, true));
+	EXPECT_EQ(ValuePair(24, 48), command_values(clientUnderTest.test_wrapper_take_queued_command(), 5));
 }
 
 // Below a factor of 1, a size above 0 stays at least 1 px: 0 hides the object (F.18), and a Change
@@ -2824,6 +2879,56 @@ TEST_F(VirtualTerminalTest, ResizeOutputList)
 	EXPECT_EQ(true, clientUnderTest.test_wrapper_resize_object(testObject, 2.0f, VirtualTerminalObjectType::OutputList));
 	EXPECT_EQ(testWidth, static_cast<std::uint16_t>(testObject[3]) | (static_cast<std::uint16_t>(testObject[4]) << 8));
 	EXPECT_EQ(testHeight, static_cast<std::uint16_t>(testObject[5]) | (static_cast<std::uint16_t>(testObject[6]) << 8));
+}
+
+// The child list of an Animation starts at byte 17, after the number of objects (15) and of macros (16)
+TEST_F(VirtualTerminalTest, ResizeAnimation)
+{
+	std::vector<std::uint8_t> testObject;
+	append_u16(testObject, 1);
+	testObject.push_back(static_cast<std::uint8_t>(VirtualTerminalObjectType::Animation));
+	append_u16(testObject, 50); // Width
+	append_u16(testObject, 20); // Height
+	append_u16(testObject, 100); // Refresh interval
+	testObject.push_back(0); // Value
+	testObject.push_back(1); // Enabled
+	testObject.push_back(0); // First child index
+	testObject.push_back(1); // Last child index
+	testObject.push_back(0); // Default child index
+	testObject.push_back(0); // Options
+	testObject.push_back(2); // Number of object references
+	testObject.push_back(1); // Number of macros
+	append_u16(testObject, 0x1234);
+	append_u16(testObject, 10); // X
+	append_u16(testObject, static_cast<std::uint16_t>(-20)); // Y
+	append_u16(testObject, 0x5678);
+	append_u16(testObject, 100); // X
+	append_u16(testObject, 20000); // Y, which doubled is more than a position can hold
+	testObject.push_back(1); // Macro event
+	testObject.push_back(7); // Macro ID
+
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+	EXPECT_TRUE(clientUnderTest.test_wrapper_get_is_object_scalable(VirtualTerminalObjectType::Animation));
+	ASSERT_EQ(31u, clientUnderTest.test_wrapper_get_number_bytes_in_object(testObject.data(), static_cast<std::uint32_t>(testObject.size())));
+
+	const std::vector<std::uint8_t> original = testObject;
+	ASSERT_TRUE(clientUnderTest.test_wrapper_resize_object(testObject.data(), 2.0f, VirtualTerminalObjectType::Animation));
+
+	auto value_at = [&testObject](std::size_t offset) {
+		return static_cast<std::uint16_t>(testObject[offset] | (testObject[offset + 1] << 8));
+	};
+	EXPECT_EQ(100, value_at(3));
+	EXPECT_EQ(40, value_at(5));
+	EXPECT_EQ(0x1234, value_at(17));
+	EXPECT_EQ(20, value_at(19));
+	EXPECT_EQ(static_cast<std::uint16_t>(-40), value_at(21));
+	EXPECT_EQ(0x5678, value_at(23));
+	EXPECT_EQ(200, value_at(25));
+	EXPECT_EQ(32767, value_at(27));
+
+	// Nothing else changes: the refresh interval, the indexes, the counts and the macro
+	EXPECT_TRUE(std::equal(original.begin() + 7, original.begin() + 17, testObject.begin() + 7));
+	EXPECT_TRUE(std::equal(original.begin() + 29, original.end(), testObject.begin() + 29));
 }
 
 TEST_F(VirtualTerminalTest, ResizeInputBoolean)
