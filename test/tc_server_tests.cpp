@@ -11,6 +11,7 @@
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/isobus/isobus_device_descriptor_object_pool_helpers.hpp"
 #include "isobus/isobus/isobus_task_controller_server.hpp"
 #include "isobus/utility/system_timing.hpp"
@@ -2188,6 +2189,14 @@ TEST_F(TaskControllerServerTest, MessageCanBeQueuedWhileAVirtualRuns)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
+class DiscardingLogger : public CANStackLogger
+{
+public:
+	void sink_CAN_stack_log(CANStackLogger::LoggingLevel, const std::string &) override
+	{
+	}
+};
+
 TEST_F(TaskControllerServerTest, IgnoresMessagesWithoutSourceControlFunction)
 {
 	CANHardwareInterface::set_number_of_can_channels(1);
@@ -2216,7 +2225,11 @@ TEST_F(TaskControllerServerTest, IgnoresMessagesWithoutSourceControlFunction)
 	CANMessage measurementMessage(CANMessage::Type::Receive, CANIdentifier(0x14CB9D9E), measurementCommand, nullptr, internalECU, 0);
 	server.test_receive_message(measurementMessage, &server);
 
+	// With a sink set, the handlers' log arguments are evaluated, as in an application that logs
+	DiscardingLogger logger;
+	CANStackLogger::set_can_stack_logger_sink(&logger);
 	server.update();
+	CANStackLogger::set_can_stack_logger_sink(nullptr);
 	EXPECT_EQ(0u, server.get_number_of_active_clients());
 
 	CANHardwareInterface::stop();
