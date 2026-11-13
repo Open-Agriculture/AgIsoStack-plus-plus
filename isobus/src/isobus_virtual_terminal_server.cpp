@@ -222,6 +222,11 @@ namespace isobus
 		return 0x7F;
 	}
 
+	std::uint8_t VirtualTerminalServer::get_supported_font_styles_bitfield() const
+	{
+		return 0x8F;
+	}
+
 	void VirtualTerminalServer::identify_vt()
 	{
 		LOG_ERROR("[VT Server]: The Identify VT command is not implemented");
@@ -607,9 +612,9 @@ namespace isobus
 				buffer[2] = 0xFF; // Reserved
 				buffer[3] = 0xFF; // Reserved
 				buffer[4] = 0xFF; // Reserved
-				buffer[5] = get_supported_small_fonts_bitfield(); // Say we support all small fonts
-				buffer[6] = get_supported_large_fonts_bitfield(); // Say we support all large fonts
-				buffer[7] = 0x8F; // Support normal, bold, italic, proportional
+				buffer[5] = get_supported_small_fonts_bitfield();
+				buffer[6] = get_supported_large_fonts_bitfield();
+				buffer[7] = get_supported_font_styles_bitfield();
 				CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 				                                               buffer.data(),
 				                                               CAN_DATA_LENGTH,
