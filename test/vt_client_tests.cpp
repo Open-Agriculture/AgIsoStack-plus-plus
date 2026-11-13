@@ -67,7 +67,7 @@ public:
 		return VirtualTerminalClient::get_soft_key_scaled_object_ids(pools);
 	}
 
-	std::uint32_t test_wrapper_get_number_bytes_in_object(std::uint8_t *buffer, std::uint32_t bufferLength)
+	std::uint32_t test_wrapper_get_number_bytes_in_object(const std::uint8_t *buffer, std::uint32_t bufferLength)
 	{
 		return VirtualTerminalClient::get_number_bytes_in_object(buffer, bufferLength);
 	}

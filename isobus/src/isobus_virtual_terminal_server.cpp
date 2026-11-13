@@ -25,12 +25,6 @@ namespace isobus
 	/// @brief How deep macros may nest. The standard sets no limit, but each level takes about 2 KB of stack.
 	constexpr std::uint8_t MAX_NESTED_MACROS = 16;
 
-	/// @brief The macros running on this thread, outermost first. Per thread, because a circular reference nests synchronously on one thread.
-	/// Objects, not IDs, so that equal IDs in other working sets don't match.
-	static thread_local std::array<const VTObject *, MAX_NESTED_MACROS> runningMacros;
-	/// @brief The number of valid entries in runningMacros
-	static thread_local std::uint8_t numberOfRunningMacros = 0;
-
 	/// @brief Extracts the low byte from a 16-bit value.
 	/// @param value The value to extract the low byte from.
 	/// @returns The low byte of the value.
@@ -449,6 +443,11 @@ namespace isobus
 
 	bool VirtualTerminalServer::execute_macro(std::uint16_t objectIDOfMacro, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet)
 	{
+		// Per thread, because a circular reference nests synchronously on one thread.
+		// Objects, not IDs, so that equal IDs in other working sets don't match.
+		static thread_local std::array<const VTObject *, MAX_NESTED_MACROS> runningMacros;
+		static thread_local std::uint8_t numberOfRunningMacros = 0;
+
 		auto object = workingSet->get_object_by_id(objectIDOfMacro);
 		const auto runningMacrosEnd = runningMacros.begin() + numberOfRunningMacros;
 		bool retVal = false;

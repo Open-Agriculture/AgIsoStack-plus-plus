@@ -5057,7 +5057,7 @@ namespace isobus
 		return retVal;
 	}
 
-	std::uint32_t VirtualTerminalClient::get_number_bytes_in_object(std::uint8_t *buffer, std::uint32_t bufferLength)
+	std::uint32_t VirtualTerminalClient::get_number_bytes_in_object(const std::uint8_t *buffer, std::uint32_t bufferLength)
 	{
 		constexpr std::uint32_t OBJECT_HEADER_LENGTH = 3;
 		std::uint32_t retVal = 0;
@@ -5080,9 +5080,9 @@ namespace isobus
 		return retVal;
 	}
 
-	std::uint32_t VirtualTerminalClient::get_declared_object_length(std::uint8_t *buffer, std::uint32_t bufferLength)
+	std::uint32_t VirtualTerminalClient::get_declared_object_length(const std::uint8_t *buffer, std::uint32_t bufferLength)
 	{
-		auto currentObjectType = static_cast<VirtualTerminalObjectType>(buffer[2]);
+		const auto currentObjectType = static_cast<VirtualTerminalObjectType>(buffer[2]);
 		std::uint32_t retVal = get_minimum_object_length(currentObjectType);
 
 		switch (currentObjectType)
