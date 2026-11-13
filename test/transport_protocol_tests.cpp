@@ -2239,3 +2239,67 @@ TEST_F(TransportProtocolTest, TransmitFromAnotherThreadSendsOneRequestToSend)
 		EXPECT_EQ(entry.second, 1) << "receiver 0x" << std::hex << static_cast<int>(entry.first);
 	}
 }
+
+TEST_F(TransportProtocolTest, RequestToSendWithInvalidSizeIsAborted)
+{
+	auto originator = test_helpers::create_mock_control_function(0x01);
+	auto receiver = test_helpers::create_mock_internal_control_function(0x0B);
+
+	std::vector<std::uint8_t> abortReasons;
+	auto sendFrameCallback = [&](std::uint32_t parameterGroupNumber,
+	                             CANDataSpan data,
+	                             std::shared_ptr<InternalControlFunction>,
+	                             std::shared_ptr<ControlFunction> destinationControlFunction,
+	                             CANIdentifier::CANPriority) {
+		EXPECT_EQ(parameterGroupNumber, 0xEC00);
+		EXPECT_EQ(destinationControlFunction, originator);
+		EXPECT_EQ(data[0], 255); // Abort control byte
+		abortReasons.push_back(data[1]);
+		return true;
+	};
+
+	CANNetworkConfiguration configuration;
+	TransportProtocolManager manager(sendFrameCallback, nullptr, &configuration);
+
+	for (const std::uint16_t size : { std::uint16_t(8), std::uint16_t(1786), std::uint16_t(0xFFFF) })
+	{
+		manager.process_message(test_helpers::create_message(7,
+		                                                     0xEC00,
+		                                                     receiver,
+		                                                     originator,
+		                                                     { 16, // RTS control byte
+		                                                       static_cast<std::uint8_t>(size & 0xFF),
+		                                                       static_cast<std::uint8_t>(size >> 8),
+		                                                       0xFF, // Number of packets
+		                                                       0xFF,
+		                                                       0xEB,
+		                                                       0xFE,
+		                                                       0x00 }));
+		EXPECT_FALSE(manager.has_session(originator, receiver)) << size;
+	}
+	EXPECT_EQ(abortReasons, std::vector<std::uint8_t>({ 9, 9, 9 }));
+}
+
+TEST_F(TransportProtocolTest, BroadcastWithInvalidSizeIsIgnored)
+{
+	auto originator = test_helpers::create_mock_control_function(0x01);
+
+	CANNetworkConfiguration configuration;
+	TransportProtocolManager manager(nullptr, nullptr, &configuration);
+
+	for (const std::uint16_t size : { std::uint16_t(0), std::uint16_t(8), std::uint16_t(1786) })
+	{
+		manager.process_message(test_helpers::create_message_broadcast(7,
+		                                                               0xEC00,
+		                                                               originator,
+		                                                               { 32, // BAM control byte
+		                                                                 static_cast<std::uint8_t>(size & 0xFF),
+		                                                                 static_cast<std::uint8_t>(size >> 8),
+		                                                                 static_cast<std::uint8_t>((size + 6) / 7), // Number of packets
+		                                                                 0xFF,
+		                                                                 0xEB,
+		                                                                 0xFE,
+		                                                                 0x00 }));
+		EXPECT_FALSE(manager.has_session(originator, nullptr)) << size;
+	}
+}
