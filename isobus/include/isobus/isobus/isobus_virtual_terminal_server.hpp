@@ -97,6 +97,17 @@ namespace isobus
 		/// @returns True if the message was sent, otherwise false
 		bool send_esc_message(std::uint16_t objectId, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
+		/// @brief Sends the Pointing Event message, when the operator touches a Data Mask outside its Buttons and input fields
+		/// @details The touch state is sent from VT version 4 on, and the parent mask and a transaction number from
+		/// VT version 6 on, see ISO 11783-6 H.6. The transaction number goes up with each message.
+		/// @param[in] touchState Released, pressed or still held
+		/// @param[in] xPosition X position in pixels, relative to the top left corner of the Data Mask area
+		/// @param[in] yPosition Y position in pixels, relative to the top left corner of the Data Mask area
+		/// @param[in] parentMaskObjectId Object ID of the touched Data Mask
+		/// @param[in] destination The VT client to send the message to
+		/// @returns True if the message was sent, otherwise false
+		bool send_pointing_event_message(KeyActivationCode touchState, std::uint16_t xPosition, std::uint16_t yPosition, std::uint16_t parentMaskObjectId, std::shared_ptr<ControlFunction> destination);
+
 		/// @brief The Button Activation message allows the VT to transmit operator selection of a key object to the Working
 		/// Set Master
 		/// @param[in] activationCode 0 for released, 1 for "pressed", 2 for "still held", or 3 for "aborted"
@@ -945,6 +956,7 @@ namespace isobus
 		std::uint8_t activeWorkingSetMasterAddress = NULL_CAN_ADDRESS; ///< The address of the active working set's master
 		std::uint8_t busyCodesBitfield = 0; ///< The busy codes bitfield
 		std::uint8_t currentCommandFunctionCode = 0; ///< The current command function code being processed
+		std::uint8_t pointingEventTransactionNumber = 0; ///< The TAN of the next Pointing Event message, VT version 6 and later
 		bool initialized = false; ///< True if the server has been initialized, otherwise false
 
 	private:

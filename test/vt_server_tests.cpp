@@ -2640,6 +2640,66 @@ TEST_F(VirtualTerminalServerMessagingTest, ESCMessageIsSentToTheWorkingSet)
 	CANHardwareInterface::stop();
 }
 
+TEST_F(VirtualTerminalServerMessagingTest, PointingEventMessageMatchesTheVTVersion)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x52, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xCC, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+	testPlugin.clear_queue();
+
+	CANMessageFrame frame = {};
+
+	// VT version 3 only reports the position
+	serverUnderTest.version = VirtualTerminalBase::VTVersion::Version3;
+	ASSERT_TRUE(serverUnderTest.send_pointing_event_message(VirtualTerminalBase::KeyActivationCode::ButtonUnlatchedOrReleased, 0x0123, 0x0045, 0x1234, client));
+	time_source.update_for_ms(5);
+	ASSERT_TRUE(testPlugin.read_frame(frame));
+	EXPECT_EQ(0xE6, get_pdu_format(frame)); // VT to ECU
+	EXPECT_EQ(client->get_address(), static_cast<std::uint8_t>(frame.identifier >> 8));
+	EXPECT_EQ(0x02, frame.data[0]);
+	EXPECT_EQ(0x23, frame.data[1]);
+	EXPECT_EQ(0x01, frame.data[2]);
+	EXPECT_EQ(0x45, frame.data[3]);
+	EXPECT_EQ(0x00, frame.data[4]);
+	EXPECT_EQ(0xFF, frame.data[5]);
+	EXPECT_EQ(0xFF, frame.data[6]);
+	EXPECT_EQ(0xFF, frame.data[7]);
+
+	// VT version 4 and 5 add the touch state
+	serverUnderTest.version = VirtualTerminalBase::VTVersion::Version5;
+	ASSERT_TRUE(serverUnderTest.send_pointing_event_message(VirtualTerminalBase::KeyActivationCode::ButtonStillHeld, 0x0123, 0x0045, 0x1234, client));
+	time_source.update_for_ms(5);
+	ASSERT_TRUE(testPlugin.read_frame(frame));
+	EXPECT_EQ(0x02, frame.data[5]);
+	EXPECT_EQ(0xFF, frame.data[6]);
+	EXPECT_EQ(0xFF, frame.data[7]);
+
+	// VT version 6 adds the parent mask and a new transaction number for each message
+	serverUnderTest.version = VirtualTerminalBase::VTVersion::Version6;
+	ASSERT_TRUE(serverUnderTest.send_pointing_event_message(VirtualTerminalBase::KeyActivationCode::ButtonPressedOrLatched, 0x0123, 0x0045, 0x1234, client));
+	time_source.update_for_ms(5);
+	ASSERT_TRUE(testPlugin.read_frame(frame));
+	EXPECT_EQ(0x01, frame.data[5]);
+	EXPECT_EQ(0x34, frame.data[6]);
+	EXPECT_EQ(0x12, frame.data[7]);
+
+	ASSERT_TRUE(serverUnderTest.send_pointing_event_message(VirtualTerminalBase::KeyActivationCode::ButtonUnlatchedOrReleased, 0x0123, 0x0045, 0x1234, client));
+	time_source.update_for_ms(5);
+	ASSERT_TRUE(testPlugin.read_frame(frame));
+	EXPECT_EQ(0x10, frame.data[5]);
+
+	CANHardwareInterface::stop();
+}
+
 TEST_F(VirtualTerminalServerMessagingTest, ESCCommandIsAnsweredWithTheObjectWhoseInputWasAborted)
 {
 	VirtualCANPlugin testPlugin;

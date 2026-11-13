@@ -2729,6 +2729,45 @@ namespace isobus
 		return retVal;
 	}
 
+	bool VirtualTerminalServer::send_pointing_event_message(KeyActivationCode touchState, std::uint16_t xPosition, std::uint16_t yPosition, std::uint16_t parentMaskObjectId, std::shared_ptr<ControlFunction> destination)
+	{
+		bool retVal = false;
+
+		if (nullptr != destination)
+		{
+			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+				static_cast<std::uint8_t>(Function::PointingEventMessage),
+				get_low_byte(xPosition),
+				get_high_byte(xPosition),
+				get_low_byte(yPosition),
+				get_high_byte(yPosition),
+				0xFF, // VT version 3 and prior only report presses
+				0xFF,
+				0xFF
+			};
+
+			if (get_version() >= VTVersion::Version6)
+			{
+				buffer[5] = static_cast<std::uint8_t>((pointingEventTransactionNumber << 4) | (static_cast<std::uint8_t>(touchState) & 0x0F));
+				buffer[6] = get_low_byte(parentMaskObjectId);
+				buffer[7] = get_high_byte(parentMaskObjectId);
+				pointingEventTransactionNumber = (pointingEventTransactionNumber + 1) & 0x0F;
+			}
+			else if (get_version() >= VTVersion::Version4)
+			{
+				buffer[5] = static_cast<std::uint8_t>(touchState);
+			}
+
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        serverInternalControlFunction,
+			                                                        destination,
+			                                                        get_priority());
+		}
+		return retVal;
+	}
+
 	bool VirtualTerminalServer::send_soft_key_activation_message(KeyActivationCode activationCode, std::uint16_t objectId, std::uint16_t parentObjectId, std::uint8_t keyNumber, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
