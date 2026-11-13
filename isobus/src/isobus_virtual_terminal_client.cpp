@@ -4098,6 +4098,8 @@ namespace isobus
 		constexpr std::size_t KEY_CHILDREN_OFFSET = 7; // ID, type, background colour, key code, number of objects, number of macros
 		constexpr std::size_t CONTAINER_NUMBER_OF_OBJECTS_OFFSET = 8; // ID, type, width, height, hidden
 		constexpr std::size_t CONTAINER_CHILDREN_OFFSET = 10; // ID, type, width, height, hidden, number of objects, number of macros
+		constexpr std::size_t ANIMATION_NUMBER_OF_OBJECTS_OFFSET = 15; // ID, type, width, height, refresh interval, value, enabled, first, last and default child index, options
+		constexpr std::size_t ANIMATION_CHILDREN_OFFSET = 17; // As above, then number of objects, number of macros
 		constexpr std::size_t CHILD_REFERENCE_LENGTH = 6; // ID, X, Y
 		constexpr std::size_t FONT_ATTRIBUTES_OFFSET = 8; // Output and input strings and numbers: ID, type, width, height, background colour
 		constexpr std::size_t OBJECT_POINTER_VALUE_OFFSET = 3; // ID, type
@@ -4152,7 +4154,7 @@ namespace isobus
 			}
 		}
 
-		// Follow the key children down through containers and object pointers, collecting the fonts they use
+		// Follow the key children down through containers, animations and object pointers, collecting the fonts they use
 		std::set<std::uint16_t> shownOnKeys;
 		std::set<std::uint16_t> fontsOnKeys;
 
@@ -4178,6 +4180,23 @@ namespace isobus
 						for (std::size_t i = 0; i < (*object.pool)[object.offset + CONTAINER_NUMBER_OF_OBJECTS_OFFSET]; i++)
 						{
 							const std::size_t childOffset = CONTAINER_CHILDREN_OFFSET + (CHILD_REFERENCE_LENGTH * i);
+
+							if ((childOffset + OBJECT_ID_LENGTH) <= object.size)
+							{
+								pending.push_back(read_id(object, childOffset));
+							}
+						}
+					}
+				}
+				break;
+
+				case VirtualTerminalObjectType::Animation:
+				{
+					if (object.size > ANIMATION_NUMBER_OF_OBJECTS_OFFSET)
+					{
+						for (std::size_t i = 0; i < (*object.pool)[object.offset + ANIMATION_NUMBER_OF_OBJECTS_OFFSET]; i++)
+						{
+							const std::size_t childOffset = ANIMATION_CHILDREN_OFFSET + (CHILD_REFERENCE_LENGTH * i);
 
 							if ((childOffset + OBJECT_ID_LENGTH) <= object.size)
 							{
@@ -4367,6 +4386,13 @@ namespace isobus
 			while ((poolIterator != objectPool.scaledObjectPool.end()) &&
 			       retVal)
 			{
+				// Sized first, so that resize_object() never writes past the end of a truncated pool
+				const std::uint32_t objectSize = get_number_bytes_in_object(&poolIterator[0], static_cast<std::uint32_t>(objectPool.scaledObjectPool.end() - poolIterator));
+				if (0 == objectSize)
+				{
+					retVal = false;
+					break;
+				}
 				const std::uint16_t objectID = read_little_endian_uint16(&poolIterator[0]);
 
 				if ((VirtualTerminalObjectType::Key == static_cast<VirtualTerminalObjectType>(poolIterator[2])) ||
@@ -4383,8 +4409,6 @@ namespace isobus
 					                        static_cast<VirtualTerminalObjectType>(poolIterator[2]));
 				}
 
-				std::uint32_t objectSize = get_number_bytes_in_object(&poolIterator[0], static_cast<std::uint32_t>(objectPool.scaledObjectPool.end() - poolIterator));
-				retVal &= (0 != objectSize);
 				if (retVal)
 				{
 					if (get_is_object_scalable(static_cast<VirtualTerminalObjectType>(*(poolIterator + 2))))
@@ -4603,6 +4627,7 @@ namespace isobus
 			case VirtualTerminalObjectType::OutputLinearBarGraph:
 			case VirtualTerminalObjectType::OutputArchedBarGraph:
 			case VirtualTerminalObjectType::PictureGraphic:
+			case VirtualTerminalObjectType::Animation:
 			case VirtualTerminalObjectType::AuxiliaryFunctionType1:
 			case VirtualTerminalObjectType::AuxiliaryInputType1:
 			case VirtualTerminalObjectType::AuxiliaryFunctionType2:
@@ -4664,197 +4689,239 @@ namespace isobus
 
 		if (scaleFactor > SCALE_FACTOR_POSITIVE_FUDGE || scaleFactor < SCALE_FACTOR_NEGATIVE_FUDGE)
 		{
-			const std::unordered_map<FontSize, std::map<float, FontSize, std::greater<float>>> FONT_SCALING_MAPPER{
-				{ FontSize::Size6x8,
-				  { { 23.95f, FontSize::Size128x192 },
-				    { 21.30f, FontSize::Size128x128 },
-				    { 15.95f, FontSize::Size96x128 },
-				    { 11.95f, FontSize::Size64x96 },
-				    { 10.60f, FontSize::Size64x64 },
-				    { 7.95f, FontSize::Size48x64 },
-				    { 5.95f, FontSize::Size32x48 },
-				    { 5.30f, FontSize::Size32x32 },
-				    { 3.95f, FontSize::Size24x32 },
-				    { 2.95f, FontSize::Size16x24 },
-				    { 2.60f, FontSize::Size16x16 },
-				    { 1.95f, FontSize::Size12x16 },
-				    { 1.45f, FontSize::Size8x12 },
-				    { 1.30f, FontSize::Size8x8 } } },
-				{ FontSize::Size8x8,
-				  { { 23.95f, FontSize::Size128x192 },
-				    { 15.95f, FontSize::Size128x128 },
-				    { 11.95f, FontSize::Size64x96 },
-				    { 7.95f, FontSize::Size64x64 },
-				    { 5.95f, FontSize::Size32x48 },
-				    { 3.95f, FontSize::Size32x32 },
-				    { 2.95f, FontSize::Size16x24 },
-				    { 1.95f, FontSize::Size16x16 },
-				    { 1.45f, FontSize::Size8x12 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size8x12,
-				  { { 15.95f, FontSize::Size128x192 },
-				    { 11.95f, FontSize::Size96x128 },
-				    { 7.95f, FontSize::Size64x96 },
-				    { 5.95f, FontSize::Size48x64 },
-				    { 3.95f, FontSize::Size32x48 },
-				    { 2.95f, FontSize::Size24x32 },
-				    { 1.95f, FontSize::Size16x24 },
-				    { 1.45f, FontSize::Size12x16 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size12x16,
-				  { { 11.95f, FontSize::Size128x192 },
-				    { 10.60f, FontSize::Size128x128 },
-				    { 7.95f, FontSize::Size96x128 },
-				    { 5.95f, FontSize::Size64x96 },
-				    { 5.30f, FontSize::Size64x64 },
-				    { 3.95f, FontSize::Size48x64 },
-				    { 2.95f, FontSize::Size32x48 },
-				    { 2.60f, FontSize::Size32x32 },
-				    { 1.95f, FontSize::Size24x32 },
-				    { 1.45f, FontSize::Size16x24 },
-				    { 1.30f, FontSize::Size16x16 },
-				    { 0.75f, FontSize::Size8x12 },
-				    { 0.67f, FontSize::Size8x8 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size16x16,
-				  { { 11.95f, FontSize::Size128x192 },
-				    { 7.95f, FontSize::Size128x128 },
-				    { 5.95f, FontSize::Size64x96 },
-				    { 3.95f, FontSize::Size64x64 },
-				    { 2.95f, FontSize::Size32x48 },
-				    { 1.95f, FontSize::Size32x32 },
-				    { 1.45f, FontSize::Size16x24 },
-				    { 0.75f, FontSize::Size8x12 },
-				    { 0.50f, FontSize::Size8x8 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size16x24,
-				  { { 7.95f, FontSize::Size128x128 },
-				    { 5.95f, FontSize::Size96x128 },
-				    { 3.95f, FontSize::Size64x96 },
-				    { 2.95f, FontSize::Size48x64 },
-				    { 1.95f, FontSize::Size32x48 },
-				    { 1.45f, FontSize::Size24x32 },
-				    { 0.75f, FontSize::Size12x16 },
-				    { 0.50f, FontSize::Size8x12 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size24x32,
-				  { { 5.95f, FontSize::Size128x192 },
-				    { 5.30f, FontSize::Size128x128 },
-				    { 3.95f, FontSize::Size96x128 },
-				    { 2.95f, FontSize::Size64x96 },
-				    { 2.60f, FontSize::Size64x64 },
-				    { 1.95f, FontSize::Size48x64 },
-				    { 1.45f, FontSize::Size32x48 },
-				    { 1.30f, FontSize::Size32x32 },
-				    { 0.75f, FontSize::Size16x24 },
-				    { 0.60f, FontSize::Size16x16 },
-				    { 0.50f, FontSize::Size12x16 },
-				    { 0.37f, FontSize::Size8x12 },
-				    { 0.30f, FontSize::Size8x8 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size32x32,
-				  { { 5.95f, FontSize::Size128x192 },
-				    { 3.95f, FontSize::Size128x128 },
-				    { 2.95f, FontSize::Size64x96 },
-				    { 1.95f, FontSize::Size64x64 },
-				    { 1.45f, FontSize::Size32x48 },
-				    { 0.75f, FontSize::Size16x24 },
-				    { 0.50f, FontSize::Size16x16 },
-				    { 0.37f, FontSize::Size8x12 },
-				    { 0.20f, FontSize::Size8x8 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size32x48,
-				  { { 3.95f, FontSize::Size128x192 },
-				    { 2.95f, FontSize::Size96x128 },
-				    { 1.95f, FontSize::Size64x96 },
-				    { 1.45f, FontSize::Size48x64 },
-				    { 0.75f, FontSize::Size24x32 },
-				    { 0.50f, FontSize::Size16x24 },
-				    { 0.37f, FontSize::Size12x16 },
-				    { 0.20f, FontSize::Size8x12 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size48x64,
-				  { { 2.95f, FontSize::Size128x192 },
-				    { 2.60f, FontSize::Size128x128 },
-				    { 1.95f, FontSize::Size96x128 },
-				    { 1.45f, FontSize::Size64x96 },
-				    { 1.30f, FontSize::Size64x64 },
-				    { 0.75f, FontSize::Size32x48 },
-				    { 0.60f, FontSize::Size32x32 },
-				    { 0.50f, FontSize::Size24x32 },
-				    { 0.37f, FontSize::Size16x24 },
-				    { 0.33f, FontSize::Size16x16 },
-				    { 0.25f, FontSize::Size12x16 },
-				    { 0.18f, FontSize::Size8x12 },
-				    { 0.16f, FontSize::Size8x8 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size64x64,
-				  { { 2.95f, FontSize::Size128x192 },
-				    { 1.95f, FontSize::Size128x128 },
-				    { 1.45f, FontSize::Size64x96 },
-				    { 0.75f, FontSize::Size32x48 },
-				    { 0.50f, FontSize::Size32x32 },
-				    { 0.37f, FontSize::Size16x24 },
-				    { 0.25f, FontSize::Size16x16 },
-				    { 0.18f, FontSize::Size8x12 },
-				    { 0.12f, FontSize::Size8x8 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size64x96,
-				  { { 1.95f, FontSize::Size128x192 },
-				    { 1.45f, FontSize::Size96x128 },
-				    { 0.75f, FontSize::Size48x64 },
-				    { 0.50f, FontSize::Size32x48 },
-				    { 0.37f, FontSize::Size24x32 },
-				    { 0.25f, FontSize::Size16x24 },
-				    { 0.18f, FontSize::Size12x16 },
-				    { 0.12f, FontSize::Size8x12 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size96x128,
-				  { { 1.45f, FontSize::Size128x192 },
-				    { 1.30f, FontSize::Size128x128 },
-				    { 0.75f, FontSize::Size64x96 },
-				    { 0.60f, FontSize::Size64x64 },
-				    { 0.50f, FontSize::Size48x64 },
-				    { 0.37f, FontSize::Size32x48 },
-				    { 0.33f, FontSize::Size32x32 },
-				    { 0.25f, FontSize::Size24x32 },
-				    { 0.18f, FontSize::Size16x24 },
-				    { 0.16f, FontSize::Size16x16 },
-				    { 0.125f, FontSize::Size12x16 },
-				    { 0.09f, FontSize::Size8x12 },
-				    { 0.08f, FontSize::Size8x8 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size128x128,
-				  { { 1.45f, FontSize::Size128x192 },
-				    { 0.75f, FontSize::Size64x96 },
-				    { 0.50f, FontSize::Size64x64 },
-				    { 0.37f, FontSize::Size32x48 },
-				    { 0.25f, FontSize::Size32x32 },
-				    { 0.18f, FontSize::Size16x24 },
-				    { 0.125f, FontSize::Size16x16 },
-				    { 0.09f, FontSize::Size8x12 },
-				    { 0.06f, FontSize::Size8x8 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size128x192,
-				  { { 0.75f, FontSize::Size96x128 },
-				    { 0.50f, FontSize::Size64x96 },
-				    { 0.37f, FontSize::Size48x64 },
-				    { 0.25f, FontSize::Size32x48 },
-				    { 0.18f, FontSize::Size24x32 },
-				    { 0.125f, FontSize::Size16x24 },
-				    { 0.09f, FontSize::Size12x16 },
-				    { 0.06f, FontSize::Size8x12 },
-				    { 0.0f, FontSize::Size6x8 } } }
+			// Constant tables, so nothing is allocated here: this runs for every font attributes object
+			// in a pool that is auto-scaled.
+			/// @brief One step of a font's scaling table
+			struct FontStep
+			{
+				float threshold; ///< The lowest scale factor this step applies to
+				FontSize font; ///< The font to use from that scale factor up
+			};
+			/// @brief Where one original font's steps are in FONT_STEPS
+			struct FontRow
+			{
+				FontSize original; ///< The font size found in the object pool
+				std::uint16_t first; ///< The index of its first step
+				std::uint16_t count; ///< The number of steps it has
+			};
+			// The steps of each original font, in descending order of scale factor
+			static constexpr FontStep FONT_STEPS[] = {
+				// Size6x8
+				{ 23.95f, FontSize::Size128x192 },
+				{ 21.30f, FontSize::Size128x128 },
+				{ 15.95f, FontSize::Size96x128 },
+				{ 11.95f, FontSize::Size64x96 },
+				{ 10.60f, FontSize::Size64x64 },
+				{ 7.95f, FontSize::Size48x64 },
+				{ 5.95f, FontSize::Size32x48 },
+				{ 5.30f, FontSize::Size32x32 },
+				{ 3.95f, FontSize::Size24x32 },
+				{ 2.95f, FontSize::Size16x24 },
+				{ 2.60f, FontSize::Size16x16 },
+				{ 1.95f, FontSize::Size12x16 },
+				{ 1.45f, FontSize::Size8x12 },
+				{ 1.30f, FontSize::Size8x8 },
+				// Size8x8
+				{ 23.95f, FontSize::Size128x192 },
+				{ 15.95f, FontSize::Size128x128 },
+				{ 11.95f, FontSize::Size64x96 },
+				{ 7.95f, FontSize::Size64x64 },
+				{ 5.95f, FontSize::Size32x48 },
+				{ 3.95f, FontSize::Size32x32 },
+				{ 2.95f, FontSize::Size16x24 },
+				{ 1.95f, FontSize::Size16x16 },
+				{ 1.45f, FontSize::Size8x12 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size8x12
+				{ 15.95f, FontSize::Size128x192 },
+				{ 11.95f, FontSize::Size96x128 },
+				{ 7.95f, FontSize::Size64x96 },
+				{ 5.95f, FontSize::Size48x64 },
+				{ 3.95f, FontSize::Size32x48 },
+				{ 2.95f, FontSize::Size24x32 },
+				{ 1.95f, FontSize::Size16x24 },
+				{ 1.45f, FontSize::Size12x16 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size12x16
+				{ 11.95f, FontSize::Size128x192 },
+				{ 10.60f, FontSize::Size128x128 },
+				{ 7.95f, FontSize::Size96x128 },
+				{ 5.95f, FontSize::Size64x96 },
+				{ 5.30f, FontSize::Size64x64 },
+				{ 3.95f, FontSize::Size48x64 },
+				{ 2.95f, FontSize::Size32x48 },
+				{ 2.60f, FontSize::Size32x32 },
+				{ 1.95f, FontSize::Size24x32 },
+				{ 1.45f, FontSize::Size16x24 },
+				{ 1.30f, FontSize::Size16x16 },
+				{ 0.75f, FontSize::Size8x12 },
+				{ 0.67f, FontSize::Size8x8 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size16x16
+				{ 11.95f, FontSize::Size128x192 },
+				{ 7.95f, FontSize::Size128x128 },
+				{ 5.95f, FontSize::Size64x96 },
+				{ 3.95f, FontSize::Size64x64 },
+				{ 2.95f, FontSize::Size32x48 },
+				{ 1.95f, FontSize::Size32x32 },
+				{ 1.45f, FontSize::Size16x24 },
+				{ 0.75f, FontSize::Size8x12 },
+				{ 0.50f, FontSize::Size8x8 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size16x24
+				{ 7.95f, FontSize::Size128x128 },
+				{ 5.95f, FontSize::Size96x128 },
+				{ 3.95f, FontSize::Size64x96 },
+				{ 2.95f, FontSize::Size48x64 },
+				{ 1.95f, FontSize::Size32x48 },
+				{ 1.45f, FontSize::Size24x32 },
+				{ 0.75f, FontSize::Size12x16 },
+				{ 0.50f, FontSize::Size8x12 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size24x32
+				{ 5.95f, FontSize::Size128x192 },
+				{ 5.30f, FontSize::Size128x128 },
+				{ 3.95f, FontSize::Size96x128 },
+				{ 2.95f, FontSize::Size64x96 },
+				{ 2.60f, FontSize::Size64x64 },
+				{ 1.95f, FontSize::Size48x64 },
+				{ 1.45f, FontSize::Size32x48 },
+				{ 1.30f, FontSize::Size32x32 },
+				{ 0.75f, FontSize::Size16x24 },
+				{ 0.60f, FontSize::Size16x16 },
+				{ 0.50f, FontSize::Size12x16 },
+				{ 0.37f, FontSize::Size8x12 },
+				{ 0.30f, FontSize::Size8x8 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size32x32
+				{ 5.95f, FontSize::Size128x192 },
+				{ 3.95f, FontSize::Size128x128 },
+				{ 2.95f, FontSize::Size64x96 },
+				{ 1.95f, FontSize::Size64x64 },
+				{ 1.45f, FontSize::Size32x48 },
+				{ 0.75f, FontSize::Size16x24 },
+				{ 0.50f, FontSize::Size16x16 },
+				{ 0.37f, FontSize::Size8x12 },
+				{ 0.20f, FontSize::Size8x8 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size32x48
+				{ 3.95f, FontSize::Size128x192 },
+				{ 2.95f, FontSize::Size96x128 },
+				{ 1.95f, FontSize::Size64x96 },
+				{ 1.45f, FontSize::Size48x64 },
+				{ 0.75f, FontSize::Size24x32 },
+				{ 0.50f, FontSize::Size16x24 },
+				{ 0.37f, FontSize::Size12x16 },
+				{ 0.20f, FontSize::Size8x12 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size48x64
+				{ 2.95f, FontSize::Size128x192 },
+				{ 2.60f, FontSize::Size128x128 },
+				{ 1.95f, FontSize::Size96x128 },
+				{ 1.45f, FontSize::Size64x96 },
+				{ 1.30f, FontSize::Size64x64 },
+				{ 0.75f, FontSize::Size32x48 },
+				{ 0.60f, FontSize::Size32x32 },
+				{ 0.50f, FontSize::Size24x32 },
+				{ 0.37f, FontSize::Size16x24 },
+				{ 0.33f, FontSize::Size16x16 },
+				{ 0.25f, FontSize::Size12x16 },
+				{ 0.18f, FontSize::Size8x12 },
+				{ 0.16f, FontSize::Size8x8 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size64x64
+				{ 2.95f, FontSize::Size128x192 },
+				{ 1.95f, FontSize::Size128x128 },
+				{ 1.45f, FontSize::Size64x96 },
+				{ 0.75f, FontSize::Size32x48 },
+				{ 0.50f, FontSize::Size32x32 },
+				{ 0.37f, FontSize::Size16x24 },
+				{ 0.25f, FontSize::Size16x16 },
+				{ 0.18f, FontSize::Size8x12 },
+				{ 0.12f, FontSize::Size8x8 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size64x96
+				{ 1.95f, FontSize::Size128x192 },
+				{ 1.45f, FontSize::Size96x128 },
+				{ 0.75f, FontSize::Size48x64 },
+				{ 0.50f, FontSize::Size32x48 },
+				{ 0.37f, FontSize::Size24x32 },
+				{ 0.25f, FontSize::Size16x24 },
+				{ 0.18f, FontSize::Size12x16 },
+				{ 0.12f, FontSize::Size8x12 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size96x128
+				{ 1.45f, FontSize::Size128x192 },
+				{ 1.30f, FontSize::Size128x128 },
+				{ 0.75f, FontSize::Size64x96 },
+				{ 0.60f, FontSize::Size64x64 },
+				{ 0.50f, FontSize::Size48x64 },
+				{ 0.37f, FontSize::Size32x48 },
+				{ 0.33f, FontSize::Size32x32 },
+				{ 0.25f, FontSize::Size24x32 },
+				{ 0.18f, FontSize::Size16x24 },
+				{ 0.16f, FontSize::Size16x16 },
+				{ 0.125f, FontSize::Size12x16 },
+				{ 0.09f, FontSize::Size8x12 },
+				{ 0.08f, FontSize::Size8x8 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size128x128
+				{ 1.45f, FontSize::Size128x192 },
+				{ 0.75f, FontSize::Size64x96 },
+				{ 0.50f, FontSize::Size64x64 },
+				{ 0.37f, FontSize::Size32x48 },
+				{ 0.25f, FontSize::Size32x32 },
+				{ 0.18f, FontSize::Size16x24 },
+				{ 0.125f, FontSize::Size16x16 },
+				{ 0.09f, FontSize::Size8x12 },
+				{ 0.06f, FontSize::Size8x8 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size128x192
+				{ 0.75f, FontSize::Size96x128 },
+				{ 0.50f, FontSize::Size64x96 },
+				{ 0.37f, FontSize::Size48x64 },
+				{ 0.25f, FontSize::Size32x48 },
+				{ 0.18f, FontSize::Size24x32 },
+				{ 0.125f, FontSize::Size16x24 },
+				{ 0.09f, FontSize::Size12x16 },
+				{ 0.06f, FontSize::Size8x12 },
+				{ 0.0f, FontSize::Size6x8 },
+			};
+			static constexpr FontRow FONT_ROWS[] = {
+				{ FontSize::Size6x8, 0, 14 },
+				{ FontSize::Size8x8, 14, 10 },
+				{ FontSize::Size8x12, 24, 9 },
+				{ FontSize::Size12x16, 33, 14 },
+				{ FontSize::Size16x16, 47, 10 },
+				{ FontSize::Size16x24, 57, 9 },
+				{ FontSize::Size24x32, 66, 14 },
+				{ FontSize::Size32x32, 80, 10 },
+				{ FontSize::Size32x48, 90, 9 },
+				{ FontSize::Size48x64, 99, 14 },
+				{ FontSize::Size64x64, 113, 10 },
+				{ FontSize::Size64x96, 123, 9 },
+				{ FontSize::Size96x128, 132, 14 },
+				{ FontSize::Size128x128, 146, 10 },
+				{ FontSize::Size128x192, 156, 9 },
 			};
 
-			auto iterator = FONT_SCALING_MAPPER.find(originalFont);
-			if (iterator != FONT_SCALING_MAPPER.end())
+			const FontRow *row = nullptr;
+			for (const auto &candidate : FONT_ROWS)
 			{
-				for (auto &pair : iterator->second)
+				if (candidate.original == originalFont)
 				{
-					if (scaleFactor >= pair.first)
+					row = &candidate;
+					break;
+				}
+			}
+			if (nullptr != row)
+			{
+				for (std::uint16_t i = 0; i < row->count; i++)
+				{
+					const FontStep &pair = FONT_STEPS[row->first + i];
+					if (scaleFactor >= pair.threshold)
 					{
-						retVal = pair.second;
+						retVal = pair.font;
 						break;
 					}
 				}
@@ -4892,7 +4959,6 @@ namespace isobus
 
 			case VirtualTerminalObjectType::OutputList:
 			case VirtualTerminalObjectType::ExternalReferenceNAME:
-			case VirtualTerminalObjectType::ObjectLabelRefrenceList:
 			{
 				retVal = 12;
 			}
@@ -4913,7 +4979,6 @@ namespace isobus
 			break;
 
 			case VirtualTerminalObjectType::SoftKeyMask:
-			case VirtualTerminalObjectType::ColourMap:
 			case VirtualTerminalObjectType::InputAttributes:
 			{
 				retVal = 6;
@@ -5009,6 +5074,8 @@ namespace isobus
 			case VirtualTerminalObjectType::ExtendedInputAttributes:
 			case VirtualTerminalObjectType::ObjectPointer:
 			case VirtualTerminalObjectType::Macro:
+			case VirtualTerminalObjectType::ColourMap:
+			case VirtualTerminalObjectType::ObjectLabelRefrenceList:
 			{
 				retVal = 5;
 			}
@@ -5052,9 +5119,32 @@ namespace isobus
 		return retVal;
 	}
 
-	std::uint32_t VirtualTerminalClient::get_number_bytes_in_object(std::uint8_t *buffer, std::uint32_t bufferLength)
+	std::uint32_t VirtualTerminalClient::get_number_bytes_in_object(const std::uint8_t *buffer, std::uint32_t bufferLength)
 	{
-		auto currentObjectType = static_cast<VirtualTerminalObjectType>(buffer[2]);
+		constexpr std::uint32_t OBJECT_HEADER_LENGTH = 3;
+		std::uint32_t retVal = 0;
+
+		if ((bufferLength < OBJECT_HEADER_LENGTH) ||
+		    (get_minimum_object_length(static_cast<VirtualTerminalObjectType>(buffer[2])) > bufferLength))
+		{
+			LOG_ERROR("[VT]: The object pool ends inside an object");
+		}
+		else
+		{
+			retVal = get_declared_object_length(buffer, bufferLength);
+
+			if (retVal > bufferLength)
+			{
+				LOG_ERROR("[VT]: Object " + isobus::to_string(static_cast<int>(buffer[0] | (buffer[1] << 8))) + " runs past the end of the object pool");
+				retVal = 0;
+			}
+		}
+		return retVal;
+	}
+
+	std::uint32_t VirtualTerminalClient::get_declared_object_length(const std::uint8_t *buffer, std::uint32_t bufferLength)
+	{
+		const auto currentObjectType = static_cast<VirtualTerminalObjectType>(buffer[2]);
 		std::uint32_t retVal = get_minimum_object_length(currentObjectType);
 
 		switch (currentObjectType)
@@ -5119,7 +5209,7 @@ namespace isobus
 			case VirtualTerminalObjectType::InputString:
 			{
 				const std::uint32_t sizeOfValue = buffer[16];
-				const std::uint32_t sizeOfMacros = (buffer[18 + sizeOfValue] * 2);
+				const std::uint32_t sizeOfMacros = ((18 + sizeOfValue) < bufferLength) ? (buffer[18 + sizeOfValue] * 2) : 0;
 				retVal += (sizeOfValue + sizeOfMacros);
 			}
 			break;
@@ -5142,7 +5232,7 @@ namespace isobus
 			case VirtualTerminalObjectType::OutputString:
 			{
 				const std::uint32_t sizeOfValue = (static_cast<std::uint16_t>(buffer[14]) | static_cast<std::uint16_t>(buffer[15] << 8));
-				const std::uint32_t sizeOfMacros = (buffer[16 + sizeOfValue] * 2);
+				const std::uint32_t sizeOfMacros = ((16 + sizeOfValue) < bufferLength) ? (buffer[16 + sizeOfValue] * 2) : 0;
 				retVal += (sizeOfMacros + sizeOfValue);
 			}
 			break;
@@ -5219,7 +5309,8 @@ namespace isobus
 				                                     (static_cast<std::uint32_t>(buffer[13]) << 8) |
 				                                     (static_cast<std::uint32_t>(buffer[14]) << 16) |
 				                                     (static_cast<std::uint32_t>(buffer[15]) << 24));
-				retVal += (sizeOfRawData + sizeOfMacros);
+				// Capped, so that a huge length can't wrap the sum back under bufferLength
+				retVal += (std::min(sizeOfRawData, bufferLength) + sizeOfMacros);
 			}
 			break;
 
@@ -5253,7 +5344,7 @@ namespace isobus
 			case VirtualTerminalObjectType::InputAttributes:
 			{
 				const std::uint32_t sizeOfValidationString = buffer[4];
-				const std::uint32_t sizeOfMacros = (buffer[5 + sizeOfValidationString] * 2);
+				const std::uint32_t sizeOfMacros = ((5 + sizeOfValidationString) < bufferLength) ? (buffer[5 + sizeOfValidationString] * 2) : 0;
 				retVal += (sizeOfMacros + sizeOfValidationString);
 			}
 			break;
@@ -5312,7 +5403,7 @@ namespace isobus
 
 			case VirtualTerminalObjectType::ObjectLabelRefrenceList:
 			{
-				const std::uint32_t sizeOfLabeledObjects = ((static_cast<std::uint16_t>(buffer[4]) | static_cast<std::uint16_t>(buffer[5]) << 8) * 7);
+				const std::uint32_t sizeOfLabeledObjects = ((static_cast<std::uint16_t>(buffer[3]) | static_cast<std::uint16_t>(buffer[4]) << 8) * 7);
 				retVal += sizeOfLabeledObjects;
 			}
 			break;
@@ -5334,6 +5425,7 @@ namespace isobus
 
 			case VirtualTerminalObjectType::AuxiliaryFunctionType1:
 			case VirtualTerminalObjectType::AuxiliaryFunctionType2:
+			case VirtualTerminalObjectType::AuxiliaryInputType2:
 			{
 				const std::uint32_t sizeOfObjects = (buffer[5] * 6);
 				retVal += sizeOfObjects;
@@ -5341,7 +5433,6 @@ namespace isobus
 			break;
 
 			case VirtualTerminalObjectType::AuxiliaryInputType1:
-			case VirtualTerminalObjectType::AuxiliaryInputType2:
 			{
 				const std::uint32_t sizeOfObjects = (buffer[6] * 6);
 				retVal += sizeOfObjects;
@@ -5547,12 +5638,13 @@ namespace isobus
 					// Iterate over the list of children and move them proportionally to the new size
 					for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
 					{
-						auto childX = static_cast<std::int16_t>((static_cast<std::int16_t>(buffer[20 + (6 * i)]) | (static_cast<std::int16_t>(buffer[21 + (6 * i)]) << 8)) * scaleFactor);
-						auto childY = static_cast<std::int16_t>((static_cast<std::int16_t>(buffer[22 + (6 * i)]) | (static_cast<std::int16_t>(buffer[23 + (6 * i)]) << 8)) * scaleFactor);
-						buffer[20 + (6 * i)] = (childX & 0xFF);
-						buffer[21 + (6 * i)] = (childX >> 8);
-						buffer[22 + (6 * i)] = (childY & 0xFF);
-						buffer[23 + (6 * i)] = (childY >> 8);
+						// The children follow the 17 byte header: ID, then X at 19 and Y at 21, both signed
+						const std::uint16_t childX = scale_command_position(read_little_endian_uint16(&buffer[19 + (6 * i)]), scaleFactor);
+						const std::uint16_t childY = scale_command_position(read_little_endian_uint16(&buffer[21 + (6 * i)]), scaleFactor);
+						buffer[19 + (6 * i)] = static_cast<std::uint8_t>(childX & 0xFF);
+						buffer[20 + (6 * i)] = static_cast<std::uint8_t>(childX >> 8);
+						buffer[21 + (6 * i)] = static_cast<std::uint8_t>(childY & 0xFF);
+						buffer[22 + (6 * i)] = static_cast<std::uint8_t>(childY >> 8);
 					}
 					retVal = true;
 				}

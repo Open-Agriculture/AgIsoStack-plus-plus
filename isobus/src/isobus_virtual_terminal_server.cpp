@@ -22,6 +22,9 @@
 
 namespace isobus
 {
+	/// @brief How deep macros may nest. The standard sets no limit, but each level takes about 2 KB of stack.
+	constexpr std::uint8_t MAX_NESTED_MACROS = 16;
+
 	/// @brief Extracts the low byte from a 16-bit value.
 	/// @param value The value to extract the low byte from.
 	/// @returns The low byte of the value.
@@ -217,6 +220,11 @@ namespace isobus
 	std::uint8_t VirtualTerminalServer::get_supported_large_fonts_bitfield() const
 	{
 		return 0x7F;
+	}
+
+	std::uint8_t VirtualTerminalServer::get_supported_font_styles_bitfield() const
+	{
+		return 0x8F;
 	}
 
 	void VirtualTerminalServer::identify_vt()
@@ -440,10 +448,24 @@ namespace isobus
 
 	bool VirtualTerminalServer::execute_macro(std::uint16_t objectIDOfMacro, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet)
 	{
+		// Per thread, because a circular reference nests synchronously on one thread.
+		// Objects, not IDs, so that equal IDs in other working sets don't match.
+		static thread_local std::array<const VTObject *, MAX_NESTED_MACROS> runningMacros;
+		static thread_local std::uint8_t numberOfRunningMacros = 0;
+
 		auto object = workingSet->get_object_by_id(objectIDOfMacro);
+		const auto runningMacrosEnd = runningMacros.begin() + numberOfRunningMacros;
 		bool retVal = false;
 
-		if ((nullptr != object) && (VirtualTerminalObjectType::Macro == object->get_object_type()))
+		if (runningMacrosEnd != std::find(runningMacros.begin(), runningMacrosEnd, object.get()))
+		{
+			LOG_ERROR("[VT Server]: Macro %u is already running, so it is not run again. The object pool has a circular macro reference.", objectIDOfMacro);
+		}
+		else if (MAX_NESTED_MACROS <= numberOfRunningMacros)
+		{
+			LOG_ERROR("[VT Server]: Macro %u is not run, because %u macros are already nested.", objectIDOfMacro, MAX_NESTED_MACROS);
+		}
+		else if ((nullptr != object) && (VirtualTerminalObjectType::Macro == object->get_object_type()))
 		{
 			auto macro = std::static_pointer_cast<Macro>(object);
 
@@ -451,6 +473,8 @@ namespace isobus
 			{
 				LOG_DEBUG("[VT Server]: Executing macro %u", macro->get_id());
 				retVal = true;
+				runningMacros[numberOfRunningMacros] = macro.get();
+				numberOfRunningMacros++;
 
 				for (std::uint8_t j = 0; j < macro->get_number_of_commands(); j++)
 				{
@@ -468,6 +492,7 @@ namespace isobus
 						execute_macro_as_rx_message(message);
 					}
 				}
+				numberOfRunningMacros--;
 			}
 		}
 		return retVal;
@@ -587,9 +612,9 @@ namespace isobus
 				buffer[2] = 0xFF; // Reserved
 				buffer[3] = 0xFF; // Reserved
 				buffer[4] = 0xFF; // Reserved
-				buffer[5] = get_supported_small_fonts_bitfield(); // Say we support all small fonts
-				buffer[6] = get_supported_large_fonts_bitfield(); // Say we support all large fonts
-				buffer[7] = 0x8F; // Support normal, bold, italic, proportional
+				buffer[5] = get_supported_small_fonts_bitfield();
+				buffer[6] = get_supported_large_fonts_bitfield();
+				buffer[7] = get_supported_font_styles_bitfield();
 				CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 				                                               buffer.data(),
 				                                               CAN_DATA_LENGTH,

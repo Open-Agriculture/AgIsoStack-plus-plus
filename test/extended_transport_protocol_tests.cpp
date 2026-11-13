@@ -3,6 +3,7 @@
 #include "isobus/isobus/can_extended_transport_protocol.hpp"
 
 #include "helpers/control_function_helpers.hpp"
+#include "helpers/messaging_helpers.hpp"
 #include "helpers/test_fixture.hpp"
 
 #include <atomic>
@@ -74,4 +75,45 @@ TEST_F(ExtendedTransportProtocolTest, TransmitFromAnotherThreadSendsOneRequestTo
 	{
 		EXPECT_EQ(entry.second, 1) << "receiver 0x" << std::hex << static_cast<int>(entry.first);
 	}
+}
+
+// Refused before the receive buffer is allocated, so one frame announcing 4 GiB cannot exhaust memory
+TEST_F(ExtendedTransportProtocolTest, RequestToSendWithInvalidSizeIsAborted)
+{
+	auto originator = test_helpers::create_mock_control_function(0x01);
+	auto receiver = test_helpers::create_mock_internal_control_function(0x0B);
+
+	std::vector<std::uint8_t> abortReasons;
+	auto sendFrameCallback = [&](std::uint32_t parameterGroupNumber,
+	                             CANDataSpan data,
+	                             std::shared_ptr<InternalControlFunction>,
+	                             std::shared_ptr<ControlFunction> destinationControlFunction,
+	                             CANIdentifier::CANPriority) {
+		EXPECT_EQ(parameterGroupNumber, 0xC800);
+		EXPECT_EQ(destinationControlFunction, originator);
+		EXPECT_EQ(data[0], 255); // Abort control byte
+		abortReasons.push_back(data[1]);
+		return true;
+	};
+
+	CANNetworkConfiguration configuration;
+	ExtendedTransportProtocolManager manager(sendFrameCallback, nullptr, &configuration);
+
+	for (const std::uint32_t size : { 117440506u, 0xFFFFFFFFu })
+	{
+		manager.process_message(test_helpers::create_message(7,
+		                                                     0xC800,
+		                                                     receiver,
+		                                                     originator,
+		                                                     { 20, // RTS control byte
+		                                                       static_cast<std::uint8_t>(size & 0xFF),
+		                                                       static_cast<std::uint8_t>((size >> 8) & 0xFF),
+		                                                       static_cast<std::uint8_t>((size >> 16) & 0xFF),
+		                                                       static_cast<std::uint8_t>(size >> 24),
+		                                                       0xEB,
+		                                                       0xFE,
+		                                                       0x00 }));
+		EXPECT_FALSE(manager.has_session(originator, receiver)) << size;
+	}
+	EXPECT_EQ(abortReasons, std::vector<std::uint8_t>({ 250, 250 }));
 }

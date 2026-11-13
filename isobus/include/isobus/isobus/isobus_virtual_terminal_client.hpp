@@ -1773,8 +1773,8 @@ namespace isobus
 		std::vector<std::uint8_t> scale_command(const std::vector<std::uint8_t> &command) const;
 
 		/// @brief Finds the objects drawn on soft keys, so they can be scaled with the soft key factor
-		/// @details Starts from the children of every Key and follows Containers and Object Pointers,
-		/// but not Output Lists, Animations or Working Set objects. Fonts also used outside the keys
+		/// @details Starts from the children of every Key and follows Containers, Animations and Object Pointers,
+		/// but not Output Lists or Working Set objects. Fonts also used outside the keys
 		/// are left out, so data mask text keeps its size. Other objects shown both on and off the keys,
 		/// such as a Picture Graphic, get the soft key factor everywhere.
 		/// @param[in] pools Every pool of the working set, including the ones that are not auto-scaled
@@ -1800,10 +1800,10 @@ namespace isobus
 		/// @returns The scaled value, limited to what the command can carry
 		static std::uint16_t scale_command_coordinate(std::uint16_t value, float scaleFactor);
 
-		/// @brief Scales a child position for a command, which the pool holds as a signed value
+		/// @brief Scales a child position, which the pool and the commands hold as a signed value
 		/// @param[in] value The position to scale (px)
 		/// @param[in] scaleFactor The factor to scale with
-		/// @returns The scaled position, limited to what the command can carry
+		/// @returns The scaled position, limited to -32768 to +32767 px
 		static std::uint16_t scale_command_position(std::uint16_t value, float scaleFactor);
 
 		/// @brief Scales a relative position change for the change child location command
@@ -1840,7 +1840,13 @@ namespace isobus
 		/// @param[in] buffer A pointer to the start of the VT object
 		/// @param[in] bufferLength The number of bytes that can be read from buffer
 		/// @returns The total number of bytes present in the VT object at the specified location, or 0 if it can't be sized
-		static std::uint32_t get_number_bytes_in_object(std::uint8_t *buffer, std::uint32_t bufferLength);
+		static std::uint32_t get_number_bytes_in_object(const std::uint8_t *buffer, std::uint32_t bufferLength);
+
+		/// @brief Returns the number of bytes that a VT object's own fields declare, which can be more than bufferLength
+		/// @param[in] buffer A pointer to the start of the VT object, holding at least the object's minimum length
+		/// @param[in] bufferLength The number of bytes that can be read from buffer
+		/// @returns The number of bytes that the VT object declares
+		static std::uint32_t get_declared_object_length(const std::uint8_t *buffer, std::uint32_t bufferLength);
 
 		/// @brief Resizes the most common VT object format by some scale factor
 		/// @param[in] buffer A pointer to the start of the VT object

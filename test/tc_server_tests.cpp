@@ -11,6 +11,7 @@
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/isobus/isobus_device_descriptor_object_pool_helpers.hpp"
 #include "isobus/isobus/isobus_task_controller_server.hpp"
 #include "isobus/utility/system_timing.hpp"
@@ -287,6 +288,11 @@ public:
 	bool send_status() const
 	{
 		return send_status_message();
+	}
+
+	std::size_t get_number_of_active_clients() const
+	{
+		return activeClients.size();
 	}
 
 	std::vector<std::uint8_t> testStructureLabel;
@@ -2181,4 +2187,50 @@ TEST_F(TaskControllerServerTest, MessageCanBeQueuedWhileAVirtualRuns)
 	CANHardwareInterface::stop();
 	CANNetworkManager::CANNetwork.deactivate_control_function(partnerClient);
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+class DiscardingLogger : public CANStackLogger
+{
+public:
+	void sink_CAN_stack_log(CANStackLogger::LoggingLevel, const std::string &) override
+	{
+	}
+};
+
+TEST_F(TaskControllerServerTest, IgnoresMessagesWithoutSourceControlFunction)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x9D, 0, time_source);
+
+	DerivedTcServer server(internalECU,
+	                       4,
+	                       255,
+	                       16,
+	                       TaskControllerOptions()
+	                         .with_documentation()
+	                         .with_implement_section_control()
+	                         .with_tc_geo_with_position_based_control());
+	server.initialize();
+
+	// Source control functions are null, as for a client that was pruned while still sending
+	const std::vector<std::uint8_t> workingSetMaster = { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+	CANMessage workingSetMasterMessage(CANMessage::Type::Receive, CANIdentifier(0x18FE0D9E), workingSetMaster, nullptr, nullptr, 0);
+	server.test_receive_message(workingSetMasterMessage, &server);
+
+	// Not checked against the active clients
+	const std::vector<std::uint8_t> measurementCommand = { 0x44, 0x00, 0x8D, 0x00, 0xE8, 0x03, 0x00, 0x00 };
+	CANMessage measurementMessage(CANMessage::Type::Receive, CANIdentifier(0x14CB9D9E), measurementCommand, nullptr, internalECU, 0);
+	server.test_receive_message(measurementMessage, &server);
+
+	// With a sink set, the handlers' log arguments are evaluated, as in an application that logs
+	DiscardingLogger logger;
+	CANStackLogger::set_can_stack_logger_sink(&logger);
+	server.update();
+	CANStackLogger::set_can_stack_logger_sink(nullptr);
+	EXPECT_EQ(0u, server.get_number_of_active_clients());
+
+	CANHardwareInterface::stop();
 }
