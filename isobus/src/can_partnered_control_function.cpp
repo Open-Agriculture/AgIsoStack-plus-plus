@@ -174,9 +174,9 @@ namespace isobus
 			if ((message_parameter_group_number == callback.get_parameter_group_number()) &&
 			    (nullptr != callback.get_callback()) &&
 			    ((nullptr == callback.get_internal_control_function()) ||
-			     (callback.get_internal_control_function()->get_address() == message.get_identifier().get_destination_address())))
+			     (callback.get_internal_control_function()->get_address() == message.get_identifier().get_destination_address())) &&
+			    is_registered(parameterGroupNumberCallbacksMutex, parameterGroupNumberCallbacks, callback))
 			{
-				// We have a callback matching this message
 				callback.get_callback()(message, callback.get_parent());
 			}
 		}

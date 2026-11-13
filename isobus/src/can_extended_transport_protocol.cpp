@@ -30,8 +30,9 @@ namespace isobus
 
 	void ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::set_state(StateMachineState value)
 	{
-		state = value;
+		// Timestamp first, so a thread that sees the new state doesn't time it out from the old timestamp
 		update_timestamp();
+		state = value;
 	}
 
 	std::uint32_t ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::get_total_bytes_transferred() const

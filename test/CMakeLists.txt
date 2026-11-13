@@ -63,6 +63,7 @@ set(TEST_SRC
     nmea2000_message_tests.cpp
     isobus_data_dictionary_tests.cpp
     can_message_tests.cpp
+    to_string_tests.cpp
     heartbeat_tests.cpp
     tc_server_tests.cpp
     helpers/test_time_source.cpp
@@ -73,7 +74,7 @@ set(TEST_SRC
 if(CAN_STACK_DISABLE_THREADS)
   # Most tests run on the VirtualCAN driver, which needs threads. Without
   # threads, build the tests for the single-threaded code paths only.
-  set(TEST_SRC hardware_interface_single_thread_tests.cpp)
+  set(TEST_SRC hardware_interface_single_thread_tests.cpp to_string_tests.cpp)
   set(TEST_INCLUDE "")
 endif()
 

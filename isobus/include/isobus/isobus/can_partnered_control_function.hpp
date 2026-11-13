@@ -61,6 +61,9 @@ namespace isobus
 		/// @param[in] callback The callback function being removed
 		/// @param[in] parent A generic context variable that helps identify what object the callback was destined for
 		/// @param[in] internalControlFunction The ICF being used to filter messages against
+		/// @details This stops future calls only. A call on another thread can still start or finish after this returns,
+		/// so only destroy what the callback uses once it is removed on the thread that calls CANNetworkManager::update(),
+		/// or once that thread is stopped. A callback may remove itself.
 		void remove_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent, std::shared_ptr<InternalControlFunction> internalControlFunction = nullptr);
 
 		/// @brief Returns the number of NAME filter objects that describe the identity of this control function
