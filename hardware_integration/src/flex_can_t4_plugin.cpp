@@ -1,14 +1,14 @@
 //================================================================================================
 /// @file flex_can_t4_plugin.cpp
 ///
-/// @brief An interface for using Teensy4/4.1 CAN hardware
+/// @brief An interface for using Teensy 4.0/4.1 and Teensy 3.2/3.5/3.6 CAN hardware
 /// @author Adrian Del Grosso
 ///
 /// @copyright 2023 The Open-Agriculture Developers
 //================================================================================================
 
-// Teensy 4.x only: the Teensy 3.x declarations in the header use bus names FlexCAN_T4 rejects there
-#if defined(__IMXRT1062__)
+// The Teensy boards with CAN controllers: 4.0/4.1, 3.6, and 3.2/3.5
+#if defined(__IMXRT1062__) || defined(__MK66FX1M0__) || defined(__MK20DX256__) || defined(__MK64FX512__)
 #include "isobus/hardware_integration/flex_can_t4_plugin.hpp"
 #include "FlexCAN_T4.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
@@ -65,9 +65,16 @@ namespace isobus
 		}
 	}
 
-	FlexCAN_T4<CAN1, RX_SIZE_2, TX_SIZE_512> *FlexCANT4Plugin::can0 = nullptr;
-	FlexCAN_T4<CAN2, RX_SIZE_2, TX_SIZE_512> *FlexCANT4Plugin::can1 = nullptr;
-	FlexCAN_T4<CAN3, RX_SIZE_2, TX_SIZE_512> *FlexCANT4Plugin::can2 = nullptr;
+#if defined(__IMXRT1062__)
+	FlexCANT4Plugin::Controller<CAN1> *FlexCANT4Plugin::can0 = nullptr;
+	FlexCANT4Plugin::Controller<CAN2> *FlexCANT4Plugin::can1 = nullptr;
+	FlexCANT4Plugin::Controller<CAN3> *FlexCANT4Plugin::can2 = nullptr;
+#elif defined(__MK66FX1M0__)
+	FlexCANT4Plugin::Controller<CAN0> *FlexCANT4Plugin::can0 = nullptr;
+	FlexCANT4Plugin::Controller<CAN1> *FlexCANT4Plugin::can1 = nullptr;
+#else
+	FlexCANT4Plugin::Controller<CAN0> *FlexCANT4Plugin::can0 = nullptr;
+#endif
 
 	FlexCANT4Plugin *FlexCANT4Plugin::openPlugins[3] = { nullptr, nullptr, nullptr };
 
@@ -118,7 +125,7 @@ namespace isobus
 		receiveOverflowCount = 0;
 		std::atomic_signal_fence(std::memory_order_release);
 
-		if (selectedChannel >= 3)
+		if (selectedChannel >= CONTROLLER_COUNT)
 		{
 			LOG_CRITICAL("[FlexCAN]: Invalid Channel Selected");
 			return;
@@ -130,14 +137,18 @@ namespace isobus
 		{
 			started = start_controller(can0, on_receive_channel_0);
 		}
+#if defined(__IMXRT1062__) || defined(__MK66FX1M0__)
 		else if (1 == selectedChannel)
 		{
 			started = start_controller(can1, on_receive_channel_1);
 		}
-		else
+#endif
+#if defined(__IMXRT1062__)
+		else if (2 == selectedChannel)
 		{
 			started = start_controller(can2, on_receive_channel_2);
 		}
+#endif
 
 		if (started)
 		{
@@ -241,15 +252,19 @@ namespace isobus
 		{
 			retVal = can0->write(message);
 		}
+#if defined(__IMXRT1062__) || defined(__MK66FX1M0__)
 		else if ((1 == selectedChannel) && (nullptr != can1))
 		{
 			retVal = can1->write(message);
 		}
+#endif
+#if defined(__IMXRT1062__)
 		else if ((2 == selectedChannel) && (nullptr != can2))
 		{
 			retVal = can2->write(message);
 		}
+#endif
 		return retVal;
 	}
 }
-#endif // __IMXRT1062__
+#endif // Teensy 4.0/4.1, 3.6, 3.2/3.5
