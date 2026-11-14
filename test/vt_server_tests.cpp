@@ -3391,6 +3391,9 @@ protected:
 			}
 		}
 		CANHardwareInterface::stop();
+		// Free the addresses, so that no other test finds them still claimed
+		CANNetworkManager::CANNetwork.deactivate_control_function(client);
+		CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 		return macrosThatRan;
 	}
 };
@@ -3398,7 +3401,7 @@ protected:
 TEST_F(VirtualTerminalServerMaskChangeMacroTest, ChangeActiveMaskHidesTheOldMaskAndShowsTheNewOne)
 {
 	std::uint8_t errorCode = 0xFF;
-	const auto macrosThatRan = run_command(0x4C, 0xA8, true, { 0xAD, 0x00, 0x00, 0xE9, 0x03, 0xFF, 0xFF, 0xFF }, errorCode);
+	const auto macrosThatRan = run_command(0x58, 0xA8, true, { 0xAD, 0x00, 0x00, 0xE9, 0x03, 0xFF, 0xFF, 0xFF }, errorCode);
 
 	EXPECT_EQ(0x00, errorCode);
 	// On Change Active Mask, then On Hide of Data Mask 1000 and Soft Key Mask 2000, then On Show of Data Mask 1001 and Soft Key Mask 2001
@@ -3408,7 +3411,7 @@ TEST_F(VirtualTerminalServerMaskChangeMacroTest, ChangeActiveMaskHidesTheOldMask
 TEST_F(VirtualTerminalServerMaskChangeMacroTest, ChangeActiveMaskToTheActiveMaskOnlyRunsOnChangeActiveMask)
 {
 	std::uint8_t errorCode = 0xFF;
-	const auto macrosThatRan = run_command(0x4D, 0xA9, true, { 0xAD, 0x00, 0x00, 0xE8, 0x03, 0xFF, 0xFF, 0xFF }, errorCode);
+	const auto macrosThatRan = run_command(0x59, 0xA9, true, { 0xAD, 0x00, 0x00, 0xE8, 0x03, 0xFF, 0xFF, 0xFF }, errorCode);
 
 	EXPECT_EQ(0x00, errorCode);
 	EXPECT_EQ((std::vector<std::uint16_t>{ 10 }), macrosThatRan);
@@ -3417,7 +3420,7 @@ TEST_F(VirtualTerminalServerMaskChangeMacroTest, ChangeActiveMaskToTheActiveMask
 TEST_F(VirtualTerminalServerMaskChangeMacroTest, ChangeActiveMaskOfAnInactiveWorkingSetOnlyRunsOnChangeActiveMask)
 {
 	std::uint8_t errorCode = 0xFF;
-	const auto macrosThatRan = run_command(0x4E, 0xAC, false, { 0xAD, 0x00, 0x00, 0xE9, 0x03, 0xFF, 0xFF, 0xFF }, errorCode);
+	const auto macrosThatRan = run_command(0x5A, 0xAC, false, { 0xAD, 0x00, 0x00, 0xE9, 0x03, 0xFF, 0xFF, 0xFF }, errorCode);
 
 	EXPECT_EQ(0x00, errorCode);
 	EXPECT_EQ((std::vector<std::uint16_t>{ 10 }), macrosThatRan);
@@ -3426,7 +3429,7 @@ TEST_F(VirtualTerminalServerMaskChangeMacroTest, ChangeActiveMaskOfAnInactiveWor
 TEST_F(VirtualTerminalServerMaskChangeMacroTest, ChangeSoftKeyMaskOfTheVisibleMaskHidesTheOldSoftKeyMaskAndShowsTheNewOne)
 {
 	std::uint8_t errorCode = 0xFF;
-	const auto macrosThatRan = run_command(0x4F, 0xAD, true, { 0xAE, 0x01, 0xE8, 0x03, 0xD1, 0x07, 0xFF, 0xFF }, errorCode);
+	const auto macrosThatRan = run_command(0x5B, 0xAD, true, { 0xAE, 0x01, 0xE8, 0x03, 0xD1, 0x07, 0xFF, 0xFF }, errorCode);
 
 	EXPECT_EQ(0x00, errorCode);
 	EXPECT_EQ((std::vector<std::uint16_t>{ 16, 17 }), macrosThatRan);
@@ -3435,7 +3438,7 @@ TEST_F(VirtualTerminalServerMaskChangeMacroTest, ChangeSoftKeyMaskOfTheVisibleMa
 TEST_F(VirtualTerminalServerMaskChangeMacroTest, ChangeSoftKeyMaskOfAMaskThatIsNotShownRunsNoSoftKeyMaskMacros)
 {
 	std::uint8_t errorCode = 0xFF;
-	const auto macrosThatRan = run_command(0x50, 0xAE, true, { 0xAE, 0x01, 0xE9, 0x03, 0xD0, 0x07, 0xFF, 0xFF }, errorCode);
+	const auto macrosThatRan = run_command(0x5C, 0xAE, true, { 0xAE, 0x01, 0xE9, 0x03, 0xD0, 0x07, 0xFF, 0xFF }, errorCode);
 
 	EXPECT_EQ(0x00, errorCode);
 	EXPECT_TRUE(macrosThatRan.empty());
