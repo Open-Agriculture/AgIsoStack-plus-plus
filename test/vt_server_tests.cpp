@@ -1159,7 +1159,7 @@ TEST_F(VirtualTerminalServerMessagingTest, ChangePolygonScaleRejectsUnknownAndWr
 	ASSERT_TRUE(unknownObjectAnswered);
 	EXPECT_EQ(0x01, unknownObjectResponse.data[7]);
 	ASSERT_TRUE(lineAnswered);
-	EXPECT_EQ(0x10, lineResponse.data[7]);
+	EXPECT_EQ(0x01, lineResponse.data[7]);
 	EXPECT_EQ(10, serverUnderTest.managedWorkingSetList.front()->get_object_by_id(3)->get_width());
 	ASSERT_TRUE(zeroWidthAnswered);
 	EXPECT_EQ(0x00, zeroWidthResponse.data[7]);
@@ -1349,7 +1349,7 @@ TEST_F(VirtualTerminalServerMessagingTest, ChangeEndPointRejectsUnknownAndWrongO
 	ASSERT_TRUE(unknownObjectAnswered);
 	EXPECT_EQ(0x01, unknownObjectResponse.data[3]);
 	ASSERT_TRUE(polygonAnswered);
-	EXPECT_EQ(0x10, polygonResponse.data[3]);
+	EXPECT_EQ(0x01, polygonResponse.data[3]);
 	EXPECT_EQ(100, serverUnderTest.managedWorkingSetList.front()->get_object_by_id(2)->get_width());
 	ASSERT_TRUE(invalidDirectionAnswered);
 	EXPECT_EQ(0x02, invalidDirectionResponse.data[3]);
@@ -1381,6 +1381,111 @@ TEST_F(VirtualTerminalServerMessagingTest, ChangeEndPointInAShortFrameIsIgnored)
 	ASSERT_TRUE(connected);
 	EXPECT_FALSE(answered);
 	EXPECT_EQ(10, serverUnderTest.managedWorkingSetList.front()->get_object_by_id(3)->get_width());
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, CommandsToObjectsOfTheWrongTypeReportTheErrorBitOfThatCommand)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x52, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xCC, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+	serverUnderTest.version = VirtualTerminalBase::VTVersion::Version4;
+
+	const auto errorCodeOf = [&](std::uint8_t function, std::size_t errorByte) {
+		CANMessageFrame response = {};
+		return poll_for_response(serverUnderTest, testPlugin, function, response) ? static_cast<int>(response.data[errorByte]) : -1;
+	};
+
+	// Working Set 0 holds Object Pointer 1; Data Mask 1000 holds disabled Input Boolean 4 and hidden Container 2 (Input Boolean 3); Input Boolean 5 is on no mask
+	CANMessageFrame poolResponse = {};
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_tp_from_client(internalECU, client, { 0x11, 0x00, 0x00, 0x00, 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x1B, 0xFF, 0xFF, 0xE8, 0x03, 0x01, 0x00, 0xFF, 0xFF, 0x02, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x03, 0x0A, 0x00, 0x0A, 0x00, 0x01, 0x01, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x07, 0x00, 0x0A, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x01, 0x00, 0x04, 0x00, 0x07, 0x00, 0x0A, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x05, 0x00, 0x07, 0x00, 0x0A, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x01, 0x00 });
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	const bool connected = poll_for_response(serverUnderTest, testPlugin, 0x12, poolResponse) && (0x00 == poolResponse.data[1]);
+
+	receive_from_client(internalECU, client, { 0xA6, 0x01, 0x00, 0x0A, 0x00, 0x0A, 0x00, 0xFF });
+	const int changeSize = errorCodeOf(0xA6, 3);
+	receive_from_client(internalECU, client, { 0xA7, 0x01, 0x00, 0x05, 0xFF, 0xFF, 0xFF, 0xFF });
+	const int changeBackgroundColour = errorCodeOf(0xA7, 4);
+	receive_from_client(internalECU, client, { 0xAE, 0x01, 0x01, 0x00, 0xFF, 0xFF, 0xFF, 0xFF });
+	const int changeSoftKeyMask = errorCodeOf(0xAE, 5);
+	receive_from_client(internalECU, client, { 0xB0, 0x01, 0x00, 0x01, 0xFF, 0xFF, 0xFF, 0xFF });
+	const int changePriority = errorCodeOf(0xB0, 4);
+	receive_from_client(internalECU, client, { 0xB1, 0x01, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF });
+	const int changeListItem = errorCodeOf(0xB1, 6);
+	receive_from_client(internalECU, client, { 0xB6, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 });
+	const int changePolygonPoint = errorCodeOf(0xB6, 3);
+
+	receive_from_client(internalECU, client, { 0xA5, 0x04, 0x00, 0x01, 0x00, 0x80, 0x80, 0xFF });
+	const int childLocationOfANonParent = errorCodeOf(0xA5, 5);
+	receive_from_client(internalECU, client, { 0xA5, 0x00, 0x00, 0x04, 0x00, 0x80, 0x80, 0xFF });
+	const int childLocationOfANonChild = errorCodeOf(0xA5, 5);
+	receive_from_client(internalECU, client, { 0xA5, 0x00, 0x00, 0xD0, 0x07, 0x80, 0x80, 0xFF });
+	const int childLocationOfAMissingChild = errorCodeOf(0xA5, 5);
+	receive_from_client(internalECU, client, { 0xA5, 0x00, 0x00, 0x01, 0x00, 0x80, 0x80, 0xFF });
+	const int childLocationOfAChild = errorCodeOf(0xA5, 5);
+	receive_tp_from_client(internalECU, client, { 0xB4, 0x04, 0x00, 0x01, 0x00, 0x05, 0x00, 0x05, 0x00 });
+	const int childPositionOfANonParent = errorCodeOf(0xB4, 5);
+	receive_tp_from_client(internalECU, client, { 0xB4, 0x00, 0x00, 0x04, 0x00, 0x05, 0x00, 0x05, 0x00 });
+	const int childPositionOfANonChild = errorCodeOf(0xB4, 5);
+
+	receive_from_client(internalECU, client, { 0xA2, 0x01, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const int selectNonInput = errorCodeOf(0xA2, 4);
+	receive_from_client(internalECU, client, { 0xA2, 0x04, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const int selectDisabled = errorCodeOf(0xA2, 4);
+	receive_from_client(internalECU, client, { 0xA2, 0x05, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const int selectNotOnActiveMask = errorCodeOf(0xA2, 4);
+	receive_from_client(internalECU, client, { 0xA2, 0x03, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const int selectInHiddenContainer = errorCodeOf(0xA2, 4);
+	receive_from_client(internalECU, client, { 0xA1, 0x04, 0x00, 0x01, 0xFF, 0xFF, 0xFF, 0xFF });
+	const int enable = errorCodeOf(0xA1, 4);
+	receive_from_client(internalECU, client, { 0xA2, 0x04, 0x00, 0x05, 0xFF, 0xFF, 0xFF, 0xFF });
+	const int selectWithInvalidOption = errorCodeOf(0xA2, 4);
+	receive_from_client(internalECU, client, { 0xA2, 0x04, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	CANMessageFrame selectEnabled = {};
+	const bool selectEnabledAnswered = poll_for_response(serverUnderTest, testPlugin, 0xA2, selectEnabled);
+	serverUnderTest.version = VirtualTerminalBase::VTVersion::Version3;
+	receive_from_client(internalECU, client, { 0xA2, 0x04, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF });
+	CANMessageFrame openOnVersion3 = {};
+	const bool openOnVersion3Answered = poll_for_response(serverUnderTest, testPlugin, 0xA2, openOnVersion3);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(connected);
+	EXPECT_EQ(0x01, changeSize);
+	EXPECT_EQ(0x01, changeBackgroundColour);
+	EXPECT_EQ(0x01, changeSoftKeyMask);
+	EXPECT_EQ(0x01, changePriority);
+	EXPECT_EQ(0x01, changeListItem);
+	EXPECT_EQ(0x01, changePolygonPoint);
+
+	EXPECT_EQ(0x01, childLocationOfANonParent);
+	EXPECT_EQ(0x01, childLocationOfANonChild);
+	EXPECT_EQ(0x02, childLocationOfAMissingChild);
+	EXPECT_EQ(0x00, childLocationOfAChild);
+	EXPECT_EQ(0x01, childPositionOfANonParent);
+	EXPECT_EQ(0x01, childPositionOfANonChild);
+
+	EXPECT_EQ(0x02, selectNonInput);
+	EXPECT_EQ(0x01, selectDisabled);
+	EXPECT_EQ(0x04, selectNotOnActiveMask);
+	EXPECT_EQ(0x04, selectInHiddenContainer);
+	EXPECT_EQ(0x00, enable);
+	EXPECT_EQ(0x20, selectWithInvalidOption);
+	ASSERT_TRUE(selectEnabledAnswered);
+	EXPECT_EQ(0x01, selectEnabled.data[3]);
+	EXPECT_EQ(0x00, selectEnabled.data[4]);
+	ASSERT_TRUE(openOnVersion3Answered);
+	EXPECT_EQ(0x01, openOnVersion3.data[3]);
+	EXPECT_EQ(0x00, openOnVersion3.data[4]);
 }
 
 TEST_F(VirtualTerminalServerMessagingTest, GetSupportedObjectsResponseIsASortedListOfVariableLength)
