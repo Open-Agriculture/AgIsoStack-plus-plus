@@ -534,14 +534,15 @@ TEST_F(ControlFunctionFunctionalitiesTest, CFFunctionalitiesTest)
 
 	cfFunctionalitiesUnderTest.test_wrapper_get_message_content(testMessageData);
 
-	// We should just have the minimum CF functionalities
+	// We should just have the minimum CF functionalities.
+	// ISO 11783-12 A.12: a functionality without options reports 0 option bytes.
 	ASSERT_EQ(8, testMessageData.size());
 	EXPECT_EQ(0xFF, testMessageData.at(0)); // Each control function shall respond with byte 1 set to FF16
 	EXPECT_EQ(1, testMessageData.at(1)); // We are reporting 1 functionality
 	EXPECT_EQ(0, testMessageData.at(2)); // Functionality 0 is min CF
 	EXPECT_EQ(1, testMessageData.at(3)); // We specify generation 1 by default
-	EXPECT_EQ(1, testMessageData.at(4)); // 1 Option byte
-	EXPECT_EQ(0, testMessageData.at(5)); // No options
+	EXPECT_EQ(0, testMessageData.at(4)); // No options, so no option bytes
+	EXPECT_EQ(0xFF, testMessageData.at(5)); // 0xFF Padding to 8 bytes
 	EXPECT_EQ(0xFF, testMessageData.at(6)); // 0xFF Padding to 8 bytes
 	EXPECT_EQ(0xFF, testMessageData.at(7)); // 0xFF Padding to 8 bytes
 
@@ -550,64 +551,71 @@ TEST_F(ControlFunctionFunctionalitiesTest, CFFunctionalitiesTest)
 	cfFunctionalitiesUnderTest.test_wrapper_get_message_content(testMessageData);
 
 	// We should just have the minimum CF functionalities PLUS the UT client
-	ASSERT_EQ(10, testMessageData.size());
+	ASSERT_EQ(8, testMessageData.size());
 	EXPECT_EQ(0xFF, testMessageData.at(0)); // Each control function shall respond with byte 1 set to FF16
 	EXPECT_EQ(2, testMessageData.at(1)); // We are reporting 2 functionalities
 	EXPECT_EQ(0, testMessageData.at(2)); // Functionality 0 is min CF
 	EXPECT_EQ(1, testMessageData.at(3)); // We specify generation 1 by default
-	EXPECT_EQ(1, testMessageData.at(4)); // 1 Option byte
-	EXPECT_EQ(0, testMessageData.at(5)); // No options
-	EXPECT_EQ(2, testMessageData.at(6)); // UT working set
-	EXPECT_EQ(1, testMessageData.at(7)); // Generation 1. These generations are seemingly user defined and arbitrary, not the ISO standard version... no SPN defined...
-	EXPECT_EQ(1, testMessageData.at(8)); // 1 Option byte
-	EXPECT_EQ(0, testMessageData.at(9)); // No options
+	EXPECT_EQ(0, testMessageData.at(4)); // No option bytes
+	EXPECT_EQ(2, testMessageData.at(5)); // UT working set
+	EXPECT_EQ(1, testMessageData.at(6)); // Generation 1. These generations are seemingly user defined and arbitrary, not the ISO standard version... no SPN defined...
+	EXPECT_EQ(0, testMessageData.at(7)); // No option bytes
 
 	// Add Aux-N
 	cfFunctionalitiesUnderTest.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::AuxNFunctions, 1, true);
 	cfFunctionalitiesUnderTest.test_wrapper_get_message_content(testMessageData);
-	ASSERT_EQ(15, testMessageData.size());
+	ASSERT_EQ(11, testMessageData.size());
 	EXPECT_EQ(0xFF, testMessageData.at(0)); // Each control function shall respond with byte 1 set to FF16
 	EXPECT_EQ(3, testMessageData.at(1)); // We are reporting 3 functionalities
 	EXPECT_EQ(0, testMessageData.at(2)); // Functionality 0 is min CF
 	EXPECT_EQ(1, testMessageData.at(3)); // We specify generation 1 by default
-	EXPECT_EQ(1, testMessageData.at(4)); // 1 Option byte
-	EXPECT_EQ(0, testMessageData.at(5)); // No options
-	EXPECT_EQ(2, testMessageData.at(6)); // UT working set
-	EXPECT_EQ(1, testMessageData.at(7)); // Generation 1. These generations are seemingly user defined and arbitrary, not the ISO standard version... no SPN defined...
-	EXPECT_EQ(1, testMessageData.at(8)); // 1 Option byte
-	EXPECT_EQ(0, testMessageData.at(9)); // No options
-	EXPECT_EQ(6, testMessageData.at(10)); // Functionality 6 is AUX N functions
-	EXPECT_EQ(1, testMessageData.at(11)); // We specify generation 1
-	EXPECT_EQ(2, testMessageData.at(12)); // 2 Option bytes
-	EXPECT_EQ(0, testMessageData.at(13)); // No options
-	EXPECT_EQ(0, testMessageData.at(14)); // No options
+	EXPECT_EQ(0, testMessageData.at(4)); // No option bytes
+	EXPECT_EQ(2, testMessageData.at(5)); // UT working set
+	EXPECT_EQ(1, testMessageData.at(6)); // Generation 1
+	EXPECT_EQ(0, testMessageData.at(7)); // No option bytes
+	EXPECT_EQ(6, testMessageData.at(8)); // Functionality 6 is AUX N functions
+	EXPECT_EQ(1, testMessageData.at(9)); // We specify generation 1
+	EXPECT_EQ(0, testMessageData.at(10)); // No options, so neither of its 2 option bytes is sent
+
+	// A trailing zero option byte is omitted, an earlier one is kept
+	cfFunctionalitiesUnderTest.set_aux_N_functions_option_state(ControlFunctionFunctionalities::AuxNOptions::SupportsType1Function, true);
+	cfFunctionalitiesUnderTest.test_wrapper_get_message_content(testMessageData);
+	ASSERT_EQ(12, testMessageData.size());
+	EXPECT_EQ(1, testMessageData.at(10)); // Only the first option byte is set
+	EXPECT_EQ(0x02, testMessageData.at(11)); // Type 1 function
+	// The stored options are unchanged, so the getters still see them
+	EXPECT_TRUE(cfFunctionalitiesUnderTest.get_aux_N_functions_option_state(ControlFunctionFunctionalities::AuxNOptions::SupportsType1Function));
+	cfFunctionalitiesUnderTest.set_aux_N_functions_option_state(ControlFunctionFunctionalities::AuxNOptions::SupportsType1Function, false);
+	cfFunctionalitiesUnderTest.set_aux_N_functions_option_state(ControlFunctionFunctionalities::AuxNOptions::SupportsType9Function, true);
+	cfFunctionalitiesUnderTest.test_wrapper_get_message_content(testMessageData);
+	ASSERT_EQ(13, testMessageData.size());
+	EXPECT_EQ(2, testMessageData.at(10)); // The second option byte is set, so the first is sent too
+	EXPECT_EQ(0x00, testMessageData.at(11));
+	EXPECT_EQ(0x02, testMessageData.at(12)); // Type 9 function
+	cfFunctionalitiesUnderTest.set_aux_N_functions_option_state(ControlFunctionFunctionalities::AuxNOptions::SupportsType9Function, false);
 
 	// Add Task controller Client
 	cfFunctionalitiesUnderTest.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::TaskControllerSectionControlClient, 1, true);
 	cfFunctionalitiesUnderTest.set_task_controller_section_control_client_option_state(1, 255); // 1 Boom, 255 sections
 	cfFunctionalitiesUnderTest.test_wrapper_get_message_content(testMessageData);
 
-	ASSERT_EQ(20, testMessageData.size());
+	ASSERT_EQ(16, testMessageData.size());
 	EXPECT_EQ(0xFF, testMessageData.at(0)); // Each control function shall respond with byte 1 set to FF16
 	EXPECT_EQ(4, testMessageData.at(1)); // We are reporting 4 functionalities
 	EXPECT_EQ(0, testMessageData.at(2)); // Functionality 0 is min CF
 	EXPECT_EQ(1, testMessageData.at(3)); // We specify generation 1 by default
-	EXPECT_EQ(1, testMessageData.at(4)); // 1 Option byte
-	EXPECT_EQ(0, testMessageData.at(5)); // No options
-	EXPECT_EQ(2, testMessageData.at(6)); // UT working set
-	EXPECT_EQ(1, testMessageData.at(7)); // Generation 1. These generations are seemingly user defined and arbitrary, not the ISO standard version... no SPN defined...
-	EXPECT_EQ(1, testMessageData.at(8)); // 1 Option byte
-	EXPECT_EQ(0, testMessageData.at(9)); // No options
-	EXPECT_EQ(6, testMessageData.at(10)); // Functionality 6 is AUX N functions
-	EXPECT_EQ(1, testMessageData.at(11)); // We specify generation 1
-	EXPECT_EQ(2, testMessageData.at(12)); // 2 Option bytes
-	EXPECT_EQ(0, testMessageData.at(13)); // No options
-	EXPECT_EQ(0, testMessageData.at(14)); // No options
-	EXPECT_EQ(12, testMessageData.at(15)); // Functionality 12 is TC section control client
-	EXPECT_EQ(1, testMessageData.at(16)); // We specify generation 1
-	EXPECT_EQ(2, testMessageData.at(17)); // 2 Option bytes
-	EXPECT_EQ(1, testMessageData.at(18)); // 1 Boom
-	EXPECT_EQ(255, testMessageData.at(19)); // 255 Sections
+	EXPECT_EQ(0, testMessageData.at(4)); // No option bytes
+	EXPECT_EQ(2, testMessageData.at(5)); // UT working set
+	EXPECT_EQ(1, testMessageData.at(6)); // Generation 1
+	EXPECT_EQ(0, testMessageData.at(7)); // No option bytes
+	EXPECT_EQ(6, testMessageData.at(8)); // Functionality 6 is AUX N functions
+	EXPECT_EQ(1, testMessageData.at(9)); // We specify generation 1
+	EXPECT_EQ(0, testMessageData.at(10)); // No option bytes
+	EXPECT_EQ(12, testMessageData.at(11)); // Functionality 12 is TC section control client
+	EXPECT_EQ(1, testMessageData.at(12)); // We specify generation 1
+	EXPECT_EQ(2, testMessageData.at(13)); // 2 Option bytes
+	EXPECT_EQ(1, testMessageData.at(14)); // 1 Boom
+	EXPECT_EQ(255, testMessageData.at(15)); // 255 Sections
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 	CANNetworkManager::CANNetwork.deactivate_control_function(otherECU);

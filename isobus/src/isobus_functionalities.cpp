@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
 #include <limits>
 
 namespace isobus
@@ -687,12 +688,16 @@ namespace isobus
 		{
 			messageData.push_back(static_cast<std::uint8_t>(functionality.functionality));
 			messageData.push_back(functionality.generation);
-			messageData.push_back(static_cast<std::uint8_t>(functionality.serializedValue.size()));
 
-			for (const auto &dataByte : functionality.serializedValue)
+			// ISO 11783-12 A.12: trailing zero option bytes are omitted and not counted,
+			// so a functionality without options reports 0 option bytes
+			std::size_t numberOfOptionBytes = functionality.serializedValue.size();
+			while ((numberOfOptionBytes > 0) && (0 == functionality.serializedValue.at(numberOfOptionBytes - 1)))
 			{
-				messageData.push_back(dataByte);
+				numberOfOptionBytes--;
 			}
+			messageData.push_back(static_cast<std::uint8_t>(numberOfOptionBytes));
+			messageData.insert(messageData.end(), functionality.serializedValue.begin(), functionality.serializedValue.begin() + static_cast<std::ptrdiff_t>(numberOfOptionBytes));
 		}
 
 		while (messageData.size() < CAN_DATA_LENGTH)
