@@ -640,6 +640,151 @@ TEST_F(CoreTest, PartnerCreatedWhileTwoMatchingDevicesAreOfflineGetsTheOneThatRe
 	CANNetworkManager::CANNetwork.deactivate_control_function(partner);
 }
 
+static std::vector<std::pair<std::shared_ptr<ControlFunction>, ControlFunctionState>> partnerStateChanges;
+static void record_partner_state_change(std::shared_ptr<ControlFunction> controlFunction, ControlFunctionState state)
+{
+	if (ControlFunction::Type::Partnered == controlFunction->get_type())
+	{
+		partnerStateChanges.emplace_back(controlFunction, state);
+	}
+}
+
+TEST_F(CoreTest, OfflinePartnerTakesOverAMatchingDeviceThatIsAlreadyOnline)
+{
+	constexpr std::uint8_t TEST_CHANNEL = 3;
+	constexpr std::uint8_t FIRST_ADDRESS = 0x92;
+	constexpr std::uint8_t SECOND_ADDRESS = 0x93;
+	constexpr std::uint16_t MANUFACTURER_CODE = 1234;
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(250); // A request timestamp of 0 would mean "no request pending"
+
+	const std::vector<NAMEFilter> nameFilters{
+		NAMEFilter(NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(NAME::Function::VirtualTerminal)),
+		NAMEFilter(NAME::NAMEParameters::ManufacturerCode, MANUFACTURER_CODE)
+	};
+	auto partner = CANNetworkManager::CANNetwork.create_partnered_control_function(TEST_CHANNEL, nameFilters);
+
+	// Two VTs match the partner's filters
+	NAME firstName(0);
+	firstName.set_function_code(static_cast<std::uint8_t>(NAME::Function::VirtualTerminal));
+	firstName.set_manufacturer_code(MANUFACTURER_CODE);
+	firstName.set_identity_number(1);
+	NAME secondName = firstName;
+	secondName.set_identity_number(2);
+
+	// The first becomes the partner, the second an external CF
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, FIRST_ADDRESS, firstName));
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, SECOND_ADDRESS, secondName));
+	CANNetworkManager::CANNetwork.update();
+	ASSERT_TRUE(partner->get_address_valid());
+	ASSERT_EQ(firstName, partner->get_NAME());
+	auto secondCF = CANNetworkManager::CANNetwork.get_control_function(TEST_CHANNEL, SECOND_ADDRESS);
+	ASSERT_NE(nullptr, secondCF);
+	ASSERT_EQ(ControlFunction::Type::External, secondCF->get_type());
+
+	partnerStateChanges.clear();
+	CANNetworkManager::CANNetwork.add_control_function_status_change_callback(record_partner_state_change);
+
+	// The first stops answering requests for address claim, while the second answers them.
+	// No claim comes after the first goes offline.
+	CANMessageFrame request = test_helpers::create_message_frame_pgn_request(0xEE00, nullptr, nullptr);
+	request.channel = TEST_CHANNEL;
+	for (std::uint8_t i = 0; i < 2; i++)
+	{
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(request);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, SECOND_ADDRESS, secondName));
+		CANNetworkManager::CANNetwork.update();
+		time_source.update_for_ms(1500);
+		CANNetworkManager::CANNetwork.update();
+	}
+
+	// The partner takes over the second right away
+	EXPECT_TRUE(partner->get_address_valid());
+	EXPECT_EQ(SECOND_ADDRESS, partner->get_address());
+	EXPECT_EQ(secondName, partner->get_NAME());
+	EXPECT_EQ(partner, CANNetworkManager::CANNetwork.get_control_function(TEST_CHANNEL, SECOND_ADDRESS));
+	EXPECT_FALSE(secondCF->get_address_valid());
+	CANNetworkManager::CANNetwork.remove_control_function_status_change_callback(record_partner_state_change);
+	ASSERT_EQ(2u, partnerStateChanges.size());
+	EXPECT_EQ(partner, partnerStateChanges[0].first);
+	EXPECT_EQ(ControlFunctionState::Offline, partnerStateChanges[0].second);
+	EXPECT_EQ(partner, partnerStateChanges[1].first);
+	EXPECT_EQ(ControlFunctionState::Online, partnerStateChanges[1].second);
+
+	// It stays the partner, with the second's claims credited to it
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(request);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, SECOND_ADDRESS, secondName));
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(1500);
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_TRUE(partner->get_address_valid());
+	EXPECT_EQ(partner, CANNetworkManager::CANNetwork.get_control_function(TEST_CHANNEL, SECOND_ADDRESS));
+
+	// An online partner isn't taken over
+	NAME thirdName = firstName;
+	thirdName.set_identity_number(3);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, FIRST_ADDRESS, thirdName));
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_EQ(secondName, partner->get_NAME());
+	EXPECT_EQ(SECOND_ADDRESS, partner->get_address());
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(partner);
+}
+
+TEST_F(CoreTest, OfflinePartnerTakesTheNextMatchingName)
+{
+	constexpr std::uint8_t TEST_CHANNEL = 3;
+	constexpr std::uint8_t FIRST_ADDRESS = 0x94;
+	constexpr std::uint8_t SECOND_ADDRESS = 0x95;
+	constexpr std::uint16_t MANUFACTURER_CODE = 1235;
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(250); // A request timestamp of 0 would mean "no request pending"
+
+	const std::vector<NAMEFilter> nameFilters{
+		NAMEFilter(NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(NAME::Function::VirtualTerminal)),
+		NAMEFilter(NAME::NAMEParameters::ManufacturerCode, MANUFACTURER_CODE)
+	};
+	auto partner = CANNetworkManager::CANNetwork.create_partnered_control_function(TEST_CHANNEL, nameFilters);
+
+	NAME firstName(0);
+	firstName.set_function_code(static_cast<std::uint8_t>(NAME::Function::VirtualTerminal));
+	firstName.set_manufacturer_code(MANUFACTURER_CODE);
+	firstName.set_identity_number(1);
+	NAME secondName = firstName;
+	secondName.set_identity_number(2);
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, FIRST_ADDRESS, firstName));
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, SECOND_ADDRESS, secondName));
+	CANNetworkManager::CANNetwork.update();
+	ASSERT_EQ(firstName, partner->get_NAME());
+	auto secondCF = CANNetworkManager::CANNetwork.get_control_function(TEST_CHANNEL, SECOND_ADDRESS);
+	ASSERT_NE(nullptr, secondCF);
+
+	// Both stop answering, so there is no matching device online for the partner to take over
+	CANMessageFrame request = test_helpers::create_message_frame_pgn_request(0xEE00, nullptr, nullptr);
+	request.channel = TEST_CHANNEL;
+	for (std::uint8_t i = 0; i < 2; i++)
+	{
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(request);
+		CANNetworkManager::CANNetwork.update();
+		time_source.update_for_ms(1500);
+		CANNetworkManager::CANNetwork.update();
+	}
+	ASSERT_FALSE(partner->get_address_valid());
+	ASSERT_FALSE(secondCF->get_address_valid());
+
+	// The second claims again, and its claim makes it the partner
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(TEST_CHANNEL, SECOND_ADDRESS, secondName));
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_TRUE(partner->get_address_valid());
+	EXPECT_EQ(SECOND_ADDRESS, partner->get_address());
+	EXPECT_EQ(secondName, partner->get_NAME());
+	EXPECT_EQ(partner, CANNetworkManager::CANNetwork.get_control_function(TEST_CHANNEL, SECOND_ADDRESS));
+	EXPECT_FALSE(secondCF->get_address_valid());
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(partner);
+}
+
 TEST_F(CoreTest, SimilarControlFunctions)
 {
 	CANNetworkManager::CANNetwork.update();
