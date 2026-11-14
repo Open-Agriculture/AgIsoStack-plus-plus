@@ -18,7 +18,9 @@
 #include <algorithm>
 #include <iomanip>
 #include <limits>
+#include <set>
 #include <sstream>
+#include <vector>
 
 namespace isobus
 {
@@ -62,6 +64,96 @@ namespace isobus
 		return ((VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Running == state) ||
 		        (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Success == state) ||
 		        (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Fail == state));
+	}
+
+	/// @brief Checks if the Change Child Location and Change Child Position commands can target a parent object of this type.
+	/// @param type The type of the parent object.
+	/// @returns true if the commands are allowed for this object type, otherwise false.
+	static bool can_move_children_of(VirtualTerminalObjectType type)
+	{
+		bool retVal = false;
+
+		switch (type)
+		{
+			case VirtualTerminalObjectType::WorkingSet:
+			case VirtualTerminalObjectType::DataMask:
+			case VirtualTerminalObjectType::AlarmMask:
+			case VirtualTerminalObjectType::Container:
+			case VirtualTerminalObjectType::Key:
+			case VirtualTerminalObjectType::Button:
+			case VirtualTerminalObjectType::WindowMask:
+			case VirtualTerminalObjectType::AuxiliaryFunctionType2:
+			case VirtualTerminalObjectType::AuxiliaryInputType2:
+			{
+				retVal = true;
+			}
+			break;
+
+			default:
+				break;
+		}
+		return retVal;
+	}
+
+	/// @brief Checks if an object is shown on the active mask of a working set
+	/// @param workingSet The working set that owns the object
+	/// @param objectID The object to look for
+	/// @returns true if the object can be reached from the active mask or its soft key mask without passing through a hidden container, otherwise false
+	static bool is_shown_on_active_mask(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, std::uint16_t objectID)
+	{
+		bool found = false;
+		const auto workingSetObject = workingSet->get_working_set_object();
+
+		if ((nullptr != workingSetObject) && (VirtualTerminalObjectType::WorkingSet == workingSetObject->get_object_type()))
+		{
+			std::vector<std::uint16_t> stack;
+			std::set<std::uint16_t> visited;
+			stack.push_back(std::static_pointer_cast<WorkingSet>(workingSetObject)->get_active_mask());
+
+			while ((!stack.empty()) && (!found))
+			{
+				const std::uint16_t id = stack.back();
+				stack.pop_back();
+
+				if ((NULL_OBJECT_ID == id) || (!visited.insert(id).second))
+				{
+					continue;
+				}
+
+				if (objectID == id)
+				{
+					found = true;
+				}
+				else
+				{
+					const auto object = workingSet->get_object_by_id(id);
+
+					if ((nullptr == object) || ((VirtualTerminalObjectType::Container == object->get_object_type()) && std::static_pointer_cast<Container>(object)->get_hidden()))
+					{
+						continue;
+					}
+
+					if (VirtualTerminalObjectType::ObjectPointer == object->get_object_type())
+					{
+						stack.push_back(std::static_pointer_cast<ObjectPointer>(object)->get_value());
+					}
+					else if (VirtualTerminalObjectType::DataMask == object->get_object_type())
+					{
+						stack.push_back(std::static_pointer_cast<DataMask>(object)->get_soft_key_mask());
+					}
+					else if (VirtualTerminalObjectType::AlarmMask == object->get_object_type())
+					{
+						stack.push_back(std::static_pointer_cast<AlarmMask>(object)->get_soft_key_mask());
+					}
+
+					for (std::uint16_t i = 0; i < object->get_number_children(); i++)
+					{
+						stack.push_back(object->get_child_id(i));
+					}
+				}
+			}
+		}
+		return found;
 	}
 
 	/// @brief Builds a get versions or extended get versions response.
@@ -1114,9 +1206,17 @@ namespace isobus
 
 							case VirtualTerminalObjectType::Button:
 							{
-								std::static_pointer_cast<Button>(lTargetObject)->set_option(Button::Options::Disabled, (0 == data[3]));
-								send_enable_disable_object_response(objectId, 0, (0 != data[3]), managedWorkingSet->get_control_function());
-								onRepaintEventDispatcher.call(managedWorkingSet);
+								// Buttons can only be enabled or disabled from VT version 4
+								if (get_vt_version_byte(get_version()) > 3)
+								{
+									std::static_pointer_cast<Button>(lTargetObject)->set_option(Button::Options::Disabled, (0 == data[3]));
+									send_enable_disable_object_response(objectId, 0, (0 != data[3]), managedWorkingSet->get_control_function());
+									onRepaintEventDispatcher.call(managedWorkingSet);
+								}
+								else
+								{
+									send_enable_disable_object_response(objectId, get_bit(static_cast<std::uint8_t>(EnableDisableObjectErrorBit::InvalidObjectID)), (0 != data[3]), managedWorkingSet->get_control_function());
+								}
 							}
 							break;
 
@@ -1145,7 +1245,9 @@ namespace isobus
 				auto objectID = get_little_endian_uint16(data, 3);
 				auto parentObject = managedWorkingSet->get_object_by_id(parentObjectId);
 
-				if (nullptr != parentObject)
+				// Auxiliary Input Type 1 allows Change Child Location but not Change Child Position
+				if ((nullptr != parentObject) &&
+				    (can_move_children_of(parentObject->get_object_type()) || (VirtualTerminalObjectType::AuxiliaryInputType1 == parentObject->get_object_type())))
 				{
 					auto lTargetObject = managedWorkingSet->get_object_by_id(objectID);
 
@@ -1155,18 +1257,17 @@ namespace isobus
 						auto yRelativeChange = static_cast<std::int8_t>(static_cast<std::int16_t>(data[6]) - 127);
 						bool anyObjectMatched = parentObject->offset_all_children_with_id(objectID, xRelativeChange, yRelativeChange);
 
-						onRepaintEventDispatcher.call(managedWorkingSet);
-
 						if (anyObjectMatched)
 						{
+							onRepaintEventDispatcher.call(managedWorkingSet);
 							send_change_child_location_response(parentObjectId, objectID, 0, managedWorkingSet->get_control_function());
 							LOG_DEBUG("[VT Server]: Client %u change child location command. Parent: %u, Target: %u, X-Offset: %d, Y-Offset: %d", managedWorkingSet->get_control_function()->get_address(), parentObjectId, objectID, xRelativeChange, yRelativeChange);
 							process_macro(parentObject, EventID::ChangeChildLocation, parentObject->get_object_type(), managedWorkingSet);
 						}
 						else
 						{
-							send_change_child_location_response(parentObjectId, objectID, get_bit(static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), managedWorkingSet->get_control_function());
-							LOG_WARNING("[VT Server]: Client %u change child location failed because the target object with ID %u isn't applicable", managedWorkingSet->get_control_function()->get_address(), objectID);
+							send_change_child_location_response(parentObjectId, objectID, get_bit(static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject)), managedWorkingSet->get_control_function());
+							LOG_WARNING("[VT Server]: Client %u change child location failed because object %u is not a child of object %u", managedWorkingSet->get_control_function()->get_address(), objectID, parentObjectId);
 						}
 					}
 					else
@@ -1178,7 +1279,7 @@ namespace isobus
 				else
 				{
 					send_change_child_location_response(parentObjectId, objectID, get_bit(static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject)), managedWorkingSet->get_control_function());
-					LOG_WARNING("[VT Server]: Client %u change child location failed because the parent object with ID %u doesn't exist", managedWorkingSet->get_control_function()->get_address(), parentObjectId);
+					LOG_WARNING("[VT Server]: Client %u change child location failed because object %u doesn't exist or can't be a parent", managedWorkingSet->get_control_function()->get_address(), parentObjectId);
 				}
 			}
 			break;
@@ -1368,55 +1469,34 @@ namespace isobus
 					auto parentObject = managedWorkingSet->get_object_by_id(parentObjectId);
 					auto targetObject = managedWorkingSet->get_object_by_id(objectID);
 
-					if (nullptr != parentObject)
+					if ((nullptr != parentObject) && can_move_children_of(parentObject->get_object_type()))
 					{
 						if (nullptr != targetObject)
 						{
-							switch (parentObject->get_object_type())
+							bool wasFound = false;
+
+							// If a parent object includes the child object multiple times, then each instance will be moved
+							for (std::uint16_t i = 0; i < parentObject->get_number_children(); i++)
 							{
-								case VirtualTerminalObjectType::Button:
-								case VirtualTerminalObjectType::Container:
-								case VirtualTerminalObjectType::AlarmMask:
-								case VirtualTerminalObjectType::DataMask:
-								case VirtualTerminalObjectType::Key:
-								case VirtualTerminalObjectType::WorkingSet:
-								case VirtualTerminalObjectType::AuxiliaryInputType2:
-								case VirtualTerminalObjectType::WindowMask:
+								if (objectID == parentObject->get_child_id(i))
 								{
-									bool wasFound = false;
-
-									// If a parent object includes the child object multiple times, then each instance will be moved
-									for (std::uint16_t i = 0; i < parentObject->get_number_children(); i++)
-									{
-										if (objectID == parentObject->get_child_id(i))
-										{
-											wasFound = true;
-											parentObject->set_child_x(i, newXPosition);
-											parentObject->set_child_y(i, newYPosition);
-											onRepaintEventDispatcher.call(managedWorkingSet);
-										}
-									}
-
-									if (wasFound)
-									{
-										LOG_DEBUG("[VT Server]: Client %u changed child position: object %u of parent object %u, x: %u, y: %u", managedWorkingSet->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
-										send_change_child_position_response(parentObjectId, objectID, 0, message.get_source_control_function());
-										process_macro(parentObject, EventID::OnChangeChildPosition, parentObject->get_object_type(), managedWorkingSet);
-									}
-									else
-									{
-										LOG_WARNING("[VT Server]: Client %u change child position error. Target object does not exist or is not applicable: object %u of parent object %u, x: %u, y: %u", managedWorkingSet->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
-										send_change_child_position_response(parentObjectId, objectID, get_bit(static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), message.get_source_control_function());
-									}
+									wasFound = true;
+									parentObject->set_child_x(i, newXPosition);
+									parentObject->set_child_y(i, newYPosition);
+									onRepaintEventDispatcher.call(managedWorkingSet);
 								}
-								break;
+							}
 
-								default:
-								{
-									LOG_WARNING("[VT Server]: Client %u change child position error. Parent object type cannot be targeted by this command: object %u of parent object %u, x: %u, y: %u", managedWorkingSet->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
-									send_change_child_position_response(parentObjectId, objectID, get_bit(static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::AnyOtherError)), message.get_source_control_function());
-								}
-								break;
+							if (wasFound)
+							{
+								LOG_DEBUG("[VT Server]: Client %u changed child position: object %u of parent object %u, x: %u, y: %u", managedWorkingSet->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
+								send_change_child_position_response(parentObjectId, objectID, 0, message.get_source_control_function());
+								process_macro(parentObject, EventID::OnChangeChildPosition, parentObject->get_object_type(), managedWorkingSet);
+							}
+							else
+							{
+								LOG_WARNING("[VT Server]: Client %u change child position error. Object %u is not a child of object %u", managedWorkingSet->get_control_function()->get_address(), objectID, parentObjectId);
+								send_change_child_position_response(parentObjectId, objectID, get_bit(static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject)), message.get_source_control_function());
 							}
 						}
 						else
@@ -1427,7 +1507,7 @@ namespace isobus
 					}
 					else
 					{
-						LOG_WARNING("[VT Server]: Client %u change child position error. Parent object does not exist or is not applicable: object %u of parent object %u, x: %u, y: %u", managedWorkingSet->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
+						LOG_WARNING("[VT Server]: Client %u change child position error. Object %u doesn't exist or can't be a parent", managedWorkingSet->get_control_function()->get_address(), parentObjectId);
 						send_change_child_position_response(parentObjectId, objectID, get_bit(static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject)), message.get_source_control_function());
 					}
 				}
@@ -1529,7 +1609,7 @@ namespace isobus
 						default:
 						{
 							LOG_WARNING("[VT Server]: Client %u change size command: invalid object type for object %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-							send_change_size_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeSizeErrorBit::AnyOtherError)), message.get_source_control_function());
+							send_change_size_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeSizeErrorBit::InvalidObjectID)), message.get_source_control_function());
 						}
 						break;
 					}
@@ -1572,7 +1652,8 @@ namespace isobus
 								}
 								else
 								{
-									send_change_list_item_response(objectID, newObjectID, get_bit(static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
+									const auto errorBit = (listIndex >= targetObject->get_number_children()) ? ChangeListItemErrorBit::InvalidListIndex : ChangeListItemErrorBit::InvalidNewListItemObjectID;
+									send_change_list_item_response(objectID, newObjectID, get_bit(static_cast<std::uint8_t>(errorBit)), listIndex, message.get_source_control_function());
 									LOG_WARNING("[VT Server]: Client %u change list item command failed. Object ID: %u, New Object ID: %u, Index: %u", managedWorkingSet->get_control_function()->get_address(), objectID, newObjectID, listIndex);
 								}
 							}
@@ -1597,7 +1678,8 @@ namespace isobus
 								}
 								else
 								{
-									send_change_list_item_response(objectID, newObjectID, get_bit(static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
+									const auto errorBit = (listIndex >= targetObject->get_number_children()) ? ChangeListItemErrorBit::InvalidListIndex : ChangeListItemErrorBit::InvalidNewListItemObjectID;
+									send_change_list_item_response(objectID, newObjectID, get_bit(static_cast<std::uint8_t>(errorBit)), listIndex, message.get_source_control_function());
 									LOG_WARNING("[VT Server]: Client %u change list item command failed. Object ID: %u, New Object ID: %u, Index: %u", managedWorkingSet->get_control_function()->get_address(), objectID, newObjectID, listIndex);
 								}
 							}
@@ -1606,7 +1688,7 @@ namespace isobus
 							default:
 							{
 								LOG_WARNING("[VT Server]: Client %u change list item command: invalid object type. Object: %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-								send_change_list_item_response(objectID, newObjectID, get_bit(static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
+								send_change_list_item_response(objectID, newObjectID, get_bit(static_cast<std::uint8_t>(ChangeListItemErrorBit::InvalidObjectID)), listIndex, message.get_source_control_function());
 							}
 							break;
 						}
@@ -1714,7 +1796,7 @@ namespace isobus
 								else
 								{
 									LOG_WARNING("[VT Server]: Client %u change soft key mask command: failed to set mask for alarm mask object %u to %u", managedWorkingSet->get_control_function()->get_address(), dataOrAlarmMaskId, newSoftKeyMaskId);
-									send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, get_bit(static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::AnyOtherError)), message.get_source_control_function());
+									send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, get_bit(static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::InvalidSoftKeyMaskObjectID)), message.get_source_control_function());
 								}
 							}
 							break;
@@ -1731,7 +1813,7 @@ namespace isobus
 								else
 								{
 									LOG_WARNING("[VT Server]: Client %u change soft key mask command: failed to set mask for data mask object %u to %u", managedWorkingSet->get_control_function()->get_address(), dataOrAlarmMaskId, newSoftKeyMaskId);
-									send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, get_bit(static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::AnyOtherError)), message.get_source_control_function());
+									send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, get_bit(static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::InvalidSoftKeyMaskObjectID)), message.get_source_control_function());
 								}
 							}
 							break;
@@ -1739,7 +1821,7 @@ namespace isobus
 							default:
 							{
 								LOG_WARNING("[VT Server]: Client %u change soft key mask command: invalid object type for object %u", managedWorkingSet->get_control_function()->get_address(), dataOrAlarmMaskId);
-								send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, get_bit(static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::AnyOtherError)), message.get_source_control_function());
+								send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, get_bit(static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::InvalidDataOrAlarmMaskObjectID)), message.get_source_control_function());
 							}
 							break;
 						}
@@ -1768,6 +1850,7 @@ namespace isobus
 				{
 					switch (targetObject->get_object_type())
 					{
+						case VirtualTerminalObjectType::AuxiliaryFunctionType2:
 						case VirtualTerminalObjectType::AuxiliaryInputType2:
 						case VirtualTerminalObjectType::WorkingSet:
 						case VirtualTerminalObjectType::DataMask:
@@ -1794,7 +1877,7 @@ namespace isobus
 						default:
 						{
 							LOG_WARNING("[VT Server]: Client %u change background colour command: invalid object type for object %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-							send_change_background_colour_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeBackgroundColourErrorBit::AnyOtherError)), backgroundColour, message.get_source_control_function());
+							send_change_background_colour_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeBackgroundColourErrorBit::InvalidObjectID)), backgroundColour, message.get_source_control_function());
 						}
 						break;
 					}
@@ -1831,7 +1914,7 @@ namespace isobus
 					}
 					else
 					{
-						send_change_priority_response(objectID, get_bit(static_cast<std::uint8_t>(ChangePriorityErrorBit::AnyOtherError)), newPriority, message.get_source_control_function());
+						send_change_priority_response(objectID, get_bit(static_cast<std::uint8_t>(ChangePriorityErrorBit::InvalidObjectID)), newPriority, message.get_source_control_function());
 						LOG_WARNING("[VT Server]: Client %u change priority command: invalid object ID of %u - the object must be an alarm mask.", managedWorkingSet->get_control_function()->get_address(), objectID);
 					}
 				}
@@ -1846,91 +1929,100 @@ namespace isobus
 			case Function::SelectInputObjectCommand:
 			{
 				auto objectID = get_little_endian_uint16(data, 1);
+				const bool isVersion4OrLater = (get_vt_version_byte(get_version()) > 3);
+				// Before VT version 4 the option byte is reserved, so every request only sets focus
+				const std::uint8_t option = isVersion4OrLater ? data[3] : 0xFF;
 				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
+				bool isInputObject = false;
+				bool isEnabled = true;
+				bool canOpenForInput = true;
 
 				if (nullptr != targetObject)
 				{
 					switch (targetObject->get_object_type())
 					{
 						case VirtualTerminalObjectType::Button:
+						{
+							// Buttons and keys can only be selected from VT version 4
+							isInputObject = isVersion4OrLater;
+							isEnabled = !std::static_pointer_cast<Button>(targetObject)->get_option(Button::Options::Disabled);
+							canOpenForInput = false;
+						}
+						break;
+
 						case VirtualTerminalObjectType::Key:
 						{
-							if (get_vt_version_byte(get_version()) > 3)
-							{
-								if (0 == data[3])
-								{
-									// 0 in Version 4+ means to activate the object for input
-									managedWorkingSet->set_object_focus(objectID);
-									LOG_DEBUG("[VT Server]: Client %u select input object %u and open for input", managedWorkingSet->get_control_function()->get_address(), objectID);
-									onFocusObjectEventDispatcher.call(managedWorkingSet, objectID, true);
-									send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsOpenedForEdit, message.get_source_control_function());
-									process_macro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), managedWorkingSet);
-								}
-								else if (0xFF == data[3])
-								{
-									// This removes focus if the ID is NULL_OBJECT_ID, or sets focus if not
-									managedWorkingSet->set_object_focus(objectID);
-									LOG_DEBUG("[VT Server]: Client %u select input object %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-									onFocusObjectEventDispatcher.call(managedWorkingSet, objectID, false);
-									send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsSelected, message.get_source_control_function());
-									process_macro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), managedWorkingSet);
-								}
-								else
-								{
-									LOG_WARNING("[VT Server]: Client %u select input object command: Illegal option byte", managedWorkingSet->get_control_function()->get_address(), objectID);
-									send_select_input_object_response(objectID, get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidOptionValue)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
-								}
-							}
-							else
-							{
-								send_select_input_object_response(objectID, get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::AnyOtherError)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
-								LOG_WARNING("[VT Server]: Client %u select input object command: buttons and keys can only be selected when the server is version 4 or higher.", managedWorkingSet->get_control_function()->get_address(), objectID);
-							}
+							isInputObject = isVersion4OrLater;
+							canOpenForInput = false;
+						}
+						break;
+
+						case VirtualTerminalObjectType::InputBoolean:
+						{
+							isInputObject = true;
+							isEnabled = std::static_pointer_cast<InputBoolean>(targetObject)->get_enabled();
+						}
+						break;
+
+						case VirtualTerminalObjectType::InputString:
+						{
+							isInputObject = true;
+							isEnabled = std::static_pointer_cast<InputString>(targetObject)->get_enabled();
 						}
 						break;
 
 						case VirtualTerminalObjectType::InputNumber:
-						case VirtualTerminalObjectType::InputString:
+						{
+							isInputObject = true;
+							isEnabled = std::static_pointer_cast<InputNumber>(targetObject)->get_option2(InputNumber::Options2::Enabled);
+						}
+						break;
+
 						case VirtualTerminalObjectType::InputList:
 						{
-							if (0 == data[3])
-							{
-								// 0 in Version 4+ means to activate the object for input
-								managedWorkingSet->set_object_focus(objectID);
-								LOG_DEBUG("[VT Server]: Client %u select input object %u and open for input", managedWorkingSet->get_control_function()->get_address(), objectID);
-								onFocusObjectEventDispatcher.call(managedWorkingSet, objectID, true);
-								send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsOpenedForEdit, message.get_source_control_function());
-								process_macro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), managedWorkingSet);
-							}
-							else if (0xFF == data[3])
-							{
-								// This removes focus if the ID is NULL_OBJECT_ID, or sets focus if not
-								managedWorkingSet->set_object_focus(objectID);
-								LOG_DEBUG("[VT Server]: Client %u select input object %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-								onFocusObjectEventDispatcher.call(managedWorkingSet, objectID, false);
-								send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsSelected, message.get_source_control_function());
-								process_macro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), managedWorkingSet);
-							}
-							else
-							{
-								LOG_WARNING("[VT Server]: Client %u select input object command: Illegal option byte", managedWorkingSet->get_control_function()->get_address(), objectID);
-								send_select_input_object_response(objectID, get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidOptionValue)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
-							}
+							isInputObject = true;
+							isEnabled = std::static_pointer_cast<InputList>(targetObject)->get_option(InputList::Options::Enabled);
 						}
 						break;
 
 						default:
-						{
-							LOG_WARNING("[VT Server]: Client %u select input object command: invalid object type", managedWorkingSet->get_control_function()->get_address(), objectID);
-							send_select_input_object_response(objectID, get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::AnyOtherError)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
-						}
-						break;
+							break;
 					}
+				}
+
+				std::uint8_t errorBitfield = 0;
+
+				if (!isInputObject)
+				{
+					errorBitfield = get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidObjectID));
+				}
+				else if (!isEnabled)
+				{
+					errorBitfield = get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::ObjectIsDisabled));
+				}
+				else if (!is_shown_on_active_mask(managedWorkingSet, objectID))
+				{
+					errorBitfield = get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::ObjectIsNotOnTheActiveMaskOrIsInAHiddenContainer));
+				}
+				// Option 0 opens the object for input, which buttons and keys can't be
+				else if ((0xFF != option) && ((0 != option) || (!canOpenForInput)))
+				{
+					errorBitfield = get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidOptionValue));
+				}
+
+				if (0 == errorBitfield)
+				{
+					const bool openForInput = (0 == option);
+					managedWorkingSet->set_object_focus(objectID);
+					LOG_DEBUG("[VT Server]: Client %u select input object %u, open for input: %u", managedWorkingSet->get_control_function()->get_address(), objectID, openForInput);
+					onFocusObjectEventDispatcher.call(managedWorkingSet, objectID, openForInput);
+					send_select_input_object_response(objectID, 0, openForInput ? SelectInputObjectResponse::ObjectIsOpenedForEdit : SelectInputObjectResponse::ObjectIsSelected, message.get_source_control_function());
+					process_macro(targetObject, EventID::OnInputFieldSelection, targetObject->get_object_type(), managedWorkingSet);
 				}
 				else
 				{
-					send_select_input_object_response(objectID, get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidObjectID)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
-					LOG_WARNING("[VT Server]: Client %u select input object command: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+					send_select_input_object_response(objectID, errorBitfield, SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
+					LOG_WARNING("[VT Server]: Client %u select input object %u with option %u failed, error bits 0x%02X", managedWorkingSet->get_control_function()->get_address(), objectID, option, errorBitfield);
 				}
 			}
 			break;
@@ -2096,7 +2188,7 @@ namespace isobus
 					else
 					{
 						LOG_WARNING("[VT Server]: Client %u change polygon point: object id %u is not an output polygon", managedWorkingSet->get_control_function()->get_address(), objectID);
-						send_change_polygon_point_response(objectID, get_bit(static_cast<std::uint8_t>(ChangePolygonPointErrorBit::AnyOtherError)), message.get_source_control_function());
+						send_change_polygon_point_response(objectID, get_bit(static_cast<std::uint8_t>(ChangePolygonPointErrorBit::InvalidObjectID)), message.get_source_control_function());
 					}
 				}
 				else
@@ -2159,7 +2251,7 @@ namespace isobus
 					else
 					{
 						LOG_WARNING("[VT Server]: Client %u change polygon scale: object id %u is not an output polygon", managedWorkingSet->get_control_function()->get_address(), objectID);
-						send_change_polygon_scale_response(objectID, newWidth, newHeight, get_bit(static_cast<std::uint8_t>(ChangePolygonScaleErrorBit::AnyOtherError)), message.get_source_control_function());
+						send_change_polygon_scale_response(objectID, newWidth, newHeight, get_bit(static_cast<std::uint8_t>(ChangePolygonScaleErrorBit::InvalidObjectID)), message.get_source_control_function());
 					}
 				}
 				else
@@ -2203,7 +2295,7 @@ namespace isobus
 					else
 					{
 						LOG_WARNING("[VT Server]: Client %u change end point: object id %u is not an output line", managedWorkingSet->get_control_function()->get_address(), objectID);
-						send_change_end_point_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeEndPointErrorBit::AnyOtherError)), message.get_source_control_function());
+						send_change_end_point_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeEndPointErrorBit::InvalidObjectID)), message.get_source_control_function());
 					}
 				}
 				else
