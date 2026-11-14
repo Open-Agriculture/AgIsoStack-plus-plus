@@ -590,6 +590,23 @@ namespace isobus
 		return retVal;
 	}
 
+	std::shared_ptr<VTObject> VirtualTerminalServer::get_soft_key_mask_of(const std::shared_ptr<VTObject> &mask, const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet)
+	{
+		std::uint16_t softKeyMaskID = NULL_OBJECT_ID;
+		if (nullptr != mask)
+		{
+			if (VirtualTerminalObjectType::DataMask == mask->get_object_type())
+			{
+				softKeyMaskID = std::static_pointer_cast<DataMask>(mask)->get_soft_key_mask();
+			}
+			else if (VirtualTerminalObjectType::AlarmMask == mask->get_object_type())
+			{
+				softKeyMaskID = std::static_pointer_cast<AlarmMask>(mask)->get_soft_key_mask();
+			}
+		}
+		return (NULL_OBJECT_ID == softKeyMaskID) ? nullptr : workingSet->get_object_by_id(softKeyMaskID);
+	}
+
 	CANIdentifier::CANPriority VirtualTerminalServer::get_priority() const
 	{
 		return (VTVersion::Version6 == get_version()) ? CANIdentifier::CANPriority::Priority5 : CANIdentifier::CANPriority::PriorityLowest7;
@@ -1298,9 +1315,33 @@ namespace isobus
 					    ((VirtualTerminalObjectType::DataMask == newActiveMaskObject->get_object_type()) ||
 					     (VirtualTerminalObjectType::AlarmMask == newActiveMaskObject->get_object_type())))
 					{
-						std::static_pointer_cast<WorkingSet>(workingSetObject)->set_active_mask(newActiveMaskObjectId);
+						auto workingSet = std::static_pointer_cast<WorkingSet>(workingSetObject);
+						const std::uint16_t previousActiveMaskObjectId = workingSet->get_active_mask();
+						// The masks are only on the display while this working set is the active one, and only a different mask changes them.
+						// Everything the events depend on is read now, because the macros run synchronously and can change it.
+						const bool masksChangeOnTheDisplay = (managedWorkingSet == activeWorkingSet) && (previousActiveMaskObjectId != newActiveMaskObjectId);
+						const auto previousActiveMask = (NULL_OBJECT_ID == previousActiveMaskObjectId) ? nullptr : managedWorkingSet->get_object_by_id(previousActiveMaskObjectId);
+						const auto previousSoftKeyMask = get_soft_key_mask_of(previousActiveMask, managedWorkingSet);
+						const auto newSoftKeyMask = get_soft_key_mask_of(newActiveMaskObject, managedWorkingSet);
+
+						workingSet->set_active_mask(newActiveMaskObjectId);
 						send_change_active_mask_response(newActiveMaskObjectId, 0, managedWorkingSet->get_control_function());
 						onChangeActiveMaskEventDispatcher.call(managedWorkingSet, workingSetObjectId, newActiveMaskObjectId);
+
+						// The old mask is hidden and the new one shown only when the active mask really changes on the display (ISO 11783-6:2018 4.6.18).
+						// That runs before On Change Active Mask: its macro can change the active mask again, and then its Hide and Show must come last.
+						if (masksChangeOnTheDisplay)
+						{
+							if (nullptr != previousActiveMask)
+							{
+								process_macro(previousActiveMask, EventID::OnHide, previousActiveMask->get_object_type(), managedWorkingSet);
+							}
+							process_macro(previousSoftKeyMask, EventID::OnHide, VirtualTerminalObjectType::SoftKeyMask, managedWorkingSet);
+							process_macro(newActiveMaskObject, EventID::OnShow, newActiveMaskObject->get_object_type(), managedWorkingSet);
+							process_macro(newSoftKeyMask, EventID::OnShow, VirtualTerminalObjectType::SoftKeyMask, managedWorkingSet);
+						}
+						// ISO 11783-6:2018 4.6.22.1 and Table B.1: On Change Active Mask runs for every valid command, even without a change.
+						process_macro(workingSetObject, EventID::OnChangeActiveMask, VirtualTerminalObjectType::WorkingSet, managedWorkingSet);
 						LOG_DEBUG("[VT Server]: Client %u changed active mask to object %u for working set object %u", managedWorkingSet->get_control_function()->get_address(), newActiveMaskObjectId, workingSetObjectId);
 					}
 					else
@@ -1778,6 +1819,23 @@ namespace isobus
 				auto targetMask = managedWorkingSet->get_object_by_id(dataOrAlarmMaskId);
 				auto newSoftKeyMask = managedWorkingSet->get_object_by_id(newSoftKeyMaskId);
 
+				// ISO 11783-6:2018 Tables B.2 and B.3: the soft key masks are hidden and shown only if the mask is on the display.
+				// Read that now, because the On Change Soft Key Mask macros run synchronously and can change the active mask.
+				// The Hide and Show run before On Change Soft Key Mask, so the ones of a change made by its macro come last.
+				const auto workingSetObject = managedWorkingSet->get_working_set_object();
+				const bool maskIsVisible = (managedWorkingSet == activeWorkingSet) &&
+				  (nullptr != workingSetObject) &&
+				  (VirtualTerminalObjectType::WorkingSet == workingSetObject->get_object_type()) &&
+				  (dataOrAlarmMaskId == std::static_pointer_cast<WorkingSet>(workingSetObject)->get_active_mask());
+				const auto previousSoftKeyMask = get_soft_key_mask_of(targetMask, managedWorkingSet);
+				const auto changeVisibleSoftKeyMask = [&]() {
+					if (maskIsVisible && (previousSoftKeyMask != newSoftKeyMask))
+					{
+						process_macro(previousSoftKeyMask, EventID::OnHide, VirtualTerminalObjectType::SoftKeyMask, managedWorkingSet);
+						process_macro(newSoftKeyMask, EventID::OnShow, VirtualTerminalObjectType::SoftKeyMask, managedWorkingSet);
+					}
+				};
+
 				if (nullptr != targetMask)
 				{
 					if ((NULL_OBJECT_ID == newSoftKeyMaskId) || (nullptr != newSoftKeyMask))
@@ -1791,6 +1849,7 @@ namespace isobus
 									LOG_DEBUG("[VT Server]: Client %u change soft key mask command: alarm mask object %u to %u", managedWorkingSet->get_control_function()->get_address(), dataOrAlarmMaskId, newSoftKeyMaskId);
 									send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, 0, message.get_source_control_function());
 									onChangeActiveSoftKeyMaskEventDispatcher.call(managedWorkingSet, dataOrAlarmMaskId, newSoftKeyMaskId);
+									changeVisibleSoftKeyMask();
 									process_macro(targetMask, EventID::OnChangeSoftKeyMask, VirtualTerminalObjectType::AlarmMask, managedWorkingSet);
 								}
 								else
@@ -1808,6 +1867,7 @@ namespace isobus
 									LOG_DEBUG("[VT Server]: Client %u change soft key mask command: data mask object %u to %u", managedWorkingSet->get_control_function()->get_address(), dataOrAlarmMaskId, newSoftKeyMaskId);
 									send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, 0, message.get_source_control_function());
 									onChangeActiveSoftKeyMaskEventDispatcher.call(managedWorkingSet, dataOrAlarmMaskId, newSoftKeyMaskId);
+									changeVisibleSoftKeyMask();
 									process_macro(targetMask, EventID::OnChangeSoftKeyMask, VirtualTerminalObjectType::DataMask, managedWorkingSet);
 								}
 								else
