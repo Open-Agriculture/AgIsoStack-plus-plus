@@ -13,7 +13,7 @@
 #define CAN_TRANSPORT_PROTOCOL_HPP
 
 #include <atomic>
-#include <list>
+#include <vector>
 
 #include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_network_configuration.hpp"
@@ -194,7 +194,7 @@ namespace isobus
 		/// @brief Gets all the active transport protocol sessions that are currently active
 		/// @note The list returns pointers to the transport protocol sessions, but they can disappear at any time
 		/// @returns A list of all the active transport protocol sessions
-		std::list<std::shared_ptr<TransportProtocolSession>> get_sessions() const;
+		std::vector<std::shared_ptr<TransportProtocolSession>> get_sessions() const;
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
@@ -322,7 +322,7 @@ namespace isobus
 		void update_state_machine(std::shared_ptr<TransportProtocolSession> &session);
 
 		mutable Mutex activeSessionsMutex; ///< Synchronizes access to @ref activeSessions
-		std::list<std::shared_ptr<TransportProtocolSession>> activeSessions; ///< A list of all active TP sessions
+		std::vector<std::shared_ptr<TransportProtocolSession>> activeSessions; ///< A list of all active TP sessions
 
 		const CANMessageFrameCallback sendCANFrameCallback; ///< A callback for sending a CAN frame
 		const CANMessageCallback canMessageReceivedCallback; ///< A callback for when a complete CAN message is received using the TP protocol

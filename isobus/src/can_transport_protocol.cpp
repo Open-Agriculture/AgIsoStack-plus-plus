@@ -1060,7 +1060,7 @@ namespace isobus
 		return activeSessions.size();
 	}
 
-	std::list<std::shared_ptr<TransportProtocolManager::TransportProtocolSession>> TransportProtocolManager::get_sessions() const
+	std::vector<std::shared_ptr<TransportProtocolManager::TransportProtocolSession>> TransportProtocolManager::get_sessions() const
 	{
 		LOCK_GUARD(Mutex, activeSessionsMutex);
 		return activeSessions;

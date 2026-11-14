@@ -11,8 +11,8 @@
 
 namespace isobus
 {
-	CANStackLogger *CANStackLogger::logger = nullptr;
-	CANStackLogger::LoggingLevel CANStackLogger::currentLogLevel = LoggingLevel::Info;
+	std::atomic<CANStackLogger *> CANStackLogger::logger{ nullptr };
+	std::atomic<CANStackLogger::LoggingLevel> CANStackLogger::currentLogLevel{ LoggingLevel::Info };
 	Mutex CANStackLogger::loggerMutex;
 
 #ifndef DISABLE_CAN_STACK_LOGGER
@@ -68,6 +68,11 @@ namespace isobus
 	void CANStackLogger::set_log_level(LoggingLevel newLogLevel)
 	{
 		currentLogLevel = newLogLevel;
+	}
+
+	bool CANStackLogger::is_logged(LoggingLevel level)
+	{
+		return (nullptr != logger) && (level >= currentLogLevel);
 	}
 
 	void CANStackLogger::sink_CAN_stack_log(LoggingLevel, const std::string &)
