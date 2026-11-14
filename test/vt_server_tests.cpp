@@ -472,6 +472,70 @@ protected:
 		return poll_for_response(server, plugin, 0x12, response) && (0x00 == response.data[1]);
 	}
 
+	static void receive_working_set_member_from_client(std::shared_ptr<ControlFunction> master, std::shared_ptr<ControlFunction> member)
+	{
+		const std::uint64_t memberName = member->get_NAME().get_full_name();
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(5,
+		                                                                                                             static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMember),
+		                                                                                                             master,
+		                                                                                                             { static_cast<std::uint8_t>(memberName),
+		                                                                                                               static_cast<std::uint8_t>(memberName >> 8),
+		                                                                                                               static_cast<std::uint8_t>(memberName >> 16),
+		                                                                                                               static_cast<std::uint8_t>(memberName >> 24),
+		                                                                                                               static_cast<std::uint8_t>(memberName >> 32),
+		                                                                                                               static_cast<std::uint8_t>(memberName >> 40),
+		                                                                                                               static_cast<std::uint8_t>(memberName >> 48),
+		                                                                                                               static_cast<std::uint8_t>(memberName >> 56) }));
+		CANNetworkManager::CANNetwork.update();
+	}
+
+	// A master announces one member and starts its working set with the given version, then the member asks for the number of soft keys
+	bool read_soft_keys_response_destination_for_member(std::uint8_t serverAddress,
+	                                                    VirtualTerminalBase::VTVersion vtVersion,
+	                                                    std::uint8_t workingSetVersion,
+	                                                    bool announceMember,
+	                                                    std::uint8_t &masterAddress,
+	                                                    std::uint8_t &memberAddress,
+	                                                    std::uint8_t &destination)
+	{
+		VirtualCANPlugin testPlugin;
+		testPlugin.open();
+
+		CANHardwareInterface::set_number_of_can_channels(1);
+		CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+		CANHardwareInterface::start(false);
+
+		auto internalECU = test_helpers::claim_internal_control_function(serverAddress, 0, time_source);
+		auto master = test_helpers::force_claim_partnered_control_function(serverAddress + 1, 0);
+		auto member = test_helpers::force_claim_partnered_control_function(serverAddress + 2, 0);
+		masterAddress = master->get_address();
+		memberAddress = member->get_address();
+
+		DerivedTestVTServer serverUnderTest(internalECU);
+		serverUnderTest.version = vtVersion;
+		serverUnderTest.initialize();
+
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(5,
+		                                                                                                             static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster),
+		                                                                                                             master,
+		                                                                                                             { 0x02, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+		CANNetworkManager::CANNetwork.update();
+		if (announceMember)
+		{
+			receive_working_set_member_from_client(master, member);
+		}
+		receive_from_client(internalECU, master, { 0xFF, 0x01, workingSetVersion, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+
+		testPlugin.clear_queue();
+		receive_from_client(internalECU, member, { 0xC2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+
+		CANMessageFrame response = {};
+		const bool foundResponse = poll_for_response(serverUnderTest, testPlugin, 0xC2, response);
+		destination = static_cast<std::uint8_t>(response.identifier >> 8);
+		CANHardwareInterface::stop();
+		return foundResponse;
+	}
+
 	bool read_status_busy_codes(const DerivedTestVTServer &server, VirtualCANPlugin &plugin, std::uint8_t &busyCodes)
 	{
 		CANMessageFrame statusFrame = {};
@@ -2787,6 +2851,52 @@ TEST_F(VirtualTerminalServerMessagingTest, Version2ClientIsOnlyManagedAfterAWork
 	EXPECT_TRUE(nackedAfterTimeout);
 	EXPECT_FALSE(managedAfterTimeout);
 	EXPECT_TRUE(managedAfterRestart);
+}
+
+// ISO 11783-06-003 Test #4a, configuration 1
+TEST_F(VirtualTerminalServerMessagingTest, ResponseToAWorkingSetMemberGoesToTheMasterWhenBothAreVersion3)
+{
+	std::uint8_t master = 0;
+	std::uint8_t member = 0;
+	std::uint8_t destination = 0;
+	ASSERT_TRUE(read_soft_keys_response_destination_for_member(0x02, VirtualTerminalBase::VTVersion::Version3, 3, true, master, member, destination));
+	EXPECT_EQ(master, destination);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ResponseToAWorkingSetMemberGoesToTheMasterWhenTheWorkingSetIsVersion3)
+{
+	std::uint8_t master = 0;
+	std::uint8_t member = 0;
+	std::uint8_t destination = 0;
+	ASSERT_TRUE(read_soft_keys_response_destination_for_member(0x05, VirtualTerminalBase::VTVersion::Version4, 3, true, master, member, destination));
+	EXPECT_EQ(master, destination);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ResponseToAWorkingSetMemberGoesToTheMasterWhenTheVTIsVersion3)
+{
+	std::uint8_t master = 0;
+	std::uint8_t member = 0;
+	std::uint8_t destination = 0;
+	ASSERT_TRUE(read_soft_keys_response_destination_for_member(0x08, VirtualTerminalBase::VTVersion::Version3, 4, true, master, member, destination));
+	EXPECT_EQ(master, destination);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ResponseToAWorkingSetMemberGoesToTheMemberWhenBothAreVersion4OrLater)
+{
+	std::uint8_t master = 0;
+	std::uint8_t member = 0;
+	std::uint8_t destination = 0;
+	ASSERT_TRUE(read_soft_keys_response_destination_for_member(0x0B, VirtualTerminalBase::VTVersion::Version6, 5, true, master, member, destination));
+	EXPECT_EQ(member, destination);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ResponseGoesToTheSenderWhenNoMasterAnnouncedIt)
+{
+	std::uint8_t master = 0;
+	std::uint8_t member = 0;
+	std::uint8_t destination = 0;
+	ASSERT_TRUE(read_soft_keys_response_destination_for_member(0x0E, VirtualTerminalBase::VTVersion::Version3, 3, false, master, member, destination));
+	EXPECT_EQ(member, destination);
 }
 
 class TestWorkingSet : public VirtualTerminalServerManagedWorkingSet

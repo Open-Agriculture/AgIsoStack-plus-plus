@@ -85,6 +85,16 @@ namespace isobus
 		workingSetMaintenanceMessageTimestamp_ms = value;
 	}
 
+	std::uint8_t VirtualTerminalServerManagedWorkingSet::get_working_set_version() const
+	{
+		return workingSetVersion;
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::set_working_set_version(std::uint8_t value)
+	{
+		workingSetVersion = value;
+	}
+
 	void VirtualTerminalServerManagedWorkingSet::save_callback_handle(isobus::EventCallbackHandle callbackHandle)
 	{
 		callbackHandles.push_back(callbackHandle);

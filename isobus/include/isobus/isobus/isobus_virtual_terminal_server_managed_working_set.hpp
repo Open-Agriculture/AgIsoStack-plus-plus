@@ -77,6 +77,14 @@ namespace isobus
 		/// @param[in] value New timestamp value in milliseconds
 		void set_working_set_maintenance_message_timestamp_ms(std::uint32_t value);
 
+		/// @brief Returns the VT version the working set master reported in its last Working Set Maintenance message
+		/// @returns The version byte, which is 0xFF for a version 2 or prior working set or before any maintenance message
+		std::uint8_t get_working_set_version() const;
+
+		/// @brief Sets the VT version the working set master reported in its Working Set Maintenance message
+		/// @param[in] value The version byte of the maintenance message
+		void set_working_set_version(std::uint8_t value);
+
 		/// @brief Saves an event callback handle for the lifetime of this object
 		/// which is useful for keeping track of callback lifetimes in a VT server
 		/// @param[in] callbackHandle The event callback handle to save
@@ -154,6 +162,7 @@ namespace isobus
 		std::vector<isobus::EventCallbackHandle> callbackHandles; ///< A convenient way to associate callback handles to a working set
 		ObjectPoolProcessingThreadState processingState = ObjectPoolProcessingThreadState::None; ///< Stores the state of processing the object pool
 		std::uint32_t workingSetMaintenanceMessageTimestamp_ms = 0; ///< A timestamp (in ms) to track sending of the maintenance message
+		std::uint8_t workingSetVersion = 0xFF; ///< The VT version the working set master reported in its last maintenance message
 		std::uint32_t auxiliaryInputMaintenanceMessageTimestamp_ms = 0; ///< A timestamp (in ms) to track if/when the working set sent an auxiliary input maintenance message
 		std::uint16_t focusedObject = NULL_OBJECT_ID; ///< Stores the object ID of the currently focused object
 		bool wasLoadedFromNonVolatileMemory = false; ///< Used to tell the server how this object pool was obtained

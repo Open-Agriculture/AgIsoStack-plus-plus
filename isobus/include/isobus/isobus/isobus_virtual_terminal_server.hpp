@@ -19,6 +19,7 @@
 #include "isobus/utility/thread_synchronization.hpp"
 
 #include <utility>
+#include <vector>
 
 namespace isobus
 {
@@ -951,6 +952,7 @@ namespace isobus
 		void update();
 
 		static constexpr std::uint8_t VERSION_LABEL_LENGTH = 7; ///< The length of a standard object pool version label
+		static constexpr std::size_t MAX_WORKING_SET_MEMBERS = 255; ///< The most members a working set master can announce, its Working Set Master message counts them in one byte
 		static constexpr std::uint32_t WORKING_SET_MAINTENANCE_TIMEOUT_MS = 3000; ///< A working set master has shut down if it sends no Working Set Maintenance message for this long (ISO 11783-6 4.6.9)
 
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> onRepaintEventDispatcher; ///< Event dispatcher for repaint events
@@ -1030,6 +1032,18 @@ namespace isobus
 		/// @param[in] message The Working Set Master message
 		void process_working_set_master_message(const CANMessage &message);
 
+		/// @brief Remembers a member of the working set whose master sent this Working Set Member message.
+		/// Members are kept when the master sends its Working Set Master message again, since it also does that on request.
+		/// @param[in] message The Working Set Member message, which carries the NAME of the member
+		void process_working_set_member_message(const CANMessage &message);
+
+		/// @brief Picks the control function to send the response to a command to (ISO 11783-6 Table 1).
+		/// A working set member gets the response itself only if both the working set and this VT are version 4 or later,
+		/// otherwise it goes to its working set master.
+		/// @param[in] source The control function that sent the command
+		/// @returns The control function to send the response to
+		std::shared_ptr<ControlFunction> get_response_destination(const std::shared_ptr<ControlFunction> &source) const;
+
 		/// @brief Stops managing a working set whose master shut down unexpectedly (ISO 11783-6 4.6.9),
 		/// and queues it for report_shut_down_working_sets()
 		/// @param[in] workingSet The working set to stop managing
@@ -1047,6 +1061,7 @@ namespace isobus
 		std::vector<std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, UnexpectedShutdownReason>> pendingShutdowns; ///< Shut down working sets that the application has not been told about yet
 		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> pendingObjectPoolDeletions; ///< Working sets whose object pool was deleted, which update() passes to object_pool_deleted()
 		Mutex pendingShutdownsMutex; ///< Protects pendingShutdowns and pendingObjectPoolDeletions, which both the CAN thread and update() use
+		std::vector<std::pair<std::shared_ptr<ControlFunction>, std::vector<NAME>>> workingSetMembers; ///< The members each working set master announced with Working Set Member messages
 		std::vector<std::shared_ptr<ControlFunction>> announcedWorkingSetMasters; ///< Unmanaged control functions that sent a Working Set Master message, see process_working_set_master_message()
 	};
 } // namespace isobus
