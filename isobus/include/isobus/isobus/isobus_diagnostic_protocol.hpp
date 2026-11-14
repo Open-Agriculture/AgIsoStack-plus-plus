@@ -314,9 +314,9 @@ namespace isobus
 		/// field `1` to be "Bootloader v2.00", and it will be transmitted on request as:
 		/// "App v1.00*Bootloader v2.00*" in accordance with ISO 11783-12
 		/// You can clear a field by setting it to "". Cleared fields at the end of the list are removed, so they aren't sent.
-		/// @param[in] index The field index to set
+		/// @param[in] index The field index to set, 0 to 254, as the message sends the number of fields in one byte
 		/// @param[in] value The software ID string to add. It must not contain the "*" delimiter.
-		/// @returns true if the value was set, false if the value contains a "*"
+		/// @returns true if the value was set, false if the index is out of range or the value contains a "*"
 		bool set_software_id_field(std::uint32_t index, const std::string &value);
 
 		/// @brief Informs the diagnostic protocol that you are going to suspend broadcasts

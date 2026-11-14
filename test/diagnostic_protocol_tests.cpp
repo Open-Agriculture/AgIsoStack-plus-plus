@@ -54,11 +54,26 @@ TEST_F(DiagnosticProtocolTest, IdentificationFieldValidation)
 	EXPECT_TRUE(protocolUnderTest.set_software_id_field(0, "App v1.0"));
 	EXPECT_FALSE(protocolUnderTest.set_software_id_field(0, "App*v1.0"));
 	EXPECT_FALSE(protocolUnderTest.set_software_id_field(1, "*"));
+	// The number of fields is sent in one byte
+	EXPECT_TRUE(protocolUnderTest.set_software_id_field(254, "Last field"));
+	EXPECT_FALSE(protocolUnderTest.set_software_id_field(255, "Too far"));
+	EXPECT_FALSE(protocolUnderTest.set_software_id_field(0xFFFFFFFF, "Too far"));
+	EXPECT_TRUE(protocolUnderTest.set_software_id_field(254, ""));
 
 	EXPECT_TRUE(protocolUnderTest.set_product_identification_code("Code"));
 	EXPECT_FALSE(protocolUnderTest.set_product_identification_code("Co*de"));
 	EXPECT_FALSE(protocolUnderTest.set_product_identification_brand("Brand*"));
 	EXPECT_FALSE(protocolUnderTest.set_product_identification_model("*Model"));
+
+	// ISO 11783-12 A.14 to A.16: up to 50 characters
+	const std::string fiftyCharacters(50, 'A');
+	const std::string fiftyOneCharacters(51, 'A');
+	EXPECT_TRUE(protocolUnderTest.set_product_identification_code(fiftyCharacters));
+	EXPECT_FALSE(protocolUnderTest.set_product_identification_code(fiftyOneCharacters));
+	EXPECT_TRUE(protocolUnderTest.set_product_identification_brand(fiftyCharacters));
+	EXPECT_FALSE(protocolUnderTest.set_product_identification_brand(fiftyOneCharacters));
+	EXPECT_TRUE(protocolUnderTest.set_product_identification_model(fiftyCharacters));
+	EXPECT_FALSE(protocolUnderTest.set_product_identification_model(fiftyOneCharacters));
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(TestInternalECU);
 }

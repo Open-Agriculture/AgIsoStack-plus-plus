@@ -319,7 +319,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if ((value.size() < PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH) && is_valid_identification_field(value))
+		if ((value.size() <= PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH) && is_valid_identification_field(value))
 		{
 			productIdentificationCode = value;
 			retVal = true;
@@ -331,7 +331,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if ((value.size() < PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH) && is_valid_identification_field(value))
+		if ((value.size() <= PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH) && is_valid_identification_field(value))
 		{
 			productIdentificationBrand = value;
 			retVal = true;
@@ -343,7 +343,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if ((value.size() < PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH) && is_valid_identification_field(value))
+		if ((value.size() <= PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH) && is_valid_identification_field(value))
 		{
 			productIdentificationModel = value;
 			retVal = true;
@@ -353,16 +353,20 @@ namespace isobus
 
 	bool DiagnosticProtocol::set_software_id_field(std::uint32_t index, const std::string &value)
 	{
-		if (!is_valid_identification_field(value))
-		{
-			return false;
-		}
+		// The message sends the number of fields in one byte
+		constexpr std::uint32_t MAX_SOFTWARE_ID_FIELDS = 0xFF;
+		bool retVal = false;
 
-		if (value.empty())
+		if ((index < MAX_SOFTWARE_ID_FIELDS) && is_valid_identification_field(value))
 		{
 			if (index < softwareIdentificationFields.size())
 			{
-				softwareIdentificationFields[index].clear();
+				softwareIdentificationFields[index] = value;
+			}
+			else if (!value.empty())
+			{
+				softwareIdentificationFields.resize(index + 1);
+				softwareIdentificationFields[index] = value;
 			}
 
 			// Remove empty fields from the end so they aren't sent, keeping the indices of the fields before them
@@ -370,16 +374,9 @@ namespace isobus
 			{
 				softwareIdentificationFields.pop_back();
 			}
+			retVal = true;
 		}
-		else
-		{
-			if (index >= softwareIdentificationFields.size())
-			{
-				softwareIdentificationFields.resize(index + 1);
-			}
-			softwareIdentificationFields[index] = value;
-		}
-		return true;
+		return retVal;
 	}
 
 	bool DiagnosticProtocol::is_valid_identification_field(const std::string &value)
