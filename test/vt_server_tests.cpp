@@ -3299,6 +3299,18 @@ TEST_F(VirtualTerminalServerMaskChangeMacroTest, ChangeActiveMaskHidesTheSoftKey
 	EXPECT_EQ((std::vector<std::uint16_t>{ 10, 12, 13, 16, 17 }), macrosThatRan);
 }
 
+TEST_F(VirtualTerminalServerMaskChangeMacroTest, OnChangeActiveMaskMacroThatChangesTheActiveMaskAgainDoesNotRecurse)
+{
+	// On Change Active Mask sends Change Active Mask again, which would run the same macro again without end
+	const auto pool = create_mask_change_macro_pool({ 0xAD, 0x00, 0x00, 0xE9, 0x03, 0xFF, 0xFF, 0xFF });
+	std::uint8_t errorCode = 0xFF;
+	const auto macrosThatRan = run_command(0x55, 0xD5, true, { 0xAD, 0x00, 0x00, 0xE9, 0x03, 0xFF, 0xFF, 0xFF }, errorCode, pool);
+	EXPECT_EQ(0x00, errorCode);
+	// The nested command finds macro 10 still running and skips it. Its mask is already the active one, so it hides
+	// and shows nothing. Then the outer command hides Data Mask 1000 and shows Data Mask 1001.
+	EXPECT_EQ((std::vector<std::uint16_t>{ 10, 12, 13, 16, 17 }), macrosThatRan);
+}
+
 TEST_F(VirtualTerminalServerMaskChangeMacroTest, ChangeSoftKeyMaskUsesTheVisibilityFromBeforeItsMacros)
 {
 	// On Change Soft Key Mask of Data Mask 1000 makes Data Mask 1001 the active mask
