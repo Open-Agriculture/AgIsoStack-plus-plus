@@ -66,6 +66,15 @@ namespace isobus
 		/// @returns true if the callback was registered, false if the callback is nullptr or is already registered for the same PGN
 		bool register_pgn_request_callback(std::uint32_t pgn, PGNRequestCallback callback, void *parentPointer);
 
+		/// @brief Registers for a callback on receipt of a PGN request, that is also told where the request was sent
+		/// @details Use this when the reply can need the transport protocol, so it goes to the global address for a global request
+		/// and to the requester for a destination-specific one.
+		/// @param[in] pgn The PGN you want to handle in the callback
+		/// @param[in] callback The callback function to register
+		/// @param[in] parentPointer Generic context variable, usually the `this` pointer of the class registering the callback
+		/// @returns true if the callback was registered, false if the callback is nullptr or is already registered for the same PGN
+		bool register_pgn_request_callback(std::uint32_t pgn, PGNRequestCallbackWithDestination callback, void *parentPointer);
+
 		/// @brief Registers for a callback on receipt of a request for repetition rate
 		/// @param[in] pgn The PGN you want to handle in the callback
 		/// @param[in] callback The callback function to register
@@ -82,6 +91,14 @@ namespace isobus
 		/// so only destroy what the callback uses once it is removed on the thread that calls CANNetworkManager::update(),
 		/// or once that thread is stopped. A callback may remove itself.
 		bool remove_pgn_request_callback(std::uint32_t pgn, PGNRequestCallback callback, void *parentPointer);
+
+		/// @brief Removes a previously registered PGN request callback that is told where the request was sent
+		/// @param[in] pgn The PGN associated with the callback
+		/// @param[in] callback The callback function to remove
+		/// @param[in] parentPointer Generic context variable, usually the `this` pointer of the class that registered the callback
+		/// @returns true if the callback was removed, false if no callback matched the parameters
+		/// @details The same as for the other overload: this stops future calls only.
+		bool remove_pgn_request_callback(std::uint32_t pgn, PGNRequestCallbackWithDestination callback, void *parentPointer);
 
 		/// @brief Removes a callback for repetition rate requests
 		/// @param[in] pgn The PGN associated with the callback
@@ -114,13 +131,33 @@ namespace isobus
 			/// @param[in] parentPointer Pointer to the class that registered the callback, or `nullptr`
 			PGNRequestCallbackInfo(PGNRequestCallback callback, std::uint32_t parameterGroupNumber, void *parentPointer);
 
+			/// @brief Constructor for PGNRequestCallbackInfo, for a callback that is told where the request was sent
+			/// @param[in] callback A PGNRequestCallbackWithDestination
+			/// @param[in] parameterGroupNumber The PGN associated with the callback
+			/// @param[in] parentPointer Pointer to the class that registered the callback, or `nullptr`
+			PGNRequestCallbackInfo(PGNRequestCallbackWithDestination callback, std::uint32_t parameterGroupNumber, void *parentPointer);
+
+			/// @brief Calls the callback that is set
+			/// @param[in] requestedPGN The requested PGN
+			/// @param[in] requestingControlFunction The control function that sent the request
+			/// @param[in] destinationControlFunction Where the request was sent, nullptr for a global request
+			/// @param[out] acknowledge Tells the protocol if it should acknowledge the request
+			/// @param[out] acknowledgeType The type of acknowledgement to send
+			/// @returns true if the callback handled the request
+			bool call(std::uint32_t requestedPGN,
+			          std::shared_ptr<ControlFunction> requestingControlFunction,
+			          std::shared_ptr<ControlFunction> destinationControlFunction,
+			          bool &acknowledge,
+			          AcknowledgementType &acknowledgeType) const;
+
 			/// @brief A utility function for determining if the data in the object is equal to another object
 			/// @details The objects are the same if the pgn and callbackFunction both match
 			/// @param[in] obj The object to compare against
 			/// @returns true if the objects have identical data
 			bool operator==(const PGNRequestCallbackInfo &obj) const;
 
-			PGNRequestCallback callbackFunction; ///< The actual callback
+			PGNRequestCallback callbackFunction; ///< The callback, or nullptr if callbackWithDestination is set
+			PGNRequestCallbackWithDestination callbackWithDestination; ///< The callback that is told where the request was sent, or nullptr
 			std::uint32_t pgn; ///< The PGN associated with the callback
 			void *parent; ///< Pointer to the class that registered the callback, or `nullptr`
 		};

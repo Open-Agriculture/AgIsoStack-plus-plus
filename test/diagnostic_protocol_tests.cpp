@@ -1592,3 +1592,111 @@ TEST_F(DiagnosticProtocolTest, MessageEncoding)
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(TestInternalECU);
 }
+
+/// @brief Requests a PGN and returns the first transport protocol connection management frame that answers it
+static bool request_and_read_tp_connection_frame(DiagnosticProtocol &protocol,
+                                                 VirtualCANPlugin &plugin,
+                                                 std::shared_ptr<InternalControlFunction> responder,
+                                                 std::shared_ptr<PartneredControlFunction> requester,
+                                                 bool global,
+                                                 std::uint32_t parameterGroupNumber,
+                                                 CANMessageFrame &frame,
+                                                 test_helpers::TestTimeSource &timeSource)
+{
+	CANMessageFrame request = test_helpers::create_message_frame_pgn_request(parameterGroupNumber, requester, global ? nullptr : responder);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(request);
+	CANNetworkManager::CANNetwork.update();
+	protocol.update();
+	timeSource.update_for_ms(5);
+	CANNetworkManager::CANNetwork.update();
+	timeSource.update_for_ms(5);
+
+	bool found = false;
+	CANMessageFrame candidate = {};
+	while (plugin.read_frame(candidate))
+	{
+		// TP.CM is PGN 0xEC00, its byte 6 to 8 carry the PGN of the message
+		const std::uint32_t transferredPGN = static_cast<std::uint32_t>(candidate.data[5]) |
+		  (static_cast<std::uint32_t>(candidate.data[6]) << 8) |
+		  (static_cast<std::uint32_t>(candidate.data[7]) << 16);
+		if ((!found) && (0xEC == ((candidate.identifier >> 16) & 0xFF)) && (parameterGroupNumber == transferredPGN))
+		{
+			frame = candidate;
+			found = true;
+		}
+	}
+	return found;
+}
+
+TEST_F(DiagnosticProtocolTest, MultiFrameRepliesGoToTheGlobalAddressOnlyForAGlobalRequest)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto TestInternalECU = test_helpers::claim_internal_control_function(0xF0, 0, time_source);
+	auto TestPartneredECU = test_helpers::force_claim_partnered_control_function(0xF1, 0);
+	DiagnosticProtocol protocolUnderTest(TestInternalECU);
+	protocolUnderTest.initialize();
+	protocolUnderTest.set_ecu_id_field(DiagnosticProtocol::ECUIdentificationFields::PartNumber, "Part 12345");
+	protocolUnderTest.set_ecu_id_field(DiagnosticProtocol::ECUIdentificationFields::SerialNumber, "Serial 67890");
+	// Enough functionalities that the Control Function Functionalities message needs more than one frame
+	protocolUnderTest.ControlFunctionFunctionalitiesMessageInterface.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::UniversalTerminalWorkingSet, 1, true);
+	protocolUnderTest.ControlFunctionFunctionalitiesMessageInterface.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::AuxNInputs, 1, true);
+	protocolUnderTest.ControlFunctionFunctionalitiesMessageInterface.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::TaskControllerBasicClient, 1, true);
+
+	CANMessageFrame frame = {};
+	while (!testPlugin.get_queue_empty())
+	{
+		testPlugin.read_frame(frame);
+	}
+
+	// ISO 11783-3: a global request gets a BAM to the global address, a destination-specific one an RTS to the requester
+	constexpr std::uint8_t BAM = 0x20;
+	constexpr std::uint8_t RTS = 0x10;
+	CANMessageFrame globalECUID = {};
+	CANMessageFrame specificECUID = {};
+	CANMessageFrame globalFunctionalities = {};
+	CANMessageFrame specificFunctionalities = {};
+	const bool foundGlobalECUID = request_and_read_tp_connection_frame(protocolUnderTest, testPlugin, TestInternalECU, TestPartneredECU, true, 0xFDC5, globalECUID, time_source);
+	time_source.update_for_ms(1000); // Let the BAM finish
+	CANNetworkManager::CANNetwork.update();
+	while (testPlugin.read_frame(frame))
+	{
+	}
+	const bool foundSpecificECUID = request_and_read_tp_connection_frame(protocolUnderTest, testPlugin, TestInternalECU, TestPartneredECU, false, 0xFDC5, specificECUID, time_source);
+	time_source.update_for_ms(2000); // Let the unanswered RTS time out
+	CANNetworkManager::CANNetwork.update();
+	while (testPlugin.read_frame(frame))
+	{
+	}
+	const bool foundGlobalFunctionalities = request_and_read_tp_connection_frame(protocolUnderTest, testPlugin, TestInternalECU, TestPartneredECU, true, 0xFC8E, globalFunctionalities, time_source);
+	time_source.update_for_ms(1000);
+	CANNetworkManager::CANNetwork.update();
+	while (testPlugin.read_frame(frame))
+	{
+	}
+	const bool foundSpecificFunctionalities = request_and_read_tp_connection_frame(protocolUnderTest, testPlugin, TestInternalECU, TestPartneredECU, false, 0xFC8E, specificFunctionalities, time_source);
+
+	protocolUnderTest.terminate();
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(foundGlobalECUID);
+	EXPECT_EQ(BAM, globalECUID.data[0]);
+	EXPECT_EQ(0xFF, (globalECUID.identifier >> 8) & 0xFF);
+	ASSERT_TRUE(foundSpecificECUID);
+	EXPECT_EQ(RTS, specificECUID.data[0]);
+	EXPECT_EQ(0xF1, (specificECUID.identifier >> 8) & 0xFF);
+	ASSERT_TRUE(foundGlobalFunctionalities);
+	EXPECT_EQ(BAM, globalFunctionalities.data[0]);
+	EXPECT_EQ(0xFF, (globalFunctionalities.identifier >> 8) & 0xFF);
+	ASSERT_TRUE(foundSpecificFunctionalities);
+	EXPECT_EQ(RTS, specificFunctionalities.data[0]);
+	EXPECT_EQ(0xF1, (specificFunctionalities.identifier >> 8) & 0xFF);
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(TestPartneredECU);
+	CANNetworkManager::CANNetwork.deactivate_control_function(TestInternalECU);
+}

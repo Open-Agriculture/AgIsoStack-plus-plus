@@ -446,15 +446,25 @@ namespace isobus
 		/// @returns The bit offset/index of the specified option int the TIM functionality message data
 		std::uint8_t get_tim_option_bit_index(TractorImplementManagementOptions option) const;
 
+		/// @brief Sets where the next multi-frame control function functionalities message goes
+		/// @param[in] destination The requester of a destination-specific request, or nullptr for the global address
+		void set_reply_destination(std::shared_ptr<ControlFunction> destination);
+
+		/// @brief Returns where the next multi-frame control function functionalities message goes
+		/// @returns The requester of a destination-specific request, or nullptr for the global address
+		std::shared_ptr<ControlFunction> get_reply_destination();
+
 		/// @brief Handles PGN requests for the control function functionalities message
 		/// @param[in] parameterGroupNumber The PGN that was requested
 		/// @param[in] requestingControlFunction The control function that is requesting the PGN
+		/// @param[in] destinationControlFunction Where the request was sent, nullptr for a global request
 		/// @param[out] acknowledge Tells the PGN request protocol to ACK ack the request
 		/// @param[out] acknowledgeType Tells the PGN request protocol what kind of ACK to use
 		/// @param[in] parentPointer A generic context variable, usually the "this" pointer of the registrant for callbacks
 		/// @returns true if the PGN was handled, otherwise false
 		static bool pgn_request_handler(std::uint32_t parameterGroupNumber,
 		                                std::shared_ptr<ControlFunction> requestingControlFunction,
+		                                std::shared_ptr<ControlFunction> destinationControlFunction,
 		                                bool &acknowledge,
 		                                AcknowledgementType &acknowledgeType,
 		                                void *parentPointer);
@@ -470,6 +480,7 @@ namespace isobus
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The control function to send messages as
 		std::list<FunctionalityData> supportedFunctionalities; ///< A list of all configured functionalities and their data
 		ProcessingFlags txFlags; ///< Handles retries for sending the CF functionalities message
+		std::shared_ptr<ControlFunction> replyDestination; ///< Where a multi-frame reply goes: the requester of a destination-specific request, or nullptr for global
 		Mutex functionalitiesMutex; ///< Since messages come in on a different thread than the main app (probably), this mutex protects the functionality data
 	};
 } // namespace isobus
