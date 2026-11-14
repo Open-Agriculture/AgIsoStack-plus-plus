@@ -1345,6 +1345,36 @@ TEST_F(VirtualTerminalServerMessagingTest, CommandsRunByAMacroSendNoResponse)
 	EXPECT_EQ(7, serverUnderTest.managedWorkingSetList.front()->get_object_by_id(2)->get_width());
 }
 
+TEST_F(VirtualTerminalServerMessagingTest, ExecuteMacroCommandIsStillAnswered)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x73, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xD0, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	CANMessageFrame response = {};
+
+	const bool connected = connect_with_polygon_and_line_pool(serverUnderTest, testPlugin, internalECU, client);
+	// The working set's own Execute Macro is answered once Macro 5 has finished
+	receive_from_client(internalECU, client, { 0xBE, 0x05, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const bool answered = poll_for_response(serverUnderTest, testPlugin, 0xBE, response);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(connected);
+	ASSERT_TRUE(answered);
+	EXPECT_EQ(0x05, response.data[1]);
+	EXPECT_EQ(0x00, response.data[3]);
+	EXPECT_EQ(7, serverUnderTest.managedWorkingSetList.front()->get_object_by_id(2)->get_width());
+}
+
 TEST_F(VirtualTerminalServerMessagingTest, ThrowingMacroCommandDoesNotSilenceLaterResponses)
 {
 	VirtualCANPlugin testPlugin;
