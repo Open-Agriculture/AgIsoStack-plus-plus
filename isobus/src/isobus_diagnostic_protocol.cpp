@@ -855,6 +855,7 @@ namespace isobus
 		}
 
 		std::vector<std::uint8_t> buffer(ecuIdString.begin(), ecuIdString.end());
+		pad_single_frame_multi_packet_message(buffer);
 
 		auto it = pendingRequests.find(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUIdentificationInformation));
 		auto request = (((it != pendingRequests.end()) && (buffer.size() > CAN_DATA_LENGTH)) ? it->second : nullptr);
@@ -869,11 +870,22 @@ namespace isobus
 		return retVal;
 	}
 
+	void DiagnosticProtocol::pad_single_frame_multi_packet_message(std::vector<std::uint8_t> &buffer)
+	{
+		// ISO 11783-3 5.2.8.2: a PG that can be multi-packet, but has eight or fewer bytes to send,
+		// is sent in a single frame with a DLC of eight, and its unused bytes "not available"
+		if (buffer.size() < CAN_DATA_LENGTH)
+		{
+			buffer.resize(CAN_DATA_LENGTH, 0xFF);
+		}
+	}
+
 	bool DiagnosticProtocol::send_product_identification()
 	{
 		bool retVal = false;
 		std::string productIdString = productIdentificationCode + "*" + productIdentificationBrand + "*" + productIdentificationModel + "*";
 		std::vector<std::uint8_t> buffer(productIdString.begin(), productIdString.end());
+		pad_single_frame_multi_packet_message(buffer);
 
 		auto it = pendingRequests.find(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProductIdentification));
 		auto request = (((it != pendingRequests.end()) && (buffer.size() > CAN_DATA_LENGTH)) ? it->second : nullptr);
@@ -906,6 +918,7 @@ namespace isobus
 
 			softIDString = char(softwareIdentificationFields.size()) + softIDString;
 			std::vector<std::uint8_t> buffer(softIDString.begin(), softIDString.end());
+			pad_single_frame_multi_packet_message(buffer);
 
 			auto it = pendingRequests.find(static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification));
 			auto request = (((it != pendingRequests.end()) && (buffer.size() > CAN_DATA_LENGTH)) ? it->second : nullptr);

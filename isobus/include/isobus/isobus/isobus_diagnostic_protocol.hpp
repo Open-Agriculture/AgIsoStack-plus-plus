@@ -435,6 +435,10 @@ namespace isobus
 		/// @returns true if the message was sent
 		bool send_ecu_identification();
 
+		/// @brief Pads a message of a multi-packet PG that fits in one frame to 8 bytes with 0xFF
+		/// @param[in,out] buffer The message data, left unchanged if it is 8 bytes or longer
+		static void pad_single_frame_multi_packet_message(std::vector<std::uint8_t> &buffer);
+
 		/// @brief Sends the product identification message (PGN 0xFC8D)
 		/// @returns true if the message was sent, otherwise false
 		bool send_product_identification();
