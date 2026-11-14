@@ -3119,6 +3119,8 @@ namespace
 	// - Data Mask 1001 (Soft Key Mask 2001) runs 13 On Show and 14 On Hide
 	// - Soft Key Mask 2000 runs 15 On Show and 16 On Hide
 	// - Soft Key Mask 2001 runs 17 On Show and 18 On Hide
+	// The On Show macros also write their mask's ID, so a test can see which mask was shown last:
+	// 11 and 13 into Number Variable 109, 15 and 17 into Number Variable 110.
 	// extraCommandsOfMacro10 are added to macro 10. A non-empty onChangeSoftKeyMaskMacroOfMask1000 becomes macro 19,
 	// which Data Mask 1000 runs On Change Soft Key Mask.
 	std::vector<std::uint8_t> create_mask_change_macro_pool(const std::vector<std::uint8_t> &extraCommandsOfMacro10 = {},
@@ -3148,11 +3150,41 @@ namespace
 		pool.insert(pool.end(), { 0xD0, 0x07, SOFT_KEY_MASK, 0x00, 0x00, 0x02, 0x03, 15, 0x04, 16 });
 		pool.insert(pool.end(), { 0xD1, 0x07, SOFT_KEY_MASK, 0x00, 0x00, 0x02, 0x03, 17, 0x04, 18 });
 
+		// Number Variables 109 and 110 for the last shown Data Mask and Soft Key Mask
+		pool.insert(pool.end(), { 109, 0x00, NUMBER_VARIABLE, 0x00, 0x00, 0x00, 0x00 });
+		pool.insert(pool.end(), { 110, 0x00, NUMBER_VARIABLE, 0x00, 0x00, 0x00, 0x00 });
+
 		for (std::uint8_t i = 0; i < 9; i++)
 		{
 			const auto variableID = static_cast<std::uint8_t>(100 + i);
 			const std::vector<std::uint8_t> noCommands;
-			const std::vector<std::uint8_t> &extraCommands = (0 == i) ? extraCommandsOfMacro10 : noCommands;
+			// Macros 11, 13, 15 and 17 are the On Show macros of masks 1000, 1001, 2000 and 2001
+			const std::vector<std::uint8_t> showMask1000 = { CHANGE_NUMERIC_VALUE, 109, 0x00, 0xFF, 0xE8, 0x03, 0x00, 0x00 };
+			const std::vector<std::uint8_t> showMask1001 = { CHANGE_NUMERIC_VALUE, 109, 0x00, 0xFF, 0xE9, 0x03, 0x00, 0x00 };
+			const std::vector<std::uint8_t> showMask2000 = { CHANGE_NUMERIC_VALUE, 110, 0x00, 0xFF, 0xD0, 0x07, 0x00, 0x00 };
+			const std::vector<std::uint8_t> showMask2001 = { CHANGE_NUMERIC_VALUE, 110, 0x00, 0xFF, 0xD1, 0x07, 0x00, 0x00 };
+			const std::vector<std::uint8_t> *extraCommandsOfMacro = &noCommands;
+			switch (i)
+			{
+				case 0:
+					extraCommandsOfMacro = &extraCommandsOfMacro10;
+					break;
+				case 1:
+					extraCommandsOfMacro = &showMask1000;
+					break;
+				case 3:
+					extraCommandsOfMacro = &showMask1001;
+					break;
+				case 5:
+					extraCommandsOfMacro = &showMask2000;
+					break;
+				case 7:
+					extraCommandsOfMacro = &showMask2001;
+					break;
+				default:
+					break;
+			}
+			const std::vector<std::uint8_t> &extraCommands = *extraCommandsOfMacro;
 			const auto macroLength = static_cast<std::uint8_t>(8 + extraCommands.size());
 			pool.insert(pool.end(), { variableID, 0x00, NUMBER_VARIABLE, 0x00, 0x00, 0x00, 0x00 });
 			pool.insert(pool.end(), { static_cast<std::uint8_t>(10 + i), 0x00, MACRO, macroLength, 0x00, CHANGE_NUMERIC_VALUE, variableID, 0x00, 0xFF, 0x01, 0x00, 0x00, 0x00 });
@@ -3181,9 +3213,15 @@ namespace
 		return macrosThatRan;
 	}
 
+	// Returns the value of Number Variable 109 or 110, the last shown Data Mask or Soft Key Mask
+	std::uint32_t get_last_shown(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet, std::uint16_t variableID)
+	{
+		return std::static_pointer_cast<NumberVariable>(workingSet->get_object_by_id(variableID))->get_value();
+	}
+
 	void reset_mask_change_macros(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet)
 	{
-		for (std::uint16_t i = 0; i < 9; i++)
+		for (std::uint16_t i = 0; i < 11; i++)
 		{
 			std::static_pointer_cast<NumberVariable>(workingSet->get_object_by_id(static_cast<std::uint16_t>(100 + i)))->set_value(0);
 		}
@@ -3199,7 +3237,9 @@ protected:
 	                                       bool selectWorkingSet,
 	                                       std::initializer_list<std::uint8_t> command,
 	                                       std::uint8_t &errorCode,
-	                                       const std::vector<std::uint8_t> &pool = create_mask_change_macro_pool())
+	                                       const std::vector<std::uint8_t> &pool = create_mask_change_macro_pool(),
+	                                       std::uint32_t *lastShownDataMask = nullptr,
+	                                       std::uint32_t *lastShownSoftKeyMask = nullptr)
 	{
 		VirtualCANPlugin testPlugin;
 		testPlugin.open();
@@ -3236,6 +3276,14 @@ protected:
 			EXPECT_TRUE(poll_for_response(serverUnderTest, testPlugin, *command.begin(), commandResponse));
 			errorCode = (0xAD == *command.begin()) ? commandResponse.data[3] : commandResponse.data[5];
 			macrosThatRan = get_mask_change_macros_that_ran(workingSet);
+			if (nullptr != lastShownDataMask)
+			{
+				*lastShownDataMask = get_last_shown(workingSet, 109);
+			}
+			if (nullptr != lastShownSoftKeyMask)
+			{
+				*lastShownSoftKeyMask = get_last_shown(workingSet, 110);
+			}
 		}
 		CANHardwareInterface::stop();
 		return macrosThatRan;
@@ -3309,6 +3357,33 @@ TEST_F(VirtualTerminalServerMaskChangeMacroTest, OnChangeActiveMaskMacroThatChan
 	// The nested command finds macro 10 still running and skips it. Its mask is already the active one, so it hides
 	// and shows nothing. Then the outer command hides Data Mask 1000 and shows Data Mask 1001.
 	EXPECT_EQ((std::vector<std::uint16_t>{ 10, 12, 13, 16, 17 }), macrosThatRan);
+}
+
+TEST_F(VirtualTerminalServerMaskChangeMacroTest, ChangeActiveMaskShowsTheMaskLastThatItsMacroMakesActive)
+{
+	// On Change Active Mask switches straight back to Data Mask 1000
+	const auto pool = create_mask_change_macro_pool({ 0xAD, 0x00, 0x00, 0xE8, 0x03, 0xFF, 0xFF, 0xFF });
+	std::uint8_t errorCode = 0xFF;
+	std::uint32_t lastShownDataMask = 0;
+	std::uint32_t lastShownSoftKeyMask = 0;
+	const auto macrosThatRan = run_command(0x56, 0xD6, true, { 0xAD, 0x00, 0x00, 0xE9, 0x03, 0xFF, 0xFF, 0xFF }, errorCode, pool, &lastShownDataMask, &lastShownSoftKeyMask);
+	EXPECT_EQ(0x00, errorCode);
+	EXPECT_EQ((std::vector<std::uint16_t>{ 10, 11, 12, 13, 14, 15, 16, 17, 18 }), macrosThatRan);
+	// Data Mask 1000 is active again, so it and its Soft Key Mask have to be the last ones shown
+	EXPECT_EQ(1000U, lastShownDataMask);
+	EXPECT_EQ(2000U, lastShownSoftKeyMask);
+}
+
+TEST_F(VirtualTerminalServerMaskChangeMacroTest, ChangeSoftKeyMaskShowsTheSoftKeyMaskLastThatItsMacroSets)
+{
+	// On Change Soft Key Mask of Data Mask 1000 gives it Soft Key Mask 2000 back
+	const auto pool = create_mask_change_macro_pool({}, { 0xAE, 0x01, 0xE8, 0x03, 0xD0, 0x07, 0xFF, 0xFF });
+	std::uint8_t errorCode = 0xFF;
+	std::uint32_t lastShownSoftKeyMask = 0;
+	const auto macrosThatRan = run_command(0x57, 0xD7, true, { 0xAE, 0x01, 0xE8, 0x03, 0xD1, 0x07, 0xFF, 0xFF }, errorCode, pool, nullptr, &lastShownSoftKeyMask);
+	EXPECT_EQ(0x00, errorCode);
+	EXPECT_EQ((std::vector<std::uint16_t>{ 15, 16, 17, 18 }), macrosThatRan);
+	EXPECT_EQ(2000U, lastShownSoftKeyMask);
 }
 
 TEST_F(VirtualTerminalServerMaskChangeMacroTest, ChangeSoftKeyMaskUsesTheVisibilityFromBeforeItsMacros)
