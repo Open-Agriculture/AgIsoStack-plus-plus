@@ -1224,6 +1224,7 @@ namespace isobus
 		constexpr std::uint8_t MISSED_REQUESTS_BEFORE_OFFLINE = 2;
 
 		std::vector<std::shared_ptr<ControlFunction>> offlineControlFunctions;
+		std::vector<std::shared_ptr<PartneredControlFunction>> replacedPartners;
 		{
 			LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 			for (std::uint_fast8_t channelIndex = 0; channelIndex < CAN_PORT_MAXIMUM; channelIndex++)
@@ -1232,6 +1233,7 @@ namespace isobus
 				if ((0 != lastAddressClaimRequestTime) &&
 				    (SystemTiming::time_expired_ms(lastAddressClaimRequestTime, ADDRESS_CLAIM_RESPONSE_TIMEOUT)))
 				{
+					std::vector<std::shared_ptr<PartneredControlFunction>> offlinePartners;
 					for (auto &tableEntry : controlFunctionTable[channelIndex])
 					{
 						if ((nullptr == tableEntry) ||
@@ -1255,11 +1257,26 @@ namespace isobus
 							LOG_INFO("[NM]: Control function with address %u and NAME %016llx is now offline on channel %u.", controlFunction->get_address(), controlFunction->get_NAME(), channelIndex);
 							tableEntry = nullptr;
 							controlFunction->address = NULL_CAN_ADDRESS;
+
+							if (ControlFunction::Type::Partnered == controlFunction->get_type())
+							{
+								offlinePartners.push_back(std::static_pointer_cast<PartneredControlFunction>(controlFunction));
+							}
 						}
 
 						offlineControlFunctions.push_back(controlFunction);
 					}
 					lastAddressClaimRequestTime = 0;
+
+					// A matching device may have claimed before the partner went offline, and then nothing asks it
+					// to claim again. Now that the CFs that stayed online are known, the partner takes one over.
+					for (const auto &partner : offlinePartners)
+					{
+						if (take_over_online_external_control_function(partner, channelIndex))
+						{
+							replacedPartners.push_back(partner);
+						}
+					}
 				}
 			}
 		}
@@ -1268,6 +1285,37 @@ namespace isobus
 		{
 			process_control_function_state_change_callback(controlFunction, ControlFunctionState::Offline);
 		}
+		for (const auto &partner : replacedPartners)
+		{
+			process_control_function_state_change_callback(partner, ControlFunctionState::Online);
+		}
+	}
+
+	bool CANNetworkManager::take_over_online_external_control_function(std::shared_ptr<PartneredControlFunction> partner, std::uint8_t channelIndex)
+	{
+		for (auto &tableEntry : controlFunctionTable[channelIndex])
+		{
+			if ((nullptr != tableEntry) &&
+			    (ControlFunction::Type::External == tableEntry->get_type()) &&
+			    (partner->check_matches_name(tableEntry->get_NAME())))
+			{
+				LOG_INFO("[NM]: Offline partner %016llx replaced by %016llx at address %u on channel %u.",
+				         partner->get_NAME().get_full_name(),
+				         tableEntry->get_NAME().get_full_name(),
+				         tableEntry->get_address(),
+				         channelIndex);
+				inactiveControlFunctions.remove(partner);
+				partner->controlFunctionNAME = tableEntry->get_NAME();
+				partner->address = tableEntry->get_address();
+				// The partner replaces this CF in the table, so it keeps the CF's credit for its claims
+				partner->claimedAddressSinceLastAddressClaimRequest = tableEntry->claimedAddressSinceLastAddressClaimRequest;
+				partner->missedAddressClaimRequests = tableEntry->missedAddressClaimRequests;
+				tableEntry->address = NULL_CAN_ADDRESS;
+				tableEntry = partner;
+				return true;
+			}
+		}
+		return false;
 	}
 
 	bool CANNetworkManager::send_can_message_raw(std::uint32_t portIndex, std::uint8_t sourceAddress, std::uint8_t destAddress, std::uint32_t parameterGroupNumber, std::uint8_t priority, const void *data, std::uint32_t size) const

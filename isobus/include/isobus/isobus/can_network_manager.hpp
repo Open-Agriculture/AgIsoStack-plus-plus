@@ -370,6 +370,13 @@ namespace isobus
 		/// address claiming and removes it if needed.
 		void prune_inactive_control_functions();
 
+		/// @brief Lets an offline partner take over an online external CF that matches its NAME filters
+		/// @note Call with controlFunctionsMutex held. The caller makes the partner's Online callback.
+		/// @param[in] partner The partner that just went offline
+		/// @param[in] channelIndex The CAN channel to look on
+		/// @returns true if the partner took over a CF and is online again
+		bool take_over_online_external_control_function(std::shared_ptr<PartneredControlFunction> partner, std::uint8_t channelIndex);
+
 		/// @brief Sends a CAN message using raw addresses. Used only by the stack.
 		/// @param[in] portIndex The CAN channel index to send the message from
 		/// @param[in] sourceAddress The source address to send the CAN message from
