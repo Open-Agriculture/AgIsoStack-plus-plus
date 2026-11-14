@@ -494,7 +494,9 @@ namespace isobus
 
 	void VirtualTerminalServer::deactivate_working_set(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet)
 	{
+		// The control function stays the same when the master changes its address
 		if ((activeWorkingSet == workingSet) ||
+		    ((nullptr != activeWorkingSet) && (activeWorkingSet->get_control_function() == workingSet->get_control_function())) ||
 		    (workingSet->get_control_function()->get_address() == activeWorkingSetMasterAddress))
 		{
 			activeWorkingSet = nullptr;
@@ -3622,6 +3624,15 @@ namespace isobus
 		}
 		report_shut_down_working_sets();
 
+		// The working set master can change its address, for example after a Commanded Address,
+		// and the VT Status message has to report the address it has now (ISO 11783-6:2018 G.2)
+		if ((nullptr != activeWorkingSet) &&
+		    (nullptr != activeWorkingSet->get_control_function()) &&
+		    (activeWorkingSet->get_control_function()->get_address_valid()))
+		{
+			activeWorkingSetMasterAddress = activeWorkingSet->get_control_function()->get_address();
+		}
+
 		if ((isobus::SystemTiming::time_expired_ms(statusMessageTimestamp_ms, 1000)) &&
 		    (send_status_message()))
 		{
@@ -3673,7 +3684,8 @@ namespace isobus
 					}
 
 					// A Load Version can replace the pool of the active working set, so its mask has to be refreshed
-					if (ws->get_control_function()->get_address() == activeWorkingSetMasterAddress)
+					if (((nullptr != activeWorkingSet) && (activeWorkingSet->get_control_function() == ws->get_control_function())) ||
+					    (ws->get_control_function()->get_address() == activeWorkingSetMasterAddress))
 					{
 						activeWorkingSet = ws;
 						activeWorkingSetDataMaskObjectID = std::static_pointer_cast<WorkingSet>(workingSetObject)->get_active_mask();

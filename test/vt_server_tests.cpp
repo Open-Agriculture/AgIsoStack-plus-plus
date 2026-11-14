@@ -3633,3 +3633,69 @@ TEST_F(VirtualTerminalServerMaskChangeMacroTest, ChangeSoftKeyMaskUsesTheVisibil
 	// was on the display when the command came.
 	EXPECT_EQ((std::vector<std::uint16_t>{ 10, 12, 13, 16, 17, 18 }), macrosThatRan);
 }
+
+TEST_F(VirtualTerminalServerMessagingTest, StatusMessageReportsTheNewAddressOfTheActiveWorkingSetMaster)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0xE2, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xE3, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	// Working Set 0 with active mask 1000, and Data Mask 1000
+	constexpr auto WORKING_SET = static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSet);
+	constexpr auto DATA_MASK = static_cast<std::uint8_t>(VirtualTerminalObjectType::DataMask);
+	auto workingSet = std::make_shared<TestWorkingSet>(client);
+	workingSet->add_iop_raw_data({ 0x00, 0x00, WORKING_SET, 0x00, 0x01, 0xE8, 0x03, 0x00, 0x00, 0x00, 0xE8, 0x03, DATA_MASK, 0x00, 0xFF, 0xFF, 0x00, 0x00 });
+	workingSet->start_parsing_thread();
+	workingSet->join_parsing_thread();
+	serverUnderTest.add_managed_working_set(workingSet);
+	serverUnderTest.select_working_set(workingSet);
+
+	// The working set master moves to address 0xE4, as after a Commanded Address (ISO 11783-06-005 Test #2)
+	CANMessageFrame claim = {};
+	claim.channel = 0;
+	claim.identifier = 0x18EEFFE4;
+	claim.isExtendedFrame = true;
+	claim.dataLength = CAN_DATA_LENGTH;
+	for (std::uint8_t i = 0; i < CAN_DATA_LENGTH; i++)
+	{
+		claim.data[i] = static_cast<std::uint8_t>(client->get_NAME().get_full_name() >> (8 * i));
+	}
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(claim);
+	CANNetworkManager::CANNetwork.update();
+	const std::uint8_t clientAddress = client->get_address();
+
+	testPlugin.clear_queue();
+	time_source.update_for_ms(1001);
+	workingSet->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
+	serverUnderTest.run_update();
+	time_source.update_for_ms(5);
+
+	bool statusSent = false;
+	std::uint8_t reportedAddress = NULL_CAN_ADDRESS;
+	CANMessageFrame frame = {};
+	while (testPlugin.read_frame(frame))
+	{
+		if ((0xE6 == get_pdu_format(frame)) && (0xFE == frame.data[0]))
+		{
+			statusSent = true;
+			reportedAddress = frame.data[1];
+		}
+	}
+	CANHardwareInterface::stop();
+
+	EXPECT_EQ(0xE4, clientAddress);
+	ASSERT_TRUE(statusSent);
+	EXPECT_EQ(0xE4, reportedAddress);
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(client);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
