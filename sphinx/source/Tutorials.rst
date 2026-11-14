@@ -16,3 +16,4 @@ Tutorials
    Tutorials/Task Controller Basics
    Tutorials/Task Controller Client
    Tutorials/ESP32 PlatformIO
+   Tutorials/Teensy and Arduino PlatformIO

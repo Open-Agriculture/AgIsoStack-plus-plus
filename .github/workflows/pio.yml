@@ -13,7 +13,12 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        example: [examples/virtual_terminal/esp32_platformio_object_pool]
+        example: [examples/virtual_terminal/esp32_platformio_object_pool, examples/arduino_platformio]
+        include:
+          - example: examples/virtual_terminal/esp32_platformio_object_pool
+            envs: -e local_agisostack
+          - example: examples/arduino_platformio
+            envs: -e local_teensy41 -e local_teensy40 -e local_esp32
 
     steps:
       - uses: actions/checkout@v7
@@ -33,4 +38,4 @@ jobs:
       - name: Install AgIsoStack library in PlatformIO
         run: pio pkg install -g -l ./
       - name: Build PlatformIO examples
-        run: pio run -d ${{ matrix.example }} -e local_agisostack
+        run: pio run -d ${{ matrix.example }} ${{ matrix.envs }}
