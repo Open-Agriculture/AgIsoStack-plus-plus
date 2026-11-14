@@ -124,6 +124,13 @@ TEST_F(ControlFunctionFunctionalitiesTest, CFFunctionalitiesTest)
 	// Our weak termination should be supported
 	EXPECT_EQ(true, cfFunctionalitiesUnderTest.get_minimum_control_function_option_state(ControlFunctionFunctionalities::MinimumControlFunctionOptions::Type1ECUInternalWeakTermination));
 
+	// Setting an already supported functionality again should update its generation and keep its options
+	cfFunctionalitiesUnderTest.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::MinimumControlFunction, 2, true);
+	EXPECT_EQ(2, cfFunctionalitiesUnderTest.get_functionality_generation(ControlFunctionFunctionalities::Functionalities::MinimumControlFunction));
+	EXPECT_EQ(true, cfFunctionalitiesUnderTest.get_minimum_control_function_option_state(ControlFunctionFunctionalities::MinimumControlFunctionOptions::Type1ECUInternalWeakTermination));
+	cfFunctionalitiesUnderTest.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::MinimumControlFunction, 1, true);
+	EXPECT_EQ(1, cfFunctionalitiesUnderTest.get_functionality_generation(ControlFunctionFunctionalities::Functionalities::MinimumControlFunction));
+
 	// Test Min CF functionalities
 	EXPECT_EQ(false, cfFunctionalitiesUnderTest.get_minimum_control_function_option_state(ControlFunctionFunctionalities::MinimumControlFunctionOptions::SupportOfHeartbeatConsumer));
 	EXPECT_EQ(false, cfFunctionalitiesUnderTest.get_minimum_control_function_option_state(ControlFunctionFunctionalities::MinimumControlFunctionOptions::SupportOfHeartbeatProducer));

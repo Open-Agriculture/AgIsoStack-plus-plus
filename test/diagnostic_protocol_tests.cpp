@@ -40,6 +40,44 @@ TEST_F(DiagnosticProtocolTest, CreateAndDestroyProtocolObjects)
 	CANNetworkManager::CANNetwork.deactivate_control_function(TestInternalECU);
 }
 
+TEST_F(DiagnosticProtocolTest, IdentificationFieldValidation)
+{
+	NAME TestDeviceNAME(0);
+	auto TestInternalECU = CANNetworkManager::CANNetwork.create_internal_control_function(TestDeviceNAME, 0, 0x1C);
+	DiagnosticProtocol protocolUnderTest(TestInternalECU);
+
+	EXPECT_TRUE(protocolUnderTest.set_ecu_id_field(DiagnosticProtocol::ECUIdentificationFields::SerialNumber, "1234"));
+	EXPECT_TRUE(protocolUnderTest.set_ecu_id_field(DiagnosticProtocol::ECUIdentificationFields::HardwareID, ""));
+	EXPECT_FALSE(protocolUnderTest.set_ecu_id_field(DiagnosticProtocol::ECUIdentificationFields::NumberOfFields, "1234"));
+	EXPECT_FALSE(protocolUnderTest.set_ecu_id_field(DiagnosticProtocol::ECUIdentificationFields::SerialNumber, "12*34"));
+
+	EXPECT_TRUE(protocolUnderTest.set_software_id_field(0, "App v1.0"));
+	EXPECT_FALSE(protocolUnderTest.set_software_id_field(0, "App*v1.0"));
+	EXPECT_FALSE(protocolUnderTest.set_software_id_field(1, "*"));
+	// The number of fields is sent in one byte
+	EXPECT_TRUE(protocolUnderTest.set_software_id_field(254, "Last field"));
+	EXPECT_FALSE(protocolUnderTest.set_software_id_field(255, "Too far"));
+	EXPECT_FALSE(protocolUnderTest.set_software_id_field(0xFFFFFFFF, "Too far"));
+	EXPECT_TRUE(protocolUnderTest.set_software_id_field(254, ""));
+
+	EXPECT_TRUE(protocolUnderTest.set_product_identification_code("Code"));
+	EXPECT_FALSE(protocolUnderTest.set_product_identification_code("Co*de"));
+	EXPECT_FALSE(protocolUnderTest.set_product_identification_brand("Brand*"));
+	EXPECT_FALSE(protocolUnderTest.set_product_identification_model("*Model"));
+
+	// ISO 11783-12 A.14 to A.16: up to 50 characters
+	const std::string fiftyCharacters(50, 'A');
+	const std::string fiftyOneCharacters(51, 'A');
+	EXPECT_TRUE(protocolUnderTest.set_product_identification_code(fiftyCharacters));
+	EXPECT_FALSE(protocolUnderTest.set_product_identification_code(fiftyOneCharacters));
+	EXPECT_TRUE(protocolUnderTest.set_product_identification_brand(fiftyCharacters));
+	EXPECT_FALSE(protocolUnderTest.set_product_identification_brand(fiftyOneCharacters));
+	EXPECT_TRUE(protocolUnderTest.set_product_identification_model(fiftyCharacters));
+	EXPECT_FALSE(protocolUnderTest.set_product_identification_model(fiftyOneCharacters));
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(TestInternalECU);
+}
+
 TEST_F(DiagnosticProtocolTest, MessageEncoding)
 {
 	VirtualCANPlugin testPlugin;
@@ -76,6 +114,8 @@ TEST_F(DiagnosticProtocolTest, MessageEncoding)
 		protocolUnderTest.set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::PartNumber, "1234");
 		protocolUnderTest.set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::SerialNumber, "9876");
 		protocolUnderTest.set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::Type, "AgISOStack");
+		// Out of range, must be ignored rather than written past the end of the field list
+		protocolUnderTest.set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::NumberOfFields, "Out of range");
 
 		// Use a PGN request to trigger sending it from the protocol
 		testFrame.dataLength = 3;
@@ -487,6 +527,11 @@ TEST_F(DiagnosticProtocolTest, MessageEncoding)
 		/// Now, test software ID against J1939-71
 		protocolUnderTest.set_software_id_field(0, "Unit Test 1.0.0");
 		protocolUnderTest.set_software_id_field(1, "Another version x.x.x.x");
+		// A cleared last field is removed, so it doesn't add an empty field to the message
+		EXPECT_TRUE(protocolUnderTest.set_software_id_field(2, "Temporary"));
+		EXPECT_TRUE(protocolUnderTest.set_software_id_field(2, ""));
+		// Clearing a field that was never set doesn't add one either
+		EXPECT_TRUE(protocolUnderTest.set_software_id_field(5, ""));
 
 		// Use a PGN request to trigger sending it from the protocol
 		testFrame.dataLength = 3;
