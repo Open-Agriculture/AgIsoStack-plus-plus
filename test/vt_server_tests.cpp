@@ -1317,6 +1317,70 @@ TEST_F(VirtualTerminalServerMessagingTest, ChangeEndPointChangesTheLineRepaintsA
 	EXPECT_EQ(8, serverUnderTest.managedWorkingSetList.front()->get_object_by_id(2)->get_height());
 }
 
+TEST_F(VirtualTerminalServerMessagingTest, CommandsRunByAMacroSendNoResponse)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x70, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xCD, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	CANMessageFrame response = {};
+
+	const bool connected = connect_with_polygon_and_line_pool(serverUnderTest, testPlugin, internalECU, client);
+	// Changing Line 3's end point runs Macro 5, whose Change Size of Polygon 2 must not be answered
+	receive_from_client(internalECU, client, { 0xA9, 0x03, 0x00, 0x28, 0x00, 0x1E, 0x00, 0x01 });
+	const bool answered = poll_for_response(serverUnderTest, testPlugin, 0xA6, response);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(connected);
+	EXPECT_FALSE(answered);
+	EXPECT_EQ(7, serverUnderTest.managedWorkingSetList.front()->get_object_by_id(2)->get_width());
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ThrowingMacroCommandDoesNotSilenceLaterResponses)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x72, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xCF, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	CANMessageFrame response = {};
+
+	const bool connected = connect_with_polygon_and_line_pool(serverUnderTest, testPlugin, internalECU, client);
+	if (!connected)
+	{
+		CANHardwareInterface::stop();
+	}
+	ASSERT_TRUE(connected);
+
+	// Macro 5's Change Size repaints, so this throws out of execute_macro
+	const auto listener = serverUnderTest.get_on_repaint_event_dispatcher().add_listener([](std::shared_ptr<VirtualTerminalServerManagedWorkingSet>) { throw std::runtime_error("repaint failed"); });
+	EXPECT_THROW(serverUnderTest.execute_macro_for_test(5, serverUnderTest.managedWorkingSetList.front()), std::runtime_error);
+	serverUnderTest.get_on_repaint_event_dispatcher().remove_listener(listener);
+
+	receive_from_client(internalECU, client, { 0xA6, 0x02, 0x00, 0x09, 0x00, 0x0A, 0x00, 0xFF });
+	const bool answered = poll_for_response(serverUnderTest, testPlugin, 0xA6, response);
+	CANHardwareInterface::stop();
+
+	EXPECT_TRUE(answered);
+}
+
 TEST_F(VirtualTerminalServerMessagingTest, ChangeEndPointRejectsUnknownAndWrongObjectsAndAnInvalidLineDirection)
 {
 	VirtualCANPlugin testPlugin;
@@ -2831,6 +2895,38 @@ TEST_F(VirtualTerminalServerMessagingTest, MacroBlanksAStringWithAnEmptyChangeSt
 
 	EXPECT_TRUE(server.execute_macro_for_test(5, workingSet));
 	EXPECT_EQ("  ", std::static_pointer_cast<StringVariable>(workingSet->get_object_by_id(0x1234))->get_value());
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, UnsupportedCommandRunByAMacroIsNotAnsweredWithUnsupportedVTFunction)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x71, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xCE, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.version = VirtualTerminalBase::VTVersion::Version5;
+	serverUnderTest.initialize();
+
+	auto workingSet = std::make_shared<TestWorkingSet>(client);
+	// Macro 5 holding a Lock/Unlock Mask, which the server has no handler for
+	workingSet->add_iop_raw_data({ 0x05, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Macro), 0x08, 0x00, static_cast<std::uint8_t>(Macro::Command::LockUnlockMask), 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF });
+	workingSet->start_parsing_thread();
+	workingSet->join_parsing_thread();
+	serverUnderTest.add_managed_working_set(workingSet);
+
+	CANMessageFrame response = {};
+	const bool ran = serverUnderTest.execute_macro_for_test(5, workingSet);
+	const bool answered = poll_for_response(serverUnderTest, testPlugin, 0xFD, response);
+	CANHardwareInterface::stop();
+
+	EXPECT_TRUE(ran);
+	EXPECT_FALSE(answered);
 }
 
 /// @brief A managed working set whose macros change one string variable, so that a test can see which of them ran
