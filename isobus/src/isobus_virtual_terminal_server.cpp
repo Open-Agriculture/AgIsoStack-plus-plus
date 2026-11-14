@@ -529,6 +529,14 @@ namespace isobus
 		}
 	}
 
+	/// @brief Counts the macros running on this thread, which the response senders check because a command run from a macro gets no response.
+	/// @returns The count for the calling thread.
+	static std::uint8_t &number_of_running_macros()
+	{
+		static thread_local std::uint8_t count = 0;
+		return count;
+	}
+
 	void VirtualTerminalServer::execute_macro_as_rx_message(const CANMessage &message)
 	{
 		if ((message.get_destination_control_function() == serverInternalControlFunction) &&
@@ -543,7 +551,7 @@ namespace isobus
 		// Per thread, because a circular reference nests synchronously on one thread.
 		// Objects, not IDs, so that equal IDs in other working sets don't match.
 		static thread_local std::array<const VTObject *, MAX_NESTED_MACROS> runningMacros;
-		static thread_local std::uint8_t numberOfRunningMacros = 0;
+		std::uint8_t &numberOfRunningMacros = number_of_running_macros();
 
 		auto object = workingSet->get_object_by_id(objectIDOfMacro);
 		const auto runningMacrosEnd = runningMacros.begin() + numberOfRunningMacros;
@@ -567,6 +575,15 @@ namespace isobus
 				retVal = true;
 				runningMacros[numberOfRunningMacros] = macro.get();
 				numberOfRunningMacros++;
+				// Pops on every exit, because a listener may throw and a stuck count would silence all responses.
+				struct PopRunningMacro
+				{
+					void operator()(std::uint8_t *count) const
+					{
+						(*count)--;
+					}
+				};
+				const std::unique_ptr<std::uint8_t, PopRunningMacro> pop(&numberOfRunningMacros);
 
 				for (std::uint8_t j = 0; j < macro->get_number_of_commands(); j++)
 				{
@@ -584,7 +601,6 @@ namespace isobus
 						execute_macro_as_rx_message(message);
 					}
 				}
-				numberOfRunningMacros--;
 			}
 		}
 		return retVal;
@@ -2438,7 +2454,7 @@ namespace isobus
 			default:
 			{
 				// A VT before version 5 had no defined response to an unknown function
-				if ((5 <= get_vt_version_byte(get_version())) && (!message.is_broadcast()))
+				if ((5 <= get_vt_version_byte(get_version())) && (!message.is_broadcast()) && (0 == number_of_running_macros()))
 				{
 					const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 						static_cast<std::uint8_t>(Function::UnsupportedVTFunctionMessage),
@@ -2536,7 +2552,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeActiveMaskCommand),
@@ -2563,7 +2579,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeAttributeCommand),
@@ -2590,7 +2606,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeBackgroundColourCommand),
@@ -2617,7 +2633,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
 
@@ -2644,7 +2660,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeEndPointCommand),
@@ -2671,7 +2687,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
 				static_cast<std::uint8_t>(Function::ChangeChildPositionCommand),
@@ -2698,7 +2714,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeFillAttributesCommand),
@@ -2724,7 +2740,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeFontAttributesCommand),
@@ -2750,7 +2766,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeLineAttributesCommand),
@@ -2776,7 +2792,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeListItemCommand),
@@ -3055,7 +3071,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
 
@@ -3082,7 +3098,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
 
@@ -3109,7 +3125,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangePolygonScaleCommand),
@@ -3136,7 +3152,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
 				static_cast<std::uint8_t>(Function::ChangeSizeCommand),
@@ -3163,7 +3179,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
 				static_cast<std::uint8_t>(Function::ChangeSoftKeyMaskCommand),
@@ -3190,7 +3206,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeStringValueCommand),
@@ -3287,7 +3303,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
 
@@ -3365,12 +3381,13 @@ namespace isobus
 		buffer[6] = 0xFF;
 		buffer[7] = 0xFF;
 
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      serverInternalControlFunction,
-		                                                      destination,
-		                                                      get_priority());
+		return (0 == number_of_running_macros()) &&
+		  CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                 buffer.data(),
+		                                                 CAN_DATA_LENGTH,
+		                                                 serverInternalControlFunction,
+		                                                 destination,
+		                                                 get_priority());
 	}
 
 	bool VirtualTerminalServer::send_hide_show_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, bool value, std::shared_ptr<ControlFunction> destination) const
@@ -3386,12 +3403,13 @@ namespace isobus
 		buffer[6] = 0xFF; // Reserved
 		buffer[7] = 0xFF; // Reserved
 
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      serverInternalControlFunction,
-		                                                      destination,
-		                                                      get_priority());
+		return (0 == number_of_running_macros()) &&
+		  CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                 buffer.data(),
+		                                                 CAN_DATA_LENGTH,
+		                                                 serverInternalControlFunction,
+		                                                 destination,
+		                                                 get_priority());
 	}
 
 	bool VirtualTerminalServer::send_change_priority_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t priority, std::shared_ptr<ControlFunction> destination) const
@@ -3407,12 +3425,13 @@ namespace isobus
 		buffer[6] = 0xFF; // Reserved
 		buffer[7] = 0xFF; // Reserved
 
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      serverInternalControlFunction,
-		                                                      destination,
-		                                                      get_priority());
+		return (0 == number_of_running_macros()) &&
+		  CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                 buffer.data(),
+		                                                 CAN_DATA_LENGTH,
+		                                                 serverInternalControlFunction,
+		                                                 destination,
+		                                                 get_priority());
 	}
 
 	bool VirtualTerminalServer::send_select_input_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, SelectInputObjectResponse response, std::shared_ptr<ControlFunction> destination) const
@@ -3428,12 +3447,13 @@ namespace isobus
 		buffer[6] = 0xFF; // Reserved
 		buffer[7] = 0xFF; // Reserved
 
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      serverInternalControlFunction,
-		                                                      destination,
-		                                                      get_priority());
+		return (0 == number_of_running_macros()) &&
+		  CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                 buffer.data(),
+		                                                 CAN_DATA_LENGTH,
+		                                                 serverInternalControlFunction,
+		                                                 destination,
+		                                                 get_priority());
 	}
 
 	bool VirtualTerminalServer::send_esc_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
@@ -3512,12 +3532,13 @@ namespace isobus
 	bool VirtualTerminalServer::send_audio_signal_successful(std::shared_ptr<ControlFunction> destination) const
 	{
 		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ControlAudioSignalCommand), 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      serverInternalControlFunction,
-		                                                      destination,
-		                                                      get_priority());
+		return (0 == number_of_running_macros()) &&
+		  CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                 buffer.data(),
+		                                                 CAN_DATA_LENGTH,
+		                                                 serverInternalControlFunction,
+		                                                 destination,
+		                                                 get_priority());
 	}
 
 	bool VirtualTerminalServer::send_get_window_mask_data_response(std::shared_ptr<ControlFunction> destination) const
@@ -3544,12 +3565,13 @@ namespace isobus
 	bool VirtualTerminalServer::send_audio_volume_response(std::shared_ptr<ControlFunction> destination) const
 	{
 		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::SetAudioVolumeCommand), 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      serverInternalControlFunction,
-		                                                      destination,
-		                                                      get_priority());
+		return (0 == number_of_running_macros()) &&
+		  CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                 buffer.data(),
+		                                                 CAN_DATA_LENGTH,
+		                                                 serverInternalControlFunction,
+		                                                 destination,
+		                                                 get_priority());
 	}
 
 	bool VirtualTerminalServer::send_capture_screen_response(std::uint8_t item, std::uint8_t path, std::uint8_t errorCode, std::uint16_t imageId, std::shared_ptr<ControlFunction> requestor) const
