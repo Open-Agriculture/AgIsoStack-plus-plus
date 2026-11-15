@@ -36,7 +36,8 @@ public:
 		// A test that stops early on a failed ASSERT leaves the interface running, and the next test could not set it up
 		isobus::CANHardwareInterface::stop();
 
-		// Free the addresses of the internal and partnered control functions, so that a later test in the same process can claim them
+		// Deactivate the internal and partnered control functions, so that a later test in the same process can claim their addresses.
+		// A partner that still has a valid address is replaced by an external control function, which keeps its address claimed.
 		for (const auto &partner : isobus::CANNetworkManager::CANNetwork.get_partnered_control_functions())
 		{
 			isobus::CANNetworkManager::CANNetwork.deactivate_control_function(partner);
