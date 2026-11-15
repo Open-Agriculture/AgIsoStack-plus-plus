@@ -126,9 +126,9 @@ namespace isobus
 		objectPoolTransferDropped = false;
 	}
 
-	void VirtualTerminalServerManagedWorkingSet::set_object_pool_transfer_dropped(bool dropped)
+	void VirtualTerminalServerManagedWorkingSet::set_object_pool_transfer_dropped()
 	{
-		objectPoolTransferDropped = dropped;
+		objectPoolTransferDropped = true;
 	}
 
 	bool VirtualTerminalServerManagedWorkingSet::get_object_pool_transfer_dropped() const

@@ -32,6 +32,7 @@ namespace isobus
 	/// Received commands are queued and processed in update(), so every function you override and every event dispatcher
 	/// is called on the thread that calls update(), except on_rx_messages_pending(). Call process_macro(), the send functions
 	/// and functions that read or change a working set, like set_object_focus() and set_object_open_for_input(), from that thread as well.
+	/// A command is answered only when update() processes it, so call update() often, or wake it up from on_rx_messages_pending().
 	class VirtualTerminalServer : public VirtualTerminalBase
 	{
 	public:
@@ -47,6 +48,8 @@ namespace isobus
 		VirtualTerminalServer(std::shared_ptr<InternalControlFunction> controlFunctionToUse);
 
 		/// @brief Destructor for the VirtualTerminalServer
+		/// @details Stop the CAN hardware interface before destroying the server, so no received message is being queued
+		/// and on_rx_messages_pending() is not running while it is destroyed. CANHardwareInterface::stop() waits for its thread to finish.
 		~VirtualTerminalServer();
 
 		/// @brief Initializes the interface, which registers it with the network manager.
@@ -60,8 +63,11 @@ namespace isobus
 		/// @details A message is dropped only when the queue already holds at least this many bytes, so a single
 		/// message larger than the limit (like a large object pool transfer) is still queued. A dropped message
 		/// gets no response, except a dropped Object Pool Transfer, which makes the following End of Object Pool
-		/// answer with an error. The default is DEFAULT_MAX_RX_QUEUE_SIZE_BYTES, about 3 seconds of a fully loaded bus.
+		/// answer with an error. After a dropped Object Pool Transfer, every message is dropped until update() processes the queue.
+		/// The default is DEFAULT_MAX_RX_QUEUE_SIZE_BYTES, about 3 seconds of a fully loaded bus.
 		/// Lower it on targets with little free memory, raise it if update() can stall for longer or several clients upload at once.
+		/// A limit of 0 drops every message. The limit counts the queue only: while update() processes a batch, a new one can fill up,
+		/// so up to twice the limit can be held.
 		/// @param[in] sizeInBytes The limit in bytes
 		void set_max_rx_queue_size(std::uint32_t sizeInBytes);
 
@@ -1110,7 +1116,6 @@ namespace isobus
 
 		std::vector<std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, UnexpectedShutdownReason>> pendingShutdowns; ///< Shut down working sets that the application has not been told about yet
 		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> pendingObjectPoolDeletions; ///< Working sets whose object pool was deleted, which update() passes to object_pool_deleted()
-		Mutex pendingShutdownsMutex; ///< Protects pendingShutdowns and pendingObjectPoolDeletions, which both the CAN thread and update() use
 		std::vector<std::shared_ptr<ControlFunction>> announcedWorkingSetMasters; ///< Unmanaged control functions that sent a Working Set Master message, see process_working_set_master_message()
 
 		/// @brief A received message and the time it arrived
@@ -1118,14 +1123,14 @@ namespace isobus
 		{
 			CANMessage message; ///< The received message
 			std::uint32_t arrivalTimestamp_ms; ///< When the message was queued, from SystemTiming
-			bool objectPoolTransferDropped; ///< True if this entry only marks an Object Pool Transfer that was dropped because the queue was full, its message has no data
 		};
 
 		std::deque<QueuedMessage> rxMessageQueue; ///< Messages received on the CAN thread that update() has not processed yet
-		Mutex rxMessageQueueMutex; ///< Guards rxMessageQueue, rxMessageQueueSize_bytes, maxRxMessageQueueSize_bytes and droppedRxMessageCount only
+		Mutex rxMessageQueueMutex; ///< Guards rxMessageQueue, rxMessageQueueSize_bytes, maxRxMessageQueueSize_bytes, droppedRxMessageCount and droppedObjectPoolTransferSources only
 		std::uint32_t rxMessageQueueSize_bytes = 0; ///< Bytes held by rxMessageQueue, counted as sizeof(QueuedMessage) plus the data length
 		std::uint32_t maxRxMessageQueueSize_bytes = DEFAULT_MAX_RX_QUEUE_SIZE_BYTES; ///< Limit on rxMessageQueueSize_bytes, guarded by rxMessageQueueMutex
 		std::uint32_t droppedRxMessageCount = 0; ///< Messages dropped since update() last reported them, guarded by rxMessageQueueMutex
+		std::vector<std::shared_ptr<ControlFunction>> droppedObjectPoolTransferSources; ///< Clients whose Object Pool Transfer was dropped since the last drain, guarded by rxMessageQueueMutex
 		std::uint32_t rxMessageArrivalTimestamp_ms = 0; ///< Arrival time of the message being processed, only used on the thread that calls update()
 	};
 } // namespace isobus

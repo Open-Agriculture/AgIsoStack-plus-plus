@@ -314,7 +314,6 @@ namespace isobus
 		}
 
 		// A shut down working set can still be parsing its object pool, and its thread must not outlive it
-		LOCK_GUARD(Mutex, pendingShutdownsMutex);
 		for (const auto &shutDown : pendingShutdowns)
 		{
 			shutDown.first->join_parsing_thread();
@@ -548,7 +547,6 @@ namespace isobus
 		managedWorkingSetIopLoadStateMap.erase(workingSet);
 		managedWorkingSetList.erase(std::remove(managedWorkingSetList.begin(), managedWorkingSetList.end(), workingSet), managedWorkingSetList.end());
 
-		LOCK_GUARD(Mutex, pendingShutdownsMutex);
 		pendingShutdowns.emplace_back(workingSet, reason);
 	}
 
@@ -576,23 +574,17 @@ namespace isobus
 		deactivate_working_set(workingSet);
 		managedWorkingSetIopLoadStateMap.erase(workingSet);
 		workingSet->clear_object_pool_data({});
-		{
-			LOCK_GUARD(Mutex, pendingShutdownsMutex);
-			pendingObjectPoolDeletions.push_back(workingSet);
-		}
+		pendingObjectPoolDeletions.push_back(workingSet);
 	}
 
 	void VirtualTerminalServer::report_shut_down_working_sets()
 	{
 		std::vector<std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, UnexpectedShutdownReason>> parsedWorkingSets;
-		{
-			LOCK_GUARD(Mutex, pendingShutdownsMutex);
-			auto stillParsing = std::stable_partition(pendingShutdowns.begin(), pendingShutdowns.end(), [](const std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, UnexpectedShutdownReason> &shutDown) {
-				return VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Running == shutDown.first->get_object_pool_processing_state();
-			});
-			parsedWorkingSets.assign(stillParsing, pendingShutdowns.end());
-			pendingShutdowns.erase(stillParsing, pendingShutdowns.end());
-		}
+		auto stillParsing = std::stable_partition(pendingShutdowns.begin(), pendingShutdowns.end(), [](const std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, UnexpectedShutdownReason> &shutDown) {
+			return VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Running == shutDown.first->get_object_pool_processing_state();
+		});
+		parsedWorkingSets.assign(stillParsing, pendingShutdowns.end());
+		pendingShutdowns.erase(stillParsing, pendingShutdowns.end());
 
 		for (const auto &shutDown : parsedWorkingSets)
 		{
@@ -2613,50 +2605,35 @@ namespace isobus
 			auto server = static_cast<VirtualTerminalServer *>(parent);
 			const std::uint32_t timestamp_ms = SystemTiming::get_timestamp_ms();
 
-			bool queueWasEmpty = false;
-			bool queueIsEmpty = true;
+			bool notify = false;
 
 			{
 				Mutex &queueMutex = server->rxMessageQueueMutex;
 				LOCK_GUARD(Mutex, queueMutex);
-				queueWasEmpty = server->rxMessageQueue.empty();
-				if (server->rxMessageQueueSize_bytes < server->maxRxMessageQueueSize_bytes)
+				// Once a transfer was dropped nothing is queued until the drain, so the drop is processed after everything that came before it
+				if ((server->droppedObjectPoolTransferSources.empty()) && (server->rxMessageQueueSize_bytes < server->maxRxMessageQueueSize_bytes))
 				{
-					server->rxMessageQueue.push_back({ message, timestamp_ms, false });
+					notify = server->rxMessageQueue.empty();
+					server->rxMessageQueue.push_back({ message, timestamp_ms });
 					server->rxMessageQueueSize_bytes += static_cast<std::uint32_t>(sizeof(QueuedMessage)) + message.get_data_length();
 				}
 				else if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == message.get_identifier().get_parameter_group_number()) &&
 				         (CAN_DATA_LENGTH <= message.get_data_length()) &&
 				         (static_cast<std::uint8_t>(Function::ObjectPoolTransferMessage) == message.get_data()[0]))
 				{
-					// Once the queue is full only markers are added, so the queue ends in a run of markers.
-					// One marker per client in that run keeps the uncounted markers bounded.
-					bool alreadyMarked = false;
-					for (auto queued = server->rxMessageQueue.rbegin(); (server->rxMessageQueue.rend() != queued) && queued->objectPoolTransferDropped && !alreadyMarked; ++queued)
+					auto &sources = server->droppedObjectPoolTransferSources;
+					if (sources.end() == std::find(sources.begin(), sources.end(), message.get_source_control_function()))
 					{
-						alreadyMarked = (message.get_source_control_function() == queued->message.get_source_control_function());
-					}
-
-					if (!alreadyMarked)
-					{
-						// The marker is not counted, so that it cannot be dropped itself
-						const CANMessage marker(message.get_type(),
-						                        message.get_identifier(),
-						                        std::vector<std::uint8_t>(),
-						                        message.get_source_control_function(),
-						                        message.get_destination_control_function(),
-						                        message.get_can_port_index());
-						server->rxMessageQueue.push_back({ marker, timestamp_ms, true });
+						sources.push_back(message.get_source_control_function());
 					}
 				}
 				else
 				{
 					server->droppedRxMessageCount++;
 				}
-				queueIsEmpty = server->rxMessageQueue.empty();
 			}
 
-			if (queueWasEmpty && !queueIsEmpty)
+			if (notify)
 			{
 				server->on_rx_messages_pending();
 			}
@@ -2672,10 +2649,12 @@ namespace isobus
 	void VirtualTerminalServer::process_rx_messages()
 	{
 		std::deque<QueuedMessage> rxMessages;
+		std::vector<std::shared_ptr<ControlFunction>> droppedTransferSources;
 		std::uint32_t droppedMessages = 0;
 		{
 			LOCK_GUARD(Mutex, rxMessageQueueMutex);
 			rxMessages.swap(rxMessageQueue);
+			droppedTransferSources.swap(droppedObjectPoolTransferSources);
 			rxMessageQueueSize_bytes = 0;
 			droppedMessages = droppedRxMessageCount;
 			droppedRxMessageCount = 0;
@@ -2688,20 +2667,19 @@ namespace isobus
 
 		for (const auto &entry : rxMessages)
 		{
-			if (entry.objectPoolTransferDropped)
-			{
-				const auto workingSet = get_managed_working_set(entry.message.get_source_control_function());
+			rxMessageArrivalTimestamp_ms = entry.arrivalTimestamp_ms;
+			process_rx_message(entry.message, this);
+		}
 
-				if ((nullptr != workingSet) && (!is_object_pool_parse_unanswered(*workingSet)))
-				{
-					workingSet->set_object_pool_transfer_dropped(true);
-					LOG_ERROR("[VT Server]: Client %u object pool transfer was dropped, as the queue was full", workingSet->get_control_function()->get_address());
-				}
-			}
-			else
+		// After the batch, as nothing was queued after a dropped transfer
+		for (const auto &source : droppedTransferSources)
+		{
+			const auto workingSet = get_managed_working_set(source);
+
+			if ((nullptr != workingSet) && (!is_object_pool_parse_unanswered(*workingSet)))
 			{
-				rxMessageArrivalTimestamp_ms = entry.arrivalTimestamp_ms;
-				process_rx_message(entry.message, this);
+				workingSet->set_object_pool_transfer_dropped();
+				LOG_ERROR("[VT Server]: Client %u object pool transfer was dropped, as the queue was full", workingSet->get_control_function()->get_address());
 			}
 		}
 	}
@@ -3825,13 +3803,11 @@ namespace isobus
 
 	void VirtualTerminalServer::update()
 	{
+		const std::uint32_t drainTimestamp_ms = SystemTiming::get_timestamp_ms();
 		process_rx_messages();
 
 		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> deletedObjectPools;
-		{
-			LOCK_GUARD(Mutex, pendingShutdownsMutex);
-			deletedObjectPools.swap(pendingObjectPoolDeletions);
-		}
+		deletedObjectPools.swap(pendingObjectPoolDeletions);
 		for (const auto &ws : deletedObjectPools)
 		{
 			object_pool_deleted(ws);
@@ -3841,7 +3817,8 @@ namespace isobus
 		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> timedOutWorkingSets;
 		for (const auto &ws : managedWorkingSetList)
 		{
-			if (SystemTiming::time_expired_ms(ws->get_working_set_maintenance_message_timestamp_ms(), WORKING_SET_MAINTENANCE_TIMEOUT_MS))
+			// Measured up to the drain, as maintenance that arrived after it is still waiting in the queue
+			if (SystemTiming::time_expired_ms(ws->get_working_set_maintenance_message_timestamp_ms(), WORKING_SET_MAINTENANCE_TIMEOUT_MS + SystemTiming::get_time_elapsed_ms(drainTimestamp_ms)))
 			{
 				timedOutWorkingSets.push_back(ws);
 			}
@@ -3873,12 +3850,8 @@ namespace isobus
 		for (const auto &ws : managedWorkingSetList)
 		{
 			const auto processingState = ws->get_object_pool_processing_state();
-			bool deletionPending = false;
-			{
-				// Read after the state, so a deletion that came before this parse is found and reported before it
-				LOCK_GUARD(Mutex, pendingShutdownsMutex);
-				deletionPending = (pendingObjectPoolDeletions.end() != std::find(pendingObjectPoolDeletions.begin(), pendingObjectPoolDeletions.end(), ws));
-			}
+			// A pool deleted after the swap above, from inside a hook that update() calls, is reported by the next update() before the new pool
+			const bool deletionPending = (pendingObjectPoolDeletions.end() != std::find(pendingObjectPoolDeletions.begin(), pendingObjectPoolDeletions.end(), ws));
 
 			if ((!deletionPending) && (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Success == processingState))
 			{

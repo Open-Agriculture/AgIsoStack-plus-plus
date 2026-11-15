@@ -499,7 +499,7 @@ protected:
 		return foundStatus;
 	}
 
-	DerivedTestVTServer *serverToDrain = nullptr; ///< The server whose queued messages the receive helpers process, set by the fixtures that own one
+	DerivedTestVTServer *serverToDrain = nullptr; ///< The server the receive helpers drain, set by fixtures that own one
 };
 
 /// @brief An object pool with a selectable Working Set
@@ -593,6 +593,17 @@ protected:
 		}
 	}
 
+	/// @brief Connects the client and drops its object pool transfer, as if the queue was full
+	void drop_object_pool_transfer()
+	{
+		receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+		server->set_max_rx_queue_size(1);
+		receive_from_client_without_processing(internalECU, client, { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF });
+		receive_tp_from_client_without_processing(internalECU, client, SELECTABLE_OBJECT_POOL);
+		server->process_rx_messages();
+		server->set_max_rx_queue_size(DerivedTestVTServer::DEFAULT_MAX_RX_QUEUE_SIZE_BYTES);
+	}
+
 	VirtualCANPlugin testPlugin;
 	std::shared_ptr<InternalControlFunction> internalECU;
 	std::shared_ptr<PartneredControlFunction> client;
@@ -678,39 +689,69 @@ TEST_F(VirtualTerminalServerBusTest, AMessageLargerThanTheLimitIsQueuedWhenTheQu
 	EXPECT_EQ(0U, nacks);
 }
 
-TEST_F(VirtualTerminalServerBusTest, DroppedObjectPoolTransferFailsTheUpload)
+TEST_F(VirtualTerminalServerBusTest, DroppedObjectPoolTransferFailsEndOfObjectPool)
 {
-	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
-	server->set_max_rx_queue_size(1);
-
-	receive_from_client_without_processing(internalECU, client, { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF });
-	receive_tp_from_client_without_processing(internalECU, client, SELECTABLE_OBJECT_POOL);
-	server->process_rx_messages();
-	server->set_max_rx_queue_size(DerivedTestVTServer::DEFAULT_MAX_RX_QUEUE_SIZE_BYTES);
-
+	drop_object_pool_transfer();
 	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
 	testPlugin.clear_queue();
 
 	CANMessageFrame response = {};
 	ASSERT_TRUE(poll_for_response(*server, testPlugin, 0x12, response));
-	EXPECT_EQ(0x03, response.data[1]);
-	for (std::size_t i = 2; i <= 5; i++)
-	{
-		EXPECT_EQ(0xFF, response.data[i]);
-	}
-	EXPECT_EQ(0x08, response.data[6]);
-	ASSERT_EQ(1U, server->managedWorkingSetList.size());
-	EXPECT_EQ(VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::None, server->managedWorkingSetList.front()->get_object_pool_processing_state());
-	EXPECT_FALSE(server->managedWorkingSetList.front()->get_object_pool_transfer_dropped());
+	EXPECT_EQ(0x03, response.data[1]); // Error in object pool, VT ran out of memory
+	EXPECT_EQ(0x08, response.data[6]); // Object pool was deleted from volatile memory
 	EXPECT_EQ(1U, server->deletedObjectPools.size());
 	EXPECT_TRUE(server->parsedWorkingSets.empty());
+}
 
-	// The same working set can upload again, so the dropped flag was cleared
+TEST_F(VirtualTerminalServerBusTest, UploadWorksAgainAfterADroppedTransferFailed)
+{
+	drop_object_pool_transfer();
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	CANMessageFrame response = {};
+	ASSERT_TRUE(poll_for_response(*server, testPlugin, 0x12, response));
+
 	receive_tp_from_client(internalECU, client, SELECTABLE_OBJECT_POOL);
 	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
 	testPlugin.clear_queue();
+
 	ASSERT_TRUE(poll_for_response(*server, testPlugin, 0x12, response));
 	EXPECT_EQ(0x00, response.data[1]);
+}
+
+TEST_F(VirtualTerminalServerBusTest, DeleteObjectPoolAfterADroppedTransferAllowsANewUpload)
+{
+	drop_object_pool_transfer();
+	ASSERT_EQ(1U, server->managedWorkingSetList.size());
+	EXPECT_TRUE(server->managedWorkingSetList.front()->get_object_pool_transfer_dropped());
+
+	receive_from_client(internalECU, client, { 0xB2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	EXPECT_FALSE(server->managedWorkingSetList.front()->get_object_pool_transfer_dropped());
+
+	receive_tp_from_client(internalECU, client, SELECTABLE_OBJECT_POOL);
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+
+	CANMessageFrame response = {};
+	ASSERT_TRUE(poll_for_response(*server, testPlugin, 0x12, response));
+	EXPECT_EQ(0x00, response.data[1]);
+}
+
+TEST_F(VirtualTerminalServerBusTest, MessagesAfterADroppedTransferAreDroppedUntilTheDrain)
+{
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	server->set_max_rx_queue_size(1);
+	receive_from_client_without_processing(internalECU, client, { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF });
+	receive_tp_from_client_without_processing(internalECU, client, SELECTABLE_OBJECT_POOL);
+	server->set_max_rx_queue_size(DerivedTestVTServer::DEFAULT_MAX_RX_QUEUE_SIZE_BYTES);
+	receive_from_client_without_processing(internalECU, client, { 0xB2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	server->process_rx_messages();
+
+	ASSERT_EQ(1U, server->managedWorkingSetList.size());
+	EXPECT_TRUE(server->managedWorkingSetList.front()->get_object_pool_transfer_dropped());
+
+	CANMessageFrame response = {};
+	EXPECT_FALSE(poll_for_response(*server, testPlugin, 0xB2, response));
 }
 
 TEST_F(VirtualTerminalServerBusTest, DroppedObjectPoolTransferFromAnUnmanagedSourceChangesNothing)
@@ -2236,7 +2277,6 @@ TEST_F(VirtualTerminalServerBusTest, UnsupportedCommandRunByAMacroIsNotAnsweredW
 	EXPECT_FALSE(answered);
 }
 
-/// @brief A server that runs macro 1 of another working set the first time it is told to set the audio volume
 TEST_F(VirtualTerminalServerBusTest, MaintenanceQueuedDuringAStallKeepsTheWorkingSet)
 {
 	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
@@ -2260,7 +2300,24 @@ TEST_F(VirtualTerminalServerBusTest, MaintenanceQueuedBeforeAStallTimesOut)
 	EXPECT_EQ(VirtualTerminalServer::UnexpectedShutdownReason::MaintenanceTimeout, server->shutdownReasons.front());
 }
 
-TEST_F(VirtualTerminalServerBusTest, StoringFromAnotherThreadWhileUpdating)
+TEST_F(VirtualTerminalServerBusTest, MaintenanceQueuedDuringAStallInsideUpdateKeepsTheWorkingSet)
+{
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	// The maintenance message arrives while a hook inside update() stalls, after update() drained the queue
+	server->onObjectPoolDeleted = [&](std::shared_ptr<VirtualTerminalServerManagedWorkingSet>) {
+		time_source.simulate_delay_ms(2900);
+		receive_from_client_without_processing(internalECU, client, { 0xFF, 0x00, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+		time_source.simulate_delay_ms(600);
+	};
+	receive_from_client_without_processing(internalECU, client, { 0xB2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	server->run_update();
+	server->run_update();
+
+	EXPECT_TRUE(server->shutdownReasons.empty());
+	EXPECT_TRUE(is_managed(internalECU, client, testPlugin));
+}
+
+TEST_F(VirtualTerminalServerBusTest, MessagesCanBeStoredFromAnotherThreadWhileUpdating)
 {
 	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
 	testPlugin.clear_queue();
@@ -2296,6 +2353,7 @@ TEST_F(VirtualTerminalServerBusTest, StoringFromAnotherThreadWhileUpdating)
 	EXPECT_TRUE(is_managed(internalECU, client, testPlugin));
 }
 
+/// @brief A server that runs macro 1 of another working set the first time it is told to set the audio volume
 class NestingTestVTServer : public DerivedTestVTServer
 {
 public:

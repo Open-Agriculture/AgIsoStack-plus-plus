@@ -104,9 +104,8 @@ namespace isobus
 		/// @brief Discards the object pool so that a loaded version can overwrite it or the client can transfer a new one, keeping the callback handles
 		void clear_object_pool_data(CANLibBadge<VirtualTerminalServer>);
 
-		/// @brief Records that an Object Pool Transfer from this working set was dropped, so its object pool is incomplete
-		/// @param[in] dropped True when a transfer was dropped, false once the object pool has been deleted
-		void set_object_pool_transfer_dropped(bool dropped);
+		/// @brief Records that an Object Pool Transfer from this working set was dropped, so its object pool is incomplete. Deleting the object pool clears it.
+		void set_object_pool_transfer_dropped();
 
 		/// @brief Tells the server whether an Object Pool Transfer from this working set was dropped
 		/// @returns True if a transfer was dropped and the object pool has not been deleted since
