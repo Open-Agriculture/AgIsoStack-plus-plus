@@ -263,21 +263,6 @@ public:
 
 class VirtualTerminalServerMessagingTest : public AgIsoStackTestFixture
 {
-public:
-	void TearDown() override
-	{
-		// Free every address a test claimed, so that the next test can claim it again when they all run in one process
-		for (const auto &partner : CANNetworkManager::CANNetwork.get_partnered_control_functions())
-		{
-			CANNetworkManager::CANNetwork.deactivate_control_function(partner);
-		}
-		for (const auto &internal : CANNetworkManager::CANNetwork.get_internal_control_functions())
-		{
-			CANNetworkManager::CANNetwork.deactivate_control_function(internal);
-		}
-		AgIsoStackTestFixture::TearDown();
-	}
-
 protected:
 	static void receive_from_client(std::shared_ptr<InternalControlFunction> server,
 	                                std::shared_ptr<ControlFunction> client,
