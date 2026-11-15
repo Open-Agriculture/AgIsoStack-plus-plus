@@ -694,6 +694,8 @@ namespace isobus
 					auto result = std::find(controlFunctionTable[channelIndex].begin(),
 					                        controlFunctionTable[channelIndex].end(),
 					                        currentInternalControlFunction);
+					const bool addressChanged = (controlFunctionTable[channelIndex].end() == result) ||
+					  (claimedAddress != std::distance(controlFunctionTable[channelIndex].begin(), result));
 					if (result != controlFunctionTable[channelIndex].end())
 					{
 						*result = nullptr;
@@ -702,28 +704,47 @@ namespace isobus
 					if (claimedAddress < NULL_CAN_ADDRESS)
 					{
 						auto &targetControlFunction = controlFunctionTable[channelIndex][claimedAddress];
-						if (nullptr != targetControlFunction)
+						std::shared_ptr<InternalControlFunction> localOccupant;
+						if ((nullptr != targetControlFunction) && (ControlFunction::Type::Internal == targetControlFunction->get_type()))
 						{
-							// Someone is at that spot in the table, but their address was stolen by an internal control function
-							// Need to evict them from the table
-							targetControlFunction->address = NULL_CAN_ADDRESS;
-
-							// Our own claims never pass through the receive contention check, so restart a local CF's claim here
-							if (ControlFunction::Type::Internal == targetControlFunction->get_type())
-							{
-								const auto evictedControlFunction = std::static_pointer_cast<InternalControlFunction>(targetControlFunction);
-								const auto state = evictedControlFunction->get_current_state();
-								if ((InternalControlFunction::State::AddressClaimingComplete == state) ||
-								    (InternalControlFunction::State::SendReclaimAddressOnRequest == state))
-								{
-									evictedControlFunction->set_current_state(InternalControlFunction::State::WaitForRequestContentionPeriod);
-								}
-							}
+							localOccupant = std::static_pointer_cast<InternalControlFunction>(targetControlFunction);
 						}
 
-						// ECU has claimed since the last update, add it to the table
-						targetControlFunction = currentInternalControlFunction;
-						claimedControlFunctions.emplace_back(currentInternalControlFunction, claimedAddress);
+						// Our own claims never pass through the receive contention check, so local CFs contend here
+						if ((nullptr != localOccupant) &&
+						    localOccupant->holds_address() &&
+						    (localOccupant->get_NAME().get_full_name() < currentInternalControlFunction->get_NAME().get_full_name()))
+						{
+							localOccupant->set_current_state(InternalControlFunction::State::SendReclaimAddressOnRequest);
+							currentInternalControlFunction->address = NULL_CAN_ADDRESS;
+							currentInternalControlFunction->set_current_state(InternalControlFunction::State::WaitForRequestContentionPeriod);
+						}
+						else
+						{
+							if (nullptr != targetControlFunction)
+							{
+								// Someone is at that spot in the table, but their address was stolen by an internal control function
+								// Need to evict them from the table
+								targetControlFunction->address = NULL_CAN_ADDRESS;
+
+								if (nullptr == localOccupant)
+								{
+									// Keeps the CF object and its NAME together for when it claims a new address
+									inactiveControlFunctions.push_back(targetControlFunction);
+								}
+								else if (localOccupant->holds_address())
+								{
+									localOccupant->set_current_state(InternalControlFunction::State::WaitForRequestContentionPeriod);
+								}
+							}
+
+							// ECU has claimed since the last update, add it to the table
+							targetControlFunction = currentInternalControlFunction;
+							if (addressChanged)
+							{
+								claimedControlFunctions.emplace_back(currentInternalControlFunction, claimedAddress);
+							}
+						}
 					}
 				}
 			}
@@ -732,7 +753,17 @@ namespace isobus
 		// Listeners run without the lock so they may deactivate their control function
 		for (const auto &entry : claimedControlFunctions)
 		{
-			entry.first->addressClaimedDispatcher.call(entry.second);
+			bool stillActive = false;
+			{
+				LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
+				stillActive = (internalControlFunctions.end() != std::find(internalControlFunctions.begin(), internalControlFunctions.end(), entry.first));
+			}
+
+			// An earlier listener may have deactivated this control function
+			if (stillActive)
+			{
+				entry.first->addressClaimedDispatcher.call(entry.second);
+			}
 		}
 	}
 
@@ -879,15 +910,11 @@ namespace isobus
 							              // Seemed safest to just confirm.
 							              if (claimedNAME != cf->get_NAME().get_full_name())
 							              {
-								              const auto state = std::static_pointer_cast<InternalControlFunction>(cf)->get_current_state();
-								              const bool holdsAddress = (InternalControlFunction::State::AddressClaimingComplete == state) ||
-								                (InternalControlFunction::State::SendReclaimAddressOnRequest == state);
-
 								              // Since this is likely a J1939 style address claim if they're evicting us, we need to
 								              // check our ISO NAME versus the claimed NAME. If ours is lower, we win the
 								              // arbitration and can keep our address. If not, we need to
 								              // re-arbitrate our address.
-								              if ((claimedNAME > cf->get_NAME().get_full_name()) && holdsAddress)
+								              if ((claimedNAME > cf->get_NAME().get_full_name()) && std::static_pointer_cast<InternalControlFunction>(cf)->holds_address())
 								              {
 									              LOG_DEBUG("[AC]: Internal control function %016llx on channel %u won address contention against an ECU with NAME %016llx.",
 									                        cf->get_NAME().get_full_name(),
@@ -905,7 +932,7 @@ namespace isobus
 
 									              // This check is not strictly needed, but sanity check the state of the address claim state machine
 									              // to ensure we're not advancing it. We don't want to go from an unclaimed state to the contention state.
-									              if (holdsAddress)
+									              if (std::static_pointer_cast<InternalControlFunction>(cf)->holds_address())
 									              {
 										              std::static_pointer_cast<InternalControlFunction>(cf)->set_current_state(InternalControlFunction::State::WaitForRequestContentionPeriod);
 									              }

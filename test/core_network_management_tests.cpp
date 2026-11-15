@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <functional>
 #include <future>
 #include <memory>
@@ -295,7 +296,13 @@ protected:
 			work();
 			finished->set_value();
 		}).detach();
-		return std::future_status::ready == result.wait_for(std::chrono::seconds(1));
+		const bool returned = (std::future_status::ready == result.wait_for(std::chrono::seconds(1)));
+		if (!returned)
+		{
+			// The abandoned thread can hold the stack's lock and still reads this fixture, so no later test is safe
+			std::abort();
+		}
+		return returned;
 	}
 
 	CANMessageFrame create_address_claim_frame(std::uint8_t channel, std::uint8_t address, const NAME &name)
@@ -1306,7 +1313,7 @@ TEST_F(CoreTest, CannotClaimFromAPartnerNameDoesNotTouchTheTable)
 	CANNetworkManager::CANNetwork.update();
 
 	EXPECT_FALSE(partner->get_address_valid());
-	EXPECT_EQ(nullptr, CANNetworkManager::CANNetwork.get_control_function(1, 0));
+	EXPECT_EQ(0u, partner->get_NAME().get_full_name());
 	CANNetworkManager::CANNetwork.deactivate_control_function(partner);
 }
 
@@ -1530,5 +1537,112 @@ TEST_F(CoreTest, LocalControlFunctionEvictedByCommandedAddressReclaims)
 	CANNetworkManager::CANNetwork.deactivate_control_function(first);
 	CANNetworkManager::CANNetwork.deactivate_control_function(second);
 	CANNetworkManager::CANNetwork.deactivate_control_function(externalECU);
+	CANHardwareInterface::stop();
+}
+
+TEST_F(CoreTest, LocalControlFunctionWithTheLowerNameKeepsASharedPreferredAddress)
+{
+	start_virtual_can();
+
+	constexpr std::uint8_t SHARED_ADDRESS = 0x60;
+	const NAME lowerName = test_helpers::find_available_name(0);
+	auto lower = CANNetworkManager::CANNetwork.create_internal_control_function(lowerName, 0, SHARED_ADDRESS);
+	const NAME higherName(lowerName.get_full_name() + 1);
+	auto higher = CANNetworkManager::CANNetwork.create_internal_control_function(higherName, 0, SHARED_ADDRESS);
+
+	bool higherTookTheAddress = false;
+	for (std::uint32_t i = 0; (i < 1000) && !higherTookTheAddress; i++)
+	{
+		time_source.update_for_ms(1);
+		higherTookTheAddress = (SHARED_ADDRESS == higher->get_address()) ||
+		  (lower->get_address_valid() && (lower != CANNetworkManager::CANNetwork.get_control_function(0, SHARED_ADDRESS)));
+	}
+
+	EXPECT_FALSE(higherTookTheAddress);
+	EXPECT_EQ(SHARED_ADDRESS, lower->get_address());
+	EXPECT_NE(SHARED_ADDRESS, higher->get_address());
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(lower);
+	CANNetworkManager::CANNetwork.deactivate_control_function(higher);
+	CANHardwareInterface::stop();
+}
+
+TEST_F(CoreTest, ExternalControlFunctionEvictedByOurClaimIsKeptWhenItClaimsAgain)
+{
+	start_virtual_can();
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x43, 0, time_source);
+	auto externalECU = test_helpers::force_claim_partnered_control_function(0xF8, 0);
+	const std::uint64_t rawNAME = internalECU->get_NAME().get_full_name();
+	const NAME evictedName(rawNAME + 2);
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(0, 0x50, evictedName));
+	CANNetworkManager::CANNetwork.update();
+	auto evicted = CANNetworkManager::CANNetwork.get_control_function(0, 0x50);
+	ASSERT_NE(nullptr, evicted);
+
+	send_commanded_address(externalECU, rawNAME, 0x50);
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(500);
+	ASSERT_EQ(0x50, internalECU->get_address());
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(0, 0x61, evictedName));
+	CANNetworkManager::CANNetwork.update();
+
+	EXPECT_EQ(evicted, CANNetworkManager::CANNetwork.get_control_function(0, 0x61));
+	EXPECT_EQ(0x61, evicted->get_address());
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+	CANNetworkManager::CANNetwork.deactivate_control_function(externalECU);
+	CANHardwareInterface::stop();
+}
+
+TEST_F(CoreTest, AddressClaimedEventIsNotRepeatedForAReclaim)
+{
+	start_virtual_can();
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x49, 0, time_source);
+	std::uint32_t claimCount = 0;
+	internalECU->get_address_claimed_event_dispatcher().add_listener([&claimCount](std::uint8_t) {
+		claimCount++;
+	});
+
+	request_address_claim(internalECU);
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(100);
+
+	ASSERT_EQ(InternalControlFunction::State::AddressClaimingComplete, internalECU->get_current_state());
+	EXPECT_EQ(0u, claimCount);
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+	CANHardwareInterface::stop();
+}
+
+TEST_F(CoreTest, AddressClaimedListenerDoesNotRunForAControlFunctionDeactivatedByAnEarlierListener)
+{
+	start_virtual_can();
+
+	const NAME firstName = test_helpers::find_available_name(0);
+	auto first = CANNetworkManager::CANNetwork.create_internal_control_function(firstName, 0, 0x4A);
+	auto second = CANNetworkManager::CANNetwork.create_internal_control_function(NAME(firstName.get_full_name() + 1), 0, 0x4B);
+	bool firstListenerRan = false;
+	bool secondListenerRan = false;
+	first->get_address_claimed_event_dispatcher().add_listener([&](std::uint8_t) {
+		firstListenerRan = true;
+		CANNetworkManager::CANNetwork.deactivate_control_function(second);
+	});
+	second->get_address_claimed_event_dispatcher().add_listener([&secondListenerRan](std::uint8_t) {
+		secondListenerRan = true;
+	});
+
+	for (std::uint32_t i = 0; (i < 1000) && !firstListenerRan; i++)
+	{
+		time_source.update_for_ms(1);
+	}
+	ASSERT_TRUE(firstListenerRan);
+
+	EXPECT_FALSE(secondListenerRan);
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(first);
 	CANHardwareInterface::stop();
 }

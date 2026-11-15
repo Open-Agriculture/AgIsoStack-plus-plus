@@ -70,8 +70,9 @@ namespace isobus
 		std::uint8_t get_preferred_address() const;
 
 		/// @brief Returns the event dispatcher for when an address is claimed. It fires from the network manager's
-		/// update each time this ICF completes a claim, including a reclaim of the same address, and runs
-		/// without the stack's control function lock held.
+		/// update when this ICF sends a claim for an address it did not hold, not for a reclaim of the same address.
+		/// It fires as soon as the claim is sent, before the 250 ms contention period has passed, and runs without
+		/// the stack's control function lock held.
 		/// @returns The event dispatcher for when an address is claimed
 		EventDispatcher<std::uint8_t> &get_address_claimed_event_dispatcher();
 
@@ -118,6 +119,10 @@ namespace isobus
 		/// @brief Setter for the state
 		/// @param[in] value The new state
 		void set_current_state(State value);
+
+		/// @brief Tells if this ICF currently owns its address on the bus
+		/// @returns true if the claim is complete or a reclaim of the same address is pending
+		bool holds_address() const;
 
 		/// @brief Gets the end arbitration address for a given industry group. This is the last address that can be claimed
 		/// by a device in the specified industry group during address claiming arbitration.

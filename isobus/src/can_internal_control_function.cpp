@@ -50,6 +50,12 @@ namespace isobus
 		state = value;
 	}
 
+	bool InternalControlFunction::holds_address() const
+	{
+		const State state = get_current_state();
+		return (State::AddressClaimingComplete == state) || (State::SendReclaimAddressOnRequest == state);
+	}
+
 	std::uint8_t InternalControlFunction::get_end_arbitration_address_for_industry_group(NAME::IndustryGroup industryGroup)
 	{
 		// Search the range of available dynamic addresses based on industry group
