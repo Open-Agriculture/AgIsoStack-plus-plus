@@ -121,7 +121,8 @@ namespace isobus
 		/// @returns The object ID of the input object open for editing, or NULL_OBJECT_ID when none
 		std::uint16_t get_object_open_for_input() const;
 
-		/// @brief Returns whether the last object pool parse replaced an object that already existed
+		/// @brief Returns whether the last object pool parse replaced an object that already existed.
+		/// Only valid once object_pool_parse_finished() has been called for that parse.
 		/// @param[in] objectID The object ID to check
 		/// @returns true if the last parse replaced the object with this ID
 		bool was_object_replaced(std::uint16_t objectID) const;

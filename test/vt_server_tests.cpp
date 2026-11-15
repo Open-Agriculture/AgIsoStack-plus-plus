@@ -501,9 +501,6 @@ protected:
 	void TearDown() override
 	{
 		CANHardwareInterface::stop();
-		// Free the addresses, so that no other test finds them still claimed
-		CANNetworkManager::CANNetwork.deactivate_control_function(client);
-		CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 		server.reset();
 		VirtualTerminalServerMessagingTest::TearDown();
 	}

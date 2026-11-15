@@ -289,7 +289,7 @@ namespace isobus
 
 		/// @brief Called when a working set sends an ESC command, or when a command removes, hides or replaces the object open
 		/// for input. Close the open input, if any, before returning, clear it with set_object_open_for_input(NULL_OBJECT_ID),
-		/// and send VT Select Input Object as on Cancel, but not the VT ESC message. If no input is open, send nothing and
+		/// and send VT Select Input Object with the object deselected, but not the VT ESC message. If no input is open, send nothing and
 		/// return NULL_OBJECT_ID, the server then deselects the focused object itself. Can be called from the CAN thread.
 		/// @param[in] workingSet The working set that sent the ESC command
 		/// @returns The object ID of the object whose input was aborted, or NULL_OBJECT_ID if no object was open for input
@@ -399,6 +399,8 @@ namespace isobus
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t> &get_on_change_active_softkey_mask_event_dispatcher();
 
 		/// @brief Returns the event dispatcher for when an object is focused
+		/// When the bool is true the working set asked to open the object for input. If you open it, call
+		/// set_object_open_for_input() on the working set, otherwise the server does not know an input is open.
 		/// @returns The event dispatcher for when an object is focused
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, bool> &get_on_focus_object_event_dispatcher();
 
