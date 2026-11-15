@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <functional>
 #include <thread>
@@ -211,6 +212,11 @@ public:
 		audioVolumeSources.push_back(source);
 	}
 
+	void on_rx_messages_pending() override
+	{
+		rxMessagesPendingCalls++;
+	}
+
 	void run_update()
 	{
 		update();
@@ -276,6 +282,7 @@ public:
 	std::vector<std::shared_ptr<ControlFunction>> audioSignalSources;
 	std::vector<std::uint8_t> audioVolumes;
 	std::vector<std::shared_ptr<ControlFunction>> audioVolumeSources;
+	std::atomic<std::uint32_t> rxMessagesPendingCalls = { 0 };
 };
 
 class VirtualTerminalServerMessagingTest : public AgIsoStackTestFixture
@@ -721,6 +728,20 @@ TEST_F(VirtualTerminalServerBusTest, DroppedObjectPoolTransferFromAnUnmanagedSou
 	EXPECT_EQ(0U, responses);
 	EXPECT_EQ(0U, nacks);
 	EXPECT_TRUE(server->managedWorkingSetList.empty());
+}
+
+TEST_F(VirtualTerminalServerBusTest, PendingHookIsCalledOncePerDrain)
+{
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const std::uint32_t before = server->rxMessagesPendingCalls;
+
+	receive_from_client_without_processing(internalECU, client, { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF });
+	receive_from_client_without_processing(internalECU, client, { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF });
+	EXPECT_EQ(before + 1, server->rxMessagesPendingCalls);
+
+	server->process_rx_messages();
+	receive_from_client_without_processing(internalECU, client, { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF });
+	EXPECT_EQ(before + 2, server->rxMessagesPendingCalls);
 }
 
 TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsAnErrorWhenTheObjectPoolFailsToParse)
@@ -2216,6 +2237,65 @@ TEST_F(VirtualTerminalServerBusTest, UnsupportedCommandRunByAMacroIsNotAnsweredW
 }
 
 /// @brief A server that runs macro 1 of another working set the first time it is told to set the audio volume
+TEST_F(VirtualTerminalServerBusTest, MaintenanceQueuedDuringAStallKeepsTheWorkingSet)
+{
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	time_source.simulate_delay_ms(2900);
+	receive_from_client_without_processing(internalECU, client, { 0xFF, 0x00, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	time_source.simulate_delay_ms(600);
+	server->run_update();
+
+	EXPECT_TRUE(server->shutdownReasons.empty());
+	EXPECT_TRUE(is_managed(internalECU, client, testPlugin));
+}
+
+TEST_F(VirtualTerminalServerBusTest, MaintenanceQueuedBeforeAStallTimesOut)
+{
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_from_client_without_processing(internalECU, client, { 0xFF, 0x00, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	time_source.simulate_delay_ms(5000);
+	server->run_update();
+
+	ASSERT_EQ(1U, server->shutdownReasons.size());
+	EXPECT_EQ(VirtualTerminalServer::UnexpectedShutdownReason::MaintenanceTimeout, server->shutdownReasons.front());
+}
+
+TEST_F(VirtualTerminalServerBusTest, StoringFromAnotherThreadWhileUpdating)
+{
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+
+	const CANIdentifier identifier(CANIdentifier::Type::Extended,
+	                               static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+	                               CANIdentifier::CANPriority::PriorityLowest7,
+	                               internalECU->get_address(),
+	                               client->get_address());
+	const CANMessage message(CANMessage::Type::Receive,
+	                         identifier,
+	                         { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF },
+	                         client,
+	                         internalECU,
+	                         0);
+	std::atomic<bool> done = { false };
+
+	std::thread receiver([&]() {
+		for (std::uint32_t i = 0; i < 1000; i++)
+		{
+			DerivedTestVTServer::store_rx_message(message, server.get());
+		}
+		done = true;
+	});
+
+	while (!done)
+	{
+		server->run_update();
+	}
+	receiver.join();
+	server->run_update();
+
+	EXPECT_TRUE(is_managed(internalECU, client, testPlugin));
+}
+
 class NestingTestVTServer : public DerivedTestVTServer
 {
 public:
@@ -3107,4 +3187,24 @@ TEST_F(VirtualTerminalServerOpenInputTest, ReplacingAListItemThatDoesNotHoldTheO
 	ASSERT_EQ((std::vector<std::uint8_t>{ 0xB1 }), functions_of(frames));
 	EXPECT_EQ(0, server->abortInputCount);
 	EXPECT_EQ(11, workingSet->get_object_open_for_input());
+}
+
+TEST_F(VirtualTerminalServerOpenInputTest, CommandsAreOnlyProcessedInUpdate)
+{
+	std::uint32_t repaints = 0;
+	server->get_on_repaint_event_dispatcher().add_listener([&repaints](std::shared_ptr<VirtualTerminalServerManagedWorkingSet>) { repaints++; });
+
+	receive_from_client_without_processing(internalECU, client, { 0xA8, 0x14, 0x00, 0xFF, 0x07, 0x00, 0x00, 0x00 }); // Change Numeric Value, Input Number 20 to 7
+	const auto framesBefore = read_vt_frames();
+
+	EXPECT_TRUE(functions_of(framesBefore).empty());
+	EXPECT_EQ(5U, input_number_value());
+	EXPECT_EQ(0U, repaints);
+
+	server->run_update();
+	const auto framesAfter = read_vt_frames();
+
+	EXPECT_EQ((std::vector<std::uint8_t>{ 0xA8 }), functions_of(framesAfter));
+	EXPECT_EQ(7U, input_number_value());
+	EXPECT_GT(repaints, 0U);
 }

@@ -29,6 +29,9 @@ namespace isobus
 	/// The information that is shown in display areas are defined by Data Masks, Alarm Masks and Soft Key Masks.
 	/// The data for these masks is contained in object definitions that are loaded into a VT via the ISO 11783 CAN bus, or from non-volatile memory.
 	/// See ISO 11783-6 for the complete definition of this interface, and the objects involved.
+	/// Received commands are queued and processed in update(), so every function you override and every event dispatcher
+	/// is called on the thread that calls update(), except on_rx_messages_pending(). Call process_macro(), the send functions
+	/// and functions that read or change a working set, like set_object_focus() and set_object_open_for_input(), from that thread as well.
 	class VirtualTerminalServer : public VirtualTerminalBase
 	{
 	public:
@@ -146,6 +149,7 @@ namespace isobus
 		/// @brief Conditionally executes a macro. If the object passed in is of the specified type, and
 		/// a macro is defined for that object, the macro will be executed if the macro event matches the
 		/// event ID of the macro.
+		/// Call it on the thread that calls update().
 		/// @param[in] object The object to check for a macro (or macros) to execute
 		/// @param[in] macroEvent The event ID of the macro(s) to execute
 		/// @param[in] targetObjectType The type of object that the macro is defined for. Used to validate the object
@@ -300,7 +304,7 @@ namespace isobus
 		/// @brief Called when a working set sends an ESC command, or when a command removes, hides or replaces the object open
 		/// for input. Close the open input, if any, before returning, clear it with set_object_open_for_input(NULL_OBJECT_ID),
 		/// and send VT Select Input Object with the object deselected, but not the VT ESC message. If no input is open, send nothing and
-		/// return NULL_OBJECT_ID, the server then deselects the focused object itself. Can be called from the CAN thread.
+		/// return NULL_OBJECT_ID, the server then deselects the focused object itself.
 		/// @param[in] workingSet The working set that sent the ESC command
 		/// @returns The object ID of the object whose input was aborted, or NULL_OBJECT_ID if no object was open for input
 		virtual std::uint16_t abort_input(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet) = 0;
@@ -368,8 +372,9 @@ namespace isobus
 		/// @param[in] workingSet The working set that can become active
 		virtual void select_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
 
-		/// @brief This function is called from update() after the server deleted an object pool because delete_object_pool() returned true
-		/// @details Unlike delete_object_pool(), which can run on the CAN thread, this is the place to stop presenting the working set.
+		/// @brief This function is called from update() after the server deleted an object pool, because delete_object_pool() returned true
+		/// or because an Object Pool Transfer of it was dropped (see set_max_rx_queue_size())
+		/// @details This is the place to stop presenting the working set, delete_object_pool() is called before the pool is deleted.
 		/// The active working set is already cleared, and a new object pool from the same client is only answered after this call.
 		/// @param[in] workingSet The working set whose object pool was deleted
 		virtual void object_pool_deleted(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
@@ -393,6 +398,12 @@ namespace isobus
 		/// @param[in] volumePercent The requested volume in percent, 0 to 100. A larger value in the command is passed on as 100.
 		/// @param[in] source The control function that sent the command
 		virtual void set_audio_volume(std::uint8_t volumePercent, std::shared_ptr<ControlFunction> source);
+
+		/// @brief Called when a received message is queued while no other received message was waiting for update()
+		/// @details This is the only function of this class that is called on the thread that receives CAN messages.
+		/// Override it to wake the thread that calls update(), for example by posting an event to it, so commands are answered
+		/// without waiting for the next periodic update(). It must return quickly and must not call into the server.
+		virtual void on_rx_messages_pending();
 
 		//-------------- Callbacks/Event driven interface ---------------------
 
@@ -1094,7 +1105,7 @@ namespace isobus
 		void deactivate_working_set(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet);
 
 		/// @brief Passes each shut down working set whose object pool parsing has finished to handle_unexpected_working_set_shutdown()
-		/// @details Waiting here instead of joining the parsing thread right away keeps a long parse from blocking the CAN thread or update()
+		/// @details Waiting here instead of joining the parsing thread right away keeps a long parse from blocking update()
 		void report_shut_down_working_sets();
 
 		std::vector<std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, UnexpectedShutdownReason>> pendingShutdowns; ///< Shut down working sets that the application has not been told about yet

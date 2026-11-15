@@ -415,6 +415,10 @@ namespace isobus
 	{
 	}
 
+	void VirtualTerminalServer::on_rx_messages_pending()
+	{
+	}
+
 	void VirtualTerminalServer::select_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet)
 	{
 		activeWorkingSet = workingSet;
@@ -2609,41 +2613,52 @@ namespace isobus
 			auto server = static_cast<VirtualTerminalServer *>(parent);
 			const std::uint32_t timestamp_ms = SystemTiming::get_timestamp_ms();
 
-			Mutex &queueMutex = server->rxMessageQueueMutex;
+			bool queueWasEmpty = false;
+			bool queueIsEmpty = true;
 
-			LOCK_GUARD(Mutex, queueMutex);
-			if (server->rxMessageQueueSize_bytes < server->maxRxMessageQueueSize_bytes)
 			{
-				server->rxMessageQueue.push_back({ message, timestamp_ms, false });
-				server->rxMessageQueueSize_bytes += static_cast<std::uint32_t>(sizeof(QueuedMessage)) + message.get_data_length();
-			}
-			else if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == message.get_identifier().get_parameter_group_number()) &&
-			         (CAN_DATA_LENGTH <= message.get_data_length()) &&
-			         (static_cast<std::uint8_t>(Function::ObjectPoolTransferMessage) == message.get_data()[0]))
-			{
-				// Once the queue is full only markers are added, so the queue ends in a run of markers.
-				// One marker per client in that run keeps the uncounted markers bounded.
-				bool alreadyMarked = false;
-				for (auto queued = server->rxMessageQueue.rbegin(); (server->rxMessageQueue.rend() != queued) && queued->objectPoolTransferDropped && !alreadyMarked; ++queued)
+				Mutex &queueMutex = server->rxMessageQueueMutex;
+				LOCK_GUARD(Mutex, queueMutex);
+				queueWasEmpty = server->rxMessageQueue.empty();
+				if (server->rxMessageQueueSize_bytes < server->maxRxMessageQueueSize_bytes)
 				{
-					alreadyMarked = (message.get_source_control_function() == queued->message.get_source_control_function());
+					server->rxMessageQueue.push_back({ message, timestamp_ms, false });
+					server->rxMessageQueueSize_bytes += static_cast<std::uint32_t>(sizeof(QueuedMessage)) + message.get_data_length();
 				}
+				else if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == message.get_identifier().get_parameter_group_number()) &&
+				         (CAN_DATA_LENGTH <= message.get_data_length()) &&
+				         (static_cast<std::uint8_t>(Function::ObjectPoolTransferMessage) == message.get_data()[0]))
+				{
+					// Once the queue is full only markers are added, so the queue ends in a run of markers.
+					// One marker per client in that run keeps the uncounted markers bounded.
+					bool alreadyMarked = false;
+					for (auto queued = server->rxMessageQueue.rbegin(); (server->rxMessageQueue.rend() != queued) && queued->objectPoolTransferDropped && !alreadyMarked; ++queued)
+					{
+						alreadyMarked = (message.get_source_control_function() == queued->message.get_source_control_function());
+					}
 
-				if (!alreadyMarked)
-				{
-					// The marker is not counted, so that it cannot be dropped itself
-					const CANMessage marker(message.get_type(),
-					                        message.get_identifier(),
-					                        std::vector<std::uint8_t>(),
-					                        message.get_source_control_function(),
-					                        message.get_destination_control_function(),
-					                        message.get_can_port_index());
-					server->rxMessageQueue.push_back({ marker, timestamp_ms, true });
+					if (!alreadyMarked)
+					{
+						// The marker is not counted, so that it cannot be dropped itself
+						const CANMessage marker(message.get_type(),
+						                        message.get_identifier(),
+						                        std::vector<std::uint8_t>(),
+						                        message.get_source_control_function(),
+						                        message.get_destination_control_function(),
+						                        message.get_can_port_index());
+						server->rxMessageQueue.push_back({ marker, timestamp_ms, true });
+					}
 				}
+				else
+				{
+					server->droppedRxMessageCount++;
+				}
+				queueIsEmpty = server->rxMessageQueue.empty();
 			}
-			else
+
+			if (queueWasEmpty && !queueIsEmpty)
 			{
-				server->droppedRxMessageCount++;
+				server->on_rx_messages_pending();
 			}
 		}
 	}
