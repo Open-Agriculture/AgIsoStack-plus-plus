@@ -191,6 +191,7 @@ namespace isobus
 			InvalidObjectID = 0,
 			InvalidAttributeID = 1,
 			InvalidValue = 2,
+			ValueInUse = 3,
 			AnyOtherError = 4
 		};
 

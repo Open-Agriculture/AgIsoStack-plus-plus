@@ -2655,6 +2655,45 @@ protected:
 		return std::static_pointer_cast<InputNumber>(workingSet->get_object_by_id(20))->get_value();
 	}
 
+	std::uint16_t input_number_width() const
+	{
+		return std::static_pointer_cast<InputNumber>(workingSet->get_object_by_id(20))->get_width();
+	}
+
+	// Replaces Input Number 20 on Data Mask 1000 by Output List 40, whose only item is Input Number 20
+	void show_input_number_20_through_output_list_40()
+	{
+		send_pool_update({ 0x28, 0x00, 0x25, 0x0A, 0x00, 0x0A, 0x00, 0xFF, 0xFF, 0x00, 0x01, 0x00, 0x14, 0x00, // Output List 40
+		                   0xE8,
+		                   0x03,
+		                   0x01,
+		                   0x00,
+		                   0xF4,
+		                   0x01,
+		                   0x03,
+		                   0x00,
+		                   0x0A,
+		                   0x00,
+		                   0x00,
+		                   0x00,
+		                   0x00,
+		                   0x00,
+		                   0x0C,
+		                   0x00,
+		                   0x00,
+		                   0x00,
+		                   0x00,
+		                   0x00,
+		                   0x28,
+		                   0x00,
+		                   0x00,
+		                   0x00,
+		                   0x00,
+		                   0x00 }); // Data Mask 1000 with Output List 40 in place of Input Number 20
+		ASSERT_TRUE(pool_update_succeeded());
+		EXPECT_TRUE(read_vt_frames().empty());
+	}
+
 	const std::vector<std::uint8_t> inputNumber20 = { 0x14, 0x00, 0x09, 0x0A, 0x00, 0x0A, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x1E, 0x00, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xE8, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x3F, 0x00, 0x00, 0x00, 0x01, 0x00 };
 
 	std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet;
@@ -2886,4 +2925,52 @@ TEST_F(VirtualTerminalServerOpenInputTest, AppThatDoesNotReportTheOpenInputGetsO
 	EXPECT_EQ(0x00, frames[1].data[2]);
 	EXPECT_EQ(1, server->abortInputCount);
 	EXPECT_EQ(NULL_OBJECT_ID, workingSet->get_object_focus());
+}
+
+TEST_F(VirtualTerminalServerOpenInputTest, ChangingAnAttributeOfTheOpenInputIsRefused)
+{
+	workingSet->set_object_open_for_input(20);
+
+	const auto frames = send({ 0xAF, 0x14, 0x00, 0x01, 0x0B, 0x00, 0x00, 0x00 }); // Set the width of Input Number 20 to 11
+
+	ASSERT_EQ((std::vector<std::uint8_t>{ 0xAF }), functions_of(frames));
+	EXPECT_EQ(0x08, frames[0].data[4]); // Value in use
+	EXPECT_EQ(10U, input_number_width());
+}
+
+TEST_F(VirtualTerminalServerOpenInputTest, ChangingAnAttributeOfTheOpenInputIsAcceptedFromVTVersion6)
+{
+	server->version = VirtualTerminalBase::VTVersion::Version6;
+	workingSet->set_object_open_for_input(20);
+
+	const auto frames = send({ 0xAF, 0x14, 0x00, 0x01, 0x0B, 0x00, 0x00, 0x00 }); // Set the width of Input Number 20 to 11
+
+	ASSERT_EQ((std::vector<std::uint8_t>{ 0xAF }), functions_of(frames));
+	EXPECT_EQ(0x00, frames[0].data[4]);
+	EXPECT_EQ(11U, input_number_width());
+}
+
+TEST_F(VirtualTerminalServerOpenInputTest, ReplacingTheListItemThatHoldsTheOpenInputAbortsIt)
+{
+	show_input_number_20_through_output_list_40();
+	open_input(20);
+
+	const auto frames = send({ 0xB1, 0x28, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF }); // Set item 0 of Output List 40 to empty
+
+	ASSERT_EQ((std::vector<std::uint8_t>{ 0xB1, 0x03, 0x04 }), functions_of(frames));
+	EXPECT_EQ(20, frames[2].data[1]);
+	EXPECT_EQ(1, server->abortInputCount);
+	EXPECT_EQ(NULL_OBJECT_ID, workingSet->get_object_open_for_input());
+}
+
+TEST_F(VirtualTerminalServerOpenInputTest, ReplacingAListItemThatDoesNotHoldTheOpenInputKeepsIt)
+{
+	show_input_number_20_through_output_list_40();
+	open_input(11);
+
+	const auto frames = send({ 0xB1, 0x28, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF }); // Set item 0 of Output List 40 to empty
+
+	ASSERT_EQ((std::vector<std::uint8_t>{ 0xB1 }), functions_of(frames));
+	EXPECT_EQ(0, server->abortInputCount);
+	EXPECT_EQ(11, workingSet->get_object_open_for_input());
 }

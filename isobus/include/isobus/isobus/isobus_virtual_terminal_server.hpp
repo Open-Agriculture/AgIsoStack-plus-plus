@@ -289,7 +289,8 @@ namespace isobus
 
 		/// @brief Called when a working set sends an ESC command, or when a command removes, hides or replaces the object open
 		/// for input. Close the open input, if any, before returning, clear it with set_object_open_for_input(NULL_OBJECT_ID),
-		/// and send VT Select Input Object as on Cancel, but not the VT ESC message. Can be called from the CAN thread.
+		/// and send VT Select Input Object as on Cancel, but not the VT ESC message. If no input is open, send nothing and
+		/// return NULL_OBJECT_ID, the server then deselects the focused object itself. Can be called from the CAN thread.
 		/// @param[in] workingSet The working set that sent the ESC command
 		/// @returns The object ID of the object whose input was aborted, or NULL_OBJECT_ID if no object was open for input
 		virtual std::uint16_t abort_input(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet) = 0;

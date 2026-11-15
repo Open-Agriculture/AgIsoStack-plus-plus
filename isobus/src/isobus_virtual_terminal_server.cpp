@@ -1675,7 +1675,12 @@ namespace isobus
 
 				if ((NULL_OBJECT_ID != objectID) && (nullptr != targetObject))
 				{
-					if (targetObject->set_attribute(attributeID, attributeData, managedWorkingSet->get_object_tree(), errorCode)) // 0 Is always the read-only "type" attribute
+					if (is_value_in_use_by_open_input(managedWorkingSet, objectID, false))
+					{
+						LOG_WARNING("[VT Server]: Client %u change attribute command: object %u is open for input", managedWorkingSet->get_control_function()->get_address(), objectID);
+						send_change_attribute_response(objectID, get_bit(static_cast<std::uint8_t>(VTObject::AttributeError::ValueInUse)), data.at(3), message.get_source_control_function());
+					}
+					else if (targetObject->set_attribute(attributeID, attributeData, managedWorkingSet->get_object_tree(), errorCode)) // 0 Is always the read-only "type" attribute
 					{
 						send_change_attribute_response(objectID, 0, data.at(3), message.get_source_control_function());
 						notify_focus_lost_if_removed(managedWorkingSet);
@@ -1799,6 +1804,7 @@ namespace isobus
 								if (std::static_pointer_cast<InputList>(targetObject)->change_list_item(listIndex, newObjectID, managedWorkingSet->get_object_tree()))
 								{
 									send_change_list_item_response(objectID, newObjectID, 0, listIndex, message.get_source_control_function());
+									notify_focus_lost_if_removed(managedWorkingSet);
 									LOG_DEBUG("[VT Server]: Client %u change list item command: Object ID: %u, New Object ID: %u, Index: %u", managedWorkingSet->get_control_function()->get_address(), objectID, newObjectID, listIndex);
 									onRepaintEventDispatcher.call(managedWorkingSet);
 								}
@@ -1825,6 +1831,7 @@ namespace isobus
 								if (std::static_pointer_cast<OutputList>(targetObject)->change_list_item(listIndex, newObjectID, managedWorkingSet->get_object_tree()))
 								{
 									send_change_list_item_response(objectID, newObjectID, 0, listIndex, message.get_source_control_function());
+									notify_focus_lost_if_removed(managedWorkingSet);
 									LOG_DEBUG("[VT Server]: Client %u change list item command: Object ID: %u, New Object ID: %u, Index: %u", managedWorkingSet->get_control_function()->get_address(), objectID, newObjectID, listIndex);
 									onRepaintEventDispatcher.call(managedWorkingSet);
 								}
