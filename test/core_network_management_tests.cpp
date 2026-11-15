@@ -17,6 +17,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <vector>
 
 #include "helpers/control_function_helpers.hpp"
 #include "helpers/messaging_helpers.hpp"
@@ -34,10 +35,15 @@ void test_control_function_state_callback(std::shared_ptr<ControlFunction> contr
 	wasTestStateCallbackHit = true;
 }
 
-class CoreTest : public AgIsoStackTestFixture
+// Free, because the state callback API takes a plain function pointer
+static std::uint32_t onlineCallbackCount = 0;
+static void count_online_callbacks(std::shared_ptr<ControlFunction>, ControlFunctionState state)
 {
-	// Wrapper to give tests a more meaningful name - no content.
-};
+	if (ControlFunctionState::Online == state)
+	{
+		onlineCallbackCount++;
+	}
+}
 
 static CANMessageFrame create_address_claim_frame(std::uint8_t channel, std::uint8_t address, const NAME &name)
 {
@@ -54,6 +60,107 @@ static CANMessageFrame create_address_claim_frame(std::uint8_t channel, std::uin
 	}
 	return addressClaim;
 }
+
+class CoreTest : public AgIsoStackTestFixture
+{
+protected:
+	void send_commanded_address(std::shared_ptr<ControlFunction> sender, std::uint64_t targetNAME, std::uint8_t commandedAddress)
+	{
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(
+		  7,
+		  0xEC00,
+		  sender,
+		  { 0x20, 9, 0, 2, 0xFF, 0xD8, 0xFE, 0x00 }));
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(
+		  7,
+		  0xEB00,
+		  sender,
+		  { 1,
+		    static_cast<std::uint8_t>(targetNAME),
+		    static_cast<std::uint8_t>(targetNAME >> 8),
+		    static_cast<std::uint8_t>(targetNAME >> 16),
+		    static_cast<std::uint8_t>(targetNAME >> 24),
+		    static_cast<std::uint8_t>(targetNAME >> 32),
+		    static_cast<std::uint8_t>(targetNAME >> 40),
+		    static_cast<std::uint8_t>(targetNAME >> 48) }));
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(
+		  7,
+		  0xEB00,
+		  sender,
+		  { 2, static_cast<std::uint8_t>(targetNAME >> 56), commandedAddress, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	}
+
+	void drain_frames(VirtualCANPlugin &plugin)
+	{
+		CANMessageFrame frame;
+		while (!plugin.get_queue_empty())
+		{
+			plugin.read_frame(frame);
+		}
+	}
+
+	bool was_address_claim_sent_from(VirtualCANPlugin &plugin, std::uint8_t sourceAddress)
+	{
+		bool found = false;
+		CANMessageFrame frame;
+		while (!plugin.get_queue_empty())
+		{
+			plugin.read_frame(frame);
+			if ((0xEEFF == ((frame.identifier >> 8) & 0x3FFFF)) && (sourceAddress == (frame.identifier & 0xFF)))
+			{
+				found = true;
+			}
+		}
+		return found;
+	}
+
+	void request_address_claim(std::shared_ptr<InternalControlFunction> internalControlFunction)
+	{
+		const CANMessageFrame requestFrame = test_helpers::create_message_frame_pgn_request(0xEE00, nullptr, nullptr);
+		const CANMessage request(CANMessage::Type::Receive,
+		                         CANIdentifier(requestFrame.identifier),
+		                         requestFrame.data,
+		                         requestFrame.dataLength,
+		                         nullptr,
+		                         nullptr,
+		                         0,
+		                         0);
+		internalControlFunction->process_rx_message_for_address_claiming(request);
+	}
+
+	// An inactive CF sits at the null address, the same SA a Cannot Claim comes from
+	std::shared_ptr<ControlFunction> create_inactive_control_function(std::uint8_t channel)
+	{
+		constexpr std::uint8_t ADDRESS = 0x9D;
+		CANNetworkManager::CANNetwork.update();
+		time_source.update_for_ms(250); // A request timestamp of 0 would mean "no request pending"
+
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(channel, ADDRESS, test_helpers::find_available_name(channel)));
+		auto controlFunction = CANNetworkManager::CANNetwork.get_control_function(channel, ADDRESS);
+
+		// Two unanswered requests for address claim make it inactive
+		CANMessageFrame request = test_helpers::create_message_frame_pgn_request(0xEE00, nullptr, nullptr);
+		request.channel = channel;
+		for (std::uint8_t i = 0; i < 2; i++)
+		{
+			CANNetworkManager::CANNetwork.process_receive_can_message_frame(request);
+			CANNetworkManager::CANNetwork.update();
+			time_source.update_for_ms(1500);
+			CANNetworkManager::CANNetwork.update();
+		}
+		return controlFunction;
+	}
+
+	std::uint32_t count_online_callbacks_after_cannot_claim(std::uint8_t channel)
+	{
+		onlineCallbackCount = 0;
+		CANNetworkManager::CANNetwork.add_control_function_status_change_callback(count_online_callbacks);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(channel, 0xFE, test_helpers::find_available_name(channel)));
+		CANNetworkManager::CANNetwork.update();
+		CANNetworkManager::CANNetwork.remove_control_function_status_change_callback(count_online_callbacks);
+		return onlineCallbackCount;
+	}
+};
 
 TEST_F(CoreTest, TestCreateAndDestroyPartners)
 {
@@ -1323,4 +1430,280 @@ TEST_F(CoreTest, PartnerDeactivatedByAnEarlierOnlineCallbackIsNotReportedOnline)
 	CANNetworkManager::CANNetwork.deactivate_control_function(deactivatingPartner);
 	deactivatingPartner = nullptr;
 	partnerToDeactivate = nullptr;
+}
+
+TEST_F(CoreTest, CannotClaimDoesNotRestoreAnInactiveControlFunction)
+{
+	auto inactiveCF = create_inactive_control_function(0);
+	ASSERT_NE(nullptr, inactiveCF);
+	ASSERT_FALSE(inactiveCF->get_address_valid());
+
+	EXPECT_EQ(0u, count_online_callbacks_after_cannot_claim(0));
+	EXPECT_FALSE(inactiveCF->get_address_valid());
+}
+
+TEST_F(CoreTest, CannotClaimOnTheLastChannelDoesNotRestoreAnInactiveControlFunction)
+{
+	constexpr std::uint8_t LAST_CHANNEL = CAN_PORT_MAXIMUM - 1;
+	auto inactiveCF = create_inactive_control_function(LAST_CHANNEL);
+	ASSERT_NE(nullptr, inactiveCF);
+	ASSERT_FALSE(inactiveCF->get_address_valid());
+
+	EXPECT_EQ(0u, count_online_callbacks_after_cannot_claim(LAST_CHANNEL));
+	EXPECT_FALSE(inactiveCF->get_address_valid());
+}
+
+TEST_F(CoreTest, CannotClaimFromAPartnerNameDoesNotTouchTheTable)
+{
+	const NAME partnerName = test_helpers::find_available_name(0);
+	auto partner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, { NAMEFilter(NAME::NAMEParameters::IdentityNumber, partnerName.get_identity_number()), NAMEFilter(NAME::NAMEParameters::ManufacturerCode, partnerName.get_manufacturer_code()) });
+	ASSERT_NE(nullptr, partner);
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(0, 0xFE, partnerName));
+	CANNetworkManager::CANNetwork.update();
+
+	EXPECT_FALSE(partner->get_address_valid());
+	EXPECT_EQ(nullptr, CANNetworkManager::CANNetwork.get_control_function(1, 0));
+	CANNetworkManager::CANNetwork.deactivate_control_function(partner);
+}
+
+TEST_F(CoreTest, CommandedAddressOutsideTheValidRangeIsIgnored)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+	VirtualCANPlugin plugin;
+	plugin.open();
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x43, 0, time_source);
+	auto externalECU = test_helpers::force_claim_partnered_control_function(0xF8, 0);
+	const std::uint64_t rawNAME = internalECU->get_NAME().get_full_name();
+
+	for (std::uint8_t commandedAddress : { 0xFE, 0xFF })
+	{
+		drain_frames(plugin);
+		send_commanded_address(externalECU, rawNAME, commandedAddress);
+		CANNetworkManager::CANNetwork.update();
+		time_source.update_for_ms(500);
+
+		EXPECT_EQ(0x43, internalECU->get_address());
+		EXPECT_EQ(InternalControlFunction::State::AddressClaimingComplete, internalECU->get_current_state());
+		EXPECT_TRUE(was_address_claim_sent_from(plugin, 0x43));
+	}
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+	CANNetworkManager::CANNetwork.deactivate_control_function(externalECU);
+	CANHardwareInterface::stop();
+}
+
+TEST_F(CoreTest, ReclaimingControlFunctionLosesItsAddressToALowerName)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto losingECU = test_helpers::claim_internal_control_function(0x45, 0, time_source);
+	request_address_claim(losingECU);
+	ASSERT_EQ(InternalControlFunction::State::SendReclaimAddressOnRequest, losingECU->get_current_state());
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(0, 0x45, NAME(losingECU->get_NAME().get_full_name() - 1)));
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_EQ(InternalControlFunction::State::WaitForRequestContentionPeriod, losingECU->get_current_state());
+	EXPECT_FALSE(losingECU->get_address_valid());
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(losingECU);
+	CANHardwareInterface::stop();
+}
+
+TEST_F(CoreTest, ReclaimingControlFunctionKeepsItsAddressAgainstAHigherName)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto winningECU = test_helpers::claim_internal_control_function(0x46, 0, time_source);
+	request_address_claim(winningECU);
+	ASSERT_EQ(InternalControlFunction::State::SendReclaimAddressOnRequest, winningECU->get_current_state());
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(0, 0x46, NAME(winningECU->get_NAME().get_full_name() + 1)));
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_EQ(InternalControlFunction::State::AddressClaimingComplete, winningECU->get_current_state());
+	EXPECT_EQ(0x46, winningECU->get_address());
+	EXPECT_EQ(winningECU, CANNetworkManager::CANNetwork.get_control_function(0, 0x46));
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(winningECU);
+	CANHardwareInterface::stop();
+}
+
+TEST_F(CoreTest, FailedArbitraryAddressClaimSendRestartsClaiming)
+{
+	constexpr std::uint8_t PREFERRED_ADDRESS = 0x50;
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	// A lower NAME holds the preferred address, so the internal control function has to claim an arbitrary one
+	const NAME ourName = test_helpers::find_available_name(0);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(0, PREFERRED_ADDRESS, NAME(ourName.get_full_name() - 1)));
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(ourName, 0, PREFERRED_ADDRESS);
+	for (std::uint32_t i = 0; (i < 1000) && (InternalControlFunction::State::SendArbitraryAddressClaim != internalECU->get_current_state()); i++)
+	{
+		time_source.update_for_ms(1);
+	}
+	ASSERT_EQ(InternalControlFunction::State::SendArbitraryAddressClaim, internalECU->get_current_state());
+
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.update();
+
+	EXPECT_EQ(InternalControlFunction::State::None, internalECU->get_current_state());
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+TEST_F(CoreTest, CommandedAddressHeldByALowerNameIsRefused)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+	VirtualCANPlugin plugin;
+	plugin.open();
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x43, 0, time_source);
+	auto externalECU = test_helpers::force_claim_partnered_control_function(0xF8, 0);
+	const std::uint64_t rawNAME = internalECU->get_NAME().get_full_name();
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(0, 0x50, NAME(rawNAME - 1)));
+	CANNetworkManager::CANNetwork.update();
+
+	drain_frames(plugin);
+	send_commanded_address(externalECU, rawNAME, 0x50);
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(500);
+
+	EXPECT_EQ(0x43, internalECU->get_address());
+	EXPECT_EQ(InternalControlFunction::State::AddressClaimingComplete, internalECU->get_current_state());
+	EXPECT_TRUE(was_address_claim_sent_from(plugin, 0x43));
+	EXPECT_NE(internalECU, CANNetworkManager::CANNetwork.get_control_function(0, 0x50));
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+	CANNetworkManager::CANNetwork.deactivate_control_function(externalECU);
+	CANHardwareInterface::stop();
+}
+
+TEST_F(CoreTest, CommandedAddressHeldByAHigherNameIsTaken)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+	VirtualCANPlugin plugin;
+	plugin.open();
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x43, 0, time_source);
+	auto externalECU = test_helpers::force_claim_partnered_control_function(0xF8, 0);
+	const std::uint64_t rawNAME = internalECU->get_NAME().get_full_name();
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(0, 0x50, NAME(rawNAME + 1)));
+	CANNetworkManager::CANNetwork.update();
+
+	drain_frames(plugin);
+	send_commanded_address(externalECU, rawNAME, 0x50);
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(500);
+
+	EXPECT_EQ(0x50, internalECU->get_address());
+	EXPECT_EQ(InternalControlFunction::State::AddressClaimingComplete, internalECU->get_current_state());
+	EXPECT_TRUE(was_address_claim_sent_from(plugin, 0x50));
+	EXPECT_EQ(internalECU, CANNetworkManager::CANNetwork.get_control_function(0, 0x50));
+	EXPECT_EQ(nullptr, CANNetworkManager::CANNetwork.get_control_function(0, 0x43));
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+	CANNetworkManager::CANNetwork.deactivate_control_function(externalECU);
+	CANHardwareInterface::stop();
+}
+
+TEST_F(CoreTest, AddressClaimedEventReportsEachClaim)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto externalECU = test_helpers::force_claim_partnered_control_function(0xF8, 0);
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(test_helpers::find_available_name(0), 0, 0x43);
+	std::vector<std::uint8_t> claimedAddresses;
+	internalECU->get_address_claimed_event_dispatcher().add_listener([&claimedAddresses](std::uint8_t address) {
+		claimedAddresses.push_back(address);
+	});
+
+	for (std::uint32_t i = 0; (i < 100) && !internalECU->get_address_valid(); i++)
+	{
+		time_source.update_for_ms(100);
+	}
+	ASSERT_TRUE(internalECU->get_address_valid());
+	EXPECT_EQ(std::vector<std::uint8_t>({ 0x43 }), claimedAddresses);
+
+	send_commanded_address(externalECU, internalECU->get_NAME().get_full_name(), 0x04);
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(500);
+
+	ASSERT_FALSE(claimedAddresses.empty());
+	EXPECT_EQ(0x04, claimedAddresses.back());
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+	CANNetworkManager::CANNetwork.deactivate_control_function(externalECU);
+	CANHardwareInterface::stop();
+}
+
+TEST_F(CoreTest, AddressClaimedListenerCanDeactivateItsOwnControlFunction)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto firstECU = test_helpers::claim_internal_control_function(0x47, 0, time_source);
+	std::atomic_bool listenerCalled{ false };
+	auto deactivatingECU = CANNetworkManager::CANNetwork.create_internal_control_function(test_helpers::find_available_name(0), 0, 0x48);
+	deactivatingECU->get_address_claimed_event_dispatcher().add_listener([&deactivatingECU, &listenerCalled](std::uint8_t) {
+		listenerCalled = true;
+		CANNetworkManager::CANNetwork.deactivate_control_function(deactivatingECU);
+		// Drop the test's reference too, so only the stack keeps the ICF alive while its event runs
+		deactivatingECU = nullptr;
+	});
+
+	for (std::uint32_t i = 0; (i < 100) && !listenerCalled; i++)
+	{
+		time_source.update_for_ms(100);
+	}
+	ASSERT_TRUE(listenerCalled);
+	time_source.update_for_ms(500);
+
+	EXPECT_EQ(0x47, firstECU->get_address());
+	EXPECT_EQ(firstECU, CANNetworkManager::CANNetwork.get_control_function(0, 0x47));
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(firstECU);
+	CANHardwareInterface::stop();
+}
+
+TEST_F(CoreTest, LocalControlFunctionEvictedByCommandedAddressReclaims)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto first = test_helpers::claim_internal_control_function(0x43, 0, time_source);
+	auto second = test_helpers::claim_internal_control_function(0x44, 0, time_source);
+	auto externalECU = test_helpers::force_claim_partnered_control_function(0xF8, 0);
+	ASSERT_LT(first->get_NAME().get_full_name(), second->get_NAME().get_full_name());
+
+	send_commanded_address(externalECU, first->get_NAME().get_full_name(), 0x44);
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(1000);
+
+	EXPECT_EQ(0x44, first->get_address());
+	EXPECT_EQ(first, CANNetworkManager::CANNetwork.get_control_function(0, 0x44));
+	EXPECT_EQ(InternalControlFunction::State::AddressClaimingComplete, second->get_current_state());
+	ASSERT_TRUE(second->get_address_valid());
+	EXPECT_NE(0x44, second->get_address());
+	EXPECT_EQ(second, CANNetworkManager::CANNetwork.get_control_function(0, second->get_address()));
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(first);
+	CANNetworkManager::CANNetwork.deactivate_control_function(second);
+	CANNetworkManager::CANNetwork.deactivate_control_function(externalECU);
+	CANHardwareInterface::stop();
 }

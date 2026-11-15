@@ -69,8 +69,9 @@ namespace isobus
 		/// @returns The preferred address
 		std::uint8_t get_preferred_address() const;
 
-		/// @brief Returns the event dispatcher for when an address is claimed. Use this to register a callback
-		/// for when an address is claimed.
+		/// @brief Returns the event dispatcher for when an address is claimed. It fires from the network manager's
+		/// update each time this ICF completes a claim, including a reclaim of the same address, and runs
+		/// without the stack's control function lock held.
 		/// @returns The event dispatcher for when an address is claimed
 		EventDispatcher<std::uint8_t> &get_address_claimed_event_dispatcher();
 
@@ -108,8 +109,9 @@ namespace isobus
 		bool send_cannot_claim_source_address();
 
 		/// @brief Attempts to process a commanded address.
-		/// @details If the state machine has claimed successfully before,
-		/// this will attempt to move a NAME from the claimed address to the new, specified address.
+		/// @details If the state machine has claimed successfully before, this will claim the commanded address,
+		/// unless it is invalid, our NAME is not self-configurable, or a CF with a lower NAME holds it.
+		/// A refused command is answered with an address claim for our current address.
 		/// @param[in] commandedAddress The address to attempt to claim
 		void process_commanded_address(std::uint8_t commandedAddress);
 

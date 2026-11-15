@@ -24,6 +24,8 @@
 #include <cassert>
 #include <cstring>
 #include <numeric>
+#include <utility>
+#include <vector>
 
 namespace isobus
 {
@@ -594,7 +596,8 @@ namespace isobus
 		std::uint8_t channelIndex = message.get_can_port_index();
 
 		if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == message.get_identifier().get_parameter_group_number()) &&
-		    (channelIndex < CAN_PORT_MAXIMUM))
+		    (channelIndex < CAN_PORT_MAXIMUM) &&
+		    (message.get_identifier().get_source_address() < NULL_CAN_ADDRESS))
 		{
 			LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 			std::uint8_t claimedAddress = message.get_identifier().get_source_address();
@@ -677,34 +680,59 @@ namespace isobus
 
 	void CANNetworkManager::update_internal_cfs()
 	{
-		LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
-		for (const auto &currentInternalControlFunction : internalControlFunctions)
+		std::vector<std::pair<std::shared_ptr<InternalControlFunction>, std::uint8_t>> claimedControlFunctions;
 		{
-			if (currentInternalControlFunction->update_address_claiming())
+			LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
+			for (const auto &currentInternalControlFunction : internalControlFunctions)
 			{
-				std::uint8_t channelIndex = currentInternalControlFunction->get_can_port();
-				std::uint8_t claimedAddress = currentInternalControlFunction->get_address();
-
-				// Check if the internal control function switched addresses, and therefore needs to be moved in the table
-				auto result = std::find(controlFunctionTable[channelIndex].begin(),
-				                        controlFunctionTable[channelIndex].end(),
-				                        currentInternalControlFunction);
-				if (result != controlFunctionTable[channelIndex].end())
+				if (currentInternalControlFunction->update_address_claiming())
 				{
-					*result = nullptr;
-				}
+					std::uint8_t channelIndex = currentInternalControlFunction->get_can_port();
+					std::uint8_t claimedAddress = currentInternalControlFunction->get_address();
 
-				auto &targetControlFunction = controlFunctionTable[channelIndex][claimedAddress];
-				if (nullptr != targetControlFunction)
-				{
-					// Someone is at that spot in the table, but their address was stolen by an internal control function
-					// Need to evict them from the table
-					targetControlFunction->address = NULL_CAN_ADDRESS;
-				}
+					// Check if the internal control function switched addresses, and therefore needs to be moved in the table
+					auto result = std::find(controlFunctionTable[channelIndex].begin(),
+					                        controlFunctionTable[channelIndex].end(),
+					                        currentInternalControlFunction);
+					if (result != controlFunctionTable[channelIndex].end())
+					{
+						*result = nullptr;
+					}
 
-				// ECU has claimed since the last update, add it to the table
-				targetControlFunction = currentInternalControlFunction;
+					if (claimedAddress < NULL_CAN_ADDRESS)
+					{
+						auto &targetControlFunction = controlFunctionTable[channelIndex][claimedAddress];
+						if (nullptr != targetControlFunction)
+						{
+							// Someone is at that spot in the table, but their address was stolen by an internal control function
+							// Need to evict them from the table
+							targetControlFunction->address = NULL_CAN_ADDRESS;
+
+							// Our own claims never pass through the receive contention check, so restart a local CF's claim here
+							if (ControlFunction::Type::Internal == targetControlFunction->get_type())
+							{
+								const auto evictedControlFunction = std::static_pointer_cast<InternalControlFunction>(targetControlFunction);
+								const auto state = evictedControlFunction->get_current_state();
+								if ((InternalControlFunction::State::AddressClaimingComplete == state) ||
+								    (InternalControlFunction::State::SendReclaimAddressOnRequest == state))
+								{
+									evictedControlFunction->set_current_state(InternalControlFunction::State::WaitForRequestContentionPeriod);
+								}
+							}
+						}
+
+						// ECU has claimed since the last update, add it to the table
+						targetControlFunction = currentInternalControlFunction;
+						claimedControlFunctions.emplace_back(currentInternalControlFunction, claimedAddress);
+					}
+				}
 			}
+		}
+
+		// Listeners run without the lock so they may deactivate their control function
+		for (const auto &entry : claimedControlFunctions)
+		{
+			entry.first->addressClaimedDispatcher.call(entry.second);
 		}
 	}
 
@@ -751,7 +779,8 @@ namespace isobus
 		std::shared_ptr<ControlFunction> onlineControlFunction;
 		if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == CANIdentifier(rxFrame.identifier).get_parameter_group_number()) &&
 		    (CAN_DATA_LENGTH == rxFrame.dataLength) &&
-		    (rxFrame.channel < CAN_PORT_MAXIMUM))
+		    (rxFrame.channel < CAN_PORT_MAXIMUM) &&
+		    (CANIdentifier(rxFrame.identifier).get_source_address() < NULL_CAN_ADDRESS))
 		{
 			LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 
@@ -850,12 +879,15 @@ namespace isobus
 							              // Seemed safest to just confirm.
 							              if (claimedNAME != cf->get_NAME().get_full_name())
 							              {
+								              const auto state = std::static_pointer_cast<InternalControlFunction>(cf)->get_current_state();
+								              const bool holdsAddress = (InternalControlFunction::State::AddressClaimingComplete == state) ||
+								                (InternalControlFunction::State::SendReclaimAddressOnRequest == state);
+
 								              // Since this is likely a J1939 style address claim if they're evicting us, we need to
 								              // check our ISO NAME versus the claimed NAME. If ours is lower, we win the
 								              // arbitration and can keep our address. If not, we need to
 								              // re-arbitrate our address.
-								              if ((claimedNAME > cf->get_NAME().get_full_name()) &&
-								                  (InternalControlFunction::State::AddressClaimingComplete == std::static_pointer_cast<InternalControlFunction>(cf)->get_current_state()))
+								              if ((claimedNAME > cf->get_NAME().get_full_name()) && holdsAddress)
 								              {
 									              LOG_DEBUG("[AC]: Internal control function %016llx on channel %u won address contention against an ECU with NAME %016llx.",
 									                        cf->get_NAME().get_full_name(),
@@ -873,7 +905,7 @@ namespace isobus
 
 									              // This check is not strictly needed, but sanity check the state of the address claim state machine
 									              // to ensure we're not advancing it. We don't want to go from an unclaimed state to the contention state.
-									              if (InternalControlFunction::State::AddressClaimingComplete == std::static_pointer_cast<InternalControlFunction>(cf)->get_current_state())
+									              if (holdsAddress)
 									              {
 										              std::static_pointer_cast<InternalControlFunction>(cf)->set_current_state(InternalControlFunction::State::WaitForRequestContentionPeriod);
 									              }
