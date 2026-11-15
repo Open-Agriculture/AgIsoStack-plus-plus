@@ -104,6 +104,14 @@ namespace isobus
 		/// @brief Discards the object pool so that a loaded version can overwrite it or the client can transfer a new one, keeping the callback handles
 		void clear_object_pool_data(CANLibBadge<VirtualTerminalServer>);
 
+		/// @brief Records that an Object Pool Transfer from this working set was dropped, so its object pool is incomplete
+		/// @param[in] dropped True when a transfer was dropped, false once the object pool has been deleted
+		void set_object_pool_transfer_dropped(bool dropped);
+
+		/// @brief Tells the server whether an Object Pool Transfer from this working set was dropped
+		/// @returns True if a transfer was dropped and the object pool has not been deleted since
+		bool get_object_pool_transfer_dropped() const;
+
 		/// @brief Sets the object ID of the currently focused object
 		/// @param[in] objectID The object ID to set as the focused object
 		void set_object_focus(std::uint16_t objectID);
@@ -178,6 +186,7 @@ namespace isobus
 		bool wasLoadedFromNonVolatileMemory = false; ///< Used to tell the server how this object pool was obtained
 		bool wasLoadedWithExtendedVersionLabel = false; ///< Used to tell the server which load version command restored this object pool
 		bool workingSetDeletionRequested = false; ///< Used to tell the server to delete this working set
+		bool objectPoolTransferDropped = false; ///< Set when an Object Pool Transfer from this working set was dropped, only used on the thread that calls update()
 	};
 } // namespace isobus
 

@@ -18,6 +18,7 @@
 #include "isobus/utility/event_dispatcher.hpp"
 #include "isobus/utility/thread_synchronization.hpp"
 
+#include <deque>
 #include <utility>
 
 namespace isobus
@@ -51,6 +52,15 @@ namespace isobus
 		/// @brief Returns if the interface has been initialized yet.
 		/// @returns true if initialize has been called on this object, otherwise false
 		bool get_initialized() const;
+
+		/// @brief Sets how many bytes of received messages can wait for update() to process them.
+		/// @details A message is dropped only when the queue already holds at least this many bytes, so a single
+		/// message larger than the limit (like a large object pool transfer) is still queued. A dropped message
+		/// gets no response, except a dropped Object Pool Transfer, which makes the following End of Object Pool
+		/// answer with an error. The default is DEFAULT_MAX_RX_QUEUE_SIZE_BYTES, about 3 seconds of a fully loaded bus.
+		/// Lower it on targets with little free memory, raise it if update() can stall for longer or several clients upload at once.
+		/// @param[in] sizeInBytes The limit in bytes
+		void set_max_rx_queue_size(std::uint32_t sizeInBytes);
 
 		/// @brief Returns the internal control function used by the VT server
 		/// @returns The internal control function used by the VT server
@@ -711,6 +721,18 @@ namespace isobus
 		/// @param[in] parent A context variable to find the relevant VT server class
 		static void process_rx_message(const CANMessage &message, void *parent);
 
+		/// @brief Copies a received message into the queue that update() processes
+		/// @param[in] message The CAN message being received
+		/// @param[in] parent A context variable to find the relevant VT server class
+		static void store_rx_message(const CANMessage &message, void *parent);
+
+		/// @brief Processes the queued messages in arrival order
+		void process_rx_messages();
+
+		/// @brief Deletes a working set's object pool from volatile memory. update() then reports it with object_pool_deleted().
+		/// @param[in] workingSet The working set whose object pool is deleted
+		void remove_object_pool(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
+
 		/// @brief Sends a message using the acknowledgement PGN
 		/// @param[in] type The type of acknowledgement to send (Ack, vs Nack, etc)
 		/// @param[in] parameterGroupNumber The PGN to acknowledge
@@ -873,12 +895,14 @@ namespace isobus
 		/// @param[in] faultingObjectID The faulty object's ID or the NULL_OBJECT_ID
 		/// @param[in] objectPoolErrorCodes A bitfield of ObjectPoolErrorBit describing the issues with the pool
 		/// @param[in] destination The control function to send the message to
+		/// @param[in] ranOutOfMemory Sets the error bit for "VT ran out of memory during transfer"
 		/// @returns true if the message was sent, otherwise false
 		bool send_end_of_object_pool_response(bool success,
 		                                      std::uint16_t parentIDOfFaultingObject,
 		                                      std::uint16_t faultingObjectID,
 		                                      std::uint8_t objectPoolErrorCodes,
-		                                      std::shared_ptr<ControlFunction> destination) const;
+		                                      std::shared_ptr<ControlFunction> destination,
+		                                      bool ranOutOfMemory = false) const;
 
 		/// @brief Sends a response to the execute macro or extended macro command
 		/// @param[in] objectID The object ID for the macro
@@ -962,6 +986,7 @@ namespace isobus
 
 		static constexpr std::uint8_t VERSION_LABEL_LENGTH = 7; ///< The length of a standard object pool version label
 		static constexpr std::uint32_t WORKING_SET_MAINTENANCE_TIMEOUT_MS = 3000; ///< A working set master has shut down if it sends no Working Set Maintenance message for this long (ISO 11783-6 4.6.9)
+		static constexpr std::uint32_t DEFAULT_MAX_RX_QUEUE_SIZE_BYTES = 524288; ///< The default limit on the bytes of received messages waiting for update(), see set_max_rx_queue_size()
 
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> onRepaintEventDispatcher; ///< Event dispatcher for repaint events
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t> onChangeActiveMaskEventDispatcher; ///< Event dispatcher for active data/alarm mask change events
@@ -1076,6 +1101,21 @@ namespace isobus
 		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> pendingObjectPoolDeletions; ///< Working sets whose object pool was deleted, which update() passes to object_pool_deleted()
 		Mutex pendingShutdownsMutex; ///< Protects pendingShutdowns and pendingObjectPoolDeletions, which both the CAN thread and update() use
 		std::vector<std::shared_ptr<ControlFunction>> announcedWorkingSetMasters; ///< Unmanaged control functions that sent a Working Set Master message, see process_working_set_master_message()
+
+		/// @brief A received message and the time it arrived
+		struct QueuedMessage
+		{
+			CANMessage message; ///< The received message
+			std::uint32_t arrivalTimestamp_ms; ///< When the message was queued, from SystemTiming
+			bool objectPoolTransferDropped; ///< True if this entry only marks an Object Pool Transfer that was dropped because the queue was full, its message has no data
+		};
+
+		std::deque<QueuedMessage> rxMessageQueue; ///< Messages received on the CAN thread that update() has not processed yet
+		Mutex rxMessageQueueMutex; ///< Guards rxMessageQueue, rxMessageQueueSize_bytes, maxRxMessageQueueSize_bytes and droppedRxMessageCount only
+		std::uint32_t rxMessageQueueSize_bytes = 0; ///< Bytes held by rxMessageQueue, counted as sizeof(QueuedMessage) plus the data length
+		std::uint32_t maxRxMessageQueueSize_bytes = DEFAULT_MAX_RX_QUEUE_SIZE_BYTES; ///< Limit on rxMessageQueueSize_bytes, guarded by rxMessageQueueMutex
+		std::uint32_t droppedRxMessageCount = 0; ///< Messages dropped since update() last reported them, guarded by rxMessageQueueMutex
+		std::uint32_t rxMessageArrivalTimestamp_ms = 0; ///< Arrival time of the message being processed, only used on the thread that calls update()
 	};
 } // namespace isobus
 #endif //ISOBUS_VIRTUAL_TERMINAL_SERVER_HPP
