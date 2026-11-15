@@ -4033,8 +4033,11 @@ namespace isobus
 			}
 		}
 
-		// Padded to the 8 byte boundary (ISO 11783-6 4.6.26)
-		buffer.resize(((buffer.size() + CAN_DATA_LENGTH - 1) / CAN_DATA_LENGTH) * CAN_DATA_LENGTH, 0xFF);
+		// Only a short response is padded, to 8 bytes (ISO 11783-6 4.6.26)
+		if (buffer.size() < CAN_DATA_LENGTH)
+		{
+			buffer.resize(CAN_DATA_LENGTH, 0xFF);
+		}
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 		                                                      buffer.data(),
 		                                                      static_cast<std::uint32_t>(buffer.size()),

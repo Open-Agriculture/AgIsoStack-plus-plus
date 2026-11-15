@@ -3005,9 +3005,9 @@ TEST_F(VirtualTerminalServerAuxiliaryControlTest, AuxiliaryCapabilitiesListTheUn
 	receive_from_client(serverCF, implement, { 0x27, 0x02, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
 	ASSERT_TRUE(poll_for_response(*server, testPlugin, 0x27, invalidTypeResponse));
 
-	// One input unit with an assigned input, an unassigned one and an unassigned critical one, padded to 24 bytes
+	// One input unit with an assigned input, an unassigned one and an unassigned critical one
 	const std::vector<std::uint8_t> expectedSets = { 3, 1, BOOLEAN_NON_LATCHING, 0x02, 1, BOOLEAN_NON_LATCHING, 0x00, 1, BOOLEAN_NON_LATCHING | CRITICAL_CONTROL, 0x00 };
-	ASSERT_EQ(24U, inputUnits.size());
+	ASSERT_EQ(20U, inputUnits.size());
 	EXPECT_EQ(0x27, inputUnits[0]);
 	EXPECT_EQ(1U, inputUnits[1]);
 	for (std::uint8_t i = 0; i < 8; i++)
@@ -3015,10 +3015,9 @@ TEST_F(VirtualTerminalServerAuxiliaryControlTest, AuxiliaryCapabilitiesListTheUn
 		EXPECT_EQ(static_cast<std::uint8_t>(inputUnit->get_NAME().get_full_name() >> (8 * i)), inputUnits[2 + i]);
 	}
 	EXPECT_EQ(expectedSets, std::vector<std::uint8_t>(inputUnits.begin() + 10, inputUnits.begin() + 20));
-	EXPECT_EQ(0xFF, inputUnits[20]);
 
-	// One function unit with its one assigned function, padded to 16 bytes
-	ASSERT_EQ(16U, functionUnits.size());
+	// One function unit with its one assigned function
+	ASSERT_EQ(14U, functionUnits.size());
 	EXPECT_EQ(1U, functionUnits[1]);
 	EXPECT_EQ(static_cast<std::uint8_t>(implement->get_NAME().get_full_name()), functionUnits[2]);
 	EXPECT_EQ(1U, functionUnits[10]);
