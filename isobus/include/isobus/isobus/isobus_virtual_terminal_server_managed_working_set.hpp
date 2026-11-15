@@ -51,9 +51,13 @@ namespace isobus
 		~VirtualTerminalServerManagedWorkingSet();
 
 		/// @brief Starts a thread to parse the received object pool files
+		/// @details The thread parses into an object tree of its own, which starts as a copy of the current one,
+		/// so the object tree that the server and the application use doesn't change while it runs.
 		void start_parsing_thread();
 
 		/// @brief Joins the parsing thread
+		/// @details If the pool was parsed successfully, its object tree replaces the current one here.
+		/// If parsing failed, the current object tree stays as it was.
 		void join_parsing_thread();
 
 		/// @brief Returns if any object pools are being managed for this working set master
@@ -142,6 +146,8 @@ namespace isobus
 		bool is_object_pool_transfer_in_progress() const;
 
 	private:
+		class ObjectPoolParser; ///< Parses an object pool into an object tree of its own
+
 		/// @brief Sets the object pool processing state to a new value
 		/// @param[in] value The new state of processing the object pool
 		void set_object_pool_processing_state(ObjectPoolProcessingThreadState value);
@@ -150,6 +156,7 @@ namespace isobus
 		void worker_thread_function();
 
 		std::unique_ptr<std::thread> objectPoolProcessingThread = nullptr; ///< A thread to process the object pool with, since that can be fairly time consuming.
+		std::unique_ptr<ObjectPoolParser> objectPoolParser; ///< Holds the object tree that the processing thread parses into, until join_parsing_thread() takes it over
 		std::shared_ptr<ControlFunction> workingSetControlFunction = nullptr; ///< Stores the control function associated with this working set
 		std::vector<isobus::EventCallbackHandle> callbackHandles; ///< A convenient way to associate callback handles to a working set
 		ObjectPoolProcessingThreadState processingState = ObjectPoolProcessingThreadState::None; ///< Stores the state of processing the object pool

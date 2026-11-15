@@ -14,9 +14,39 @@
 #include "isobus/utility/to_string.hpp"
 
 #include <cstring>
+#include <utility>
+#include <vector>
 
 namespace isobus
 {
+	/// @brief Parses an object pool into an object tree of its own
+	class VirtualTerminalServerManagedWorkingSet::ObjectPoolParser : public VirtualTerminalWorkingSetBase
+	{
+	public:
+		/// @brief Starts from a copy of an existing object tree, so that a later pool transfer can replace and add objects
+		/// @param[in] objectTree The object tree to start from
+		/// @param[in] existingWorkingSetID The object ID of the working set object in that tree
+		ObjectPoolParser(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectTree, std::uint16_t existingWorkingSetID)
+		{
+			vtObjectTree = objectTree;
+			workingSetID = existingWorkingSetID;
+		}
+
+		/// @brief Moves the parsed object tree out of the parser
+		/// @returns The parsed object tree
+		std::map<std::uint16_t, std::shared_ptr<VTObject>> take_object_tree()
+		{
+			return std::move(vtObjectTree);
+		}
+
+		/// @brief Returns the object ID of the working set object in the parsed object tree
+		/// @returns The object ID of the working set object, or NULL_OBJECT_ID
+		std::uint16_t get_working_set_id() const
+		{
+			return workingSetID;
+		}
+	};
+
 	VirtualTerminalServerManagedWorkingSet::VirtualTerminalServerManagedWorkingSet()
 	{
 		LOG_INFO("[WS]: New VT Server Object Created with no associated control function");
@@ -44,6 +74,7 @@ namespace isobus
 	{
 		if (nullptr == objectPoolProcessingThread)
 		{
+			objectPoolParser.reset(new ObjectPoolParser(vtObjectTree, workingSetID));
 			set_object_pool_processing_state(ObjectPoolProcessingThreadState::Running);
 			objectPoolProcessingThread.reset(new std::thread([this]() { worker_thread_function(); }));
 		}
@@ -55,6 +86,13 @@ namespace isobus
 		{
 			objectPoolProcessingThread->join();
 			objectPoolProcessingThread = nullptr;
+
+			if ((nullptr != objectPoolParser) && (ObjectPoolProcessingThreadState::Success == get_object_pool_processing_state()))
+			{
+				vtObjectTree = objectPoolParser->take_object_tree();
+				workingSetID = objectPoolParser->get_working_set_id();
+			}
+			objectPoolParser.reset();
 			set_object_pool_processing_state(ObjectPoolProcessingThreadState::Joined);
 		}
 	}
@@ -206,6 +244,9 @@ namespace isobus
 			LOG_INFO("[WS]: Beginning parsing of object pool. This pool has " +
 			         isobus::to_string(static_cast<int>(iopFilesRawData.size())) +
 			         " IOP components.");
+			// The length of the objects in each transfer parsed by this run, without the padding after the last one
+			std::vector<std::pair<std::size_t, std::uint32_t>> parsedTransfers;
+
 			for (std::size_t i = 0; i < iopFilesRawData.size(); i++)
 			{
 				if (iopFilesRawData[i].processed)
@@ -214,21 +255,24 @@ namespace isobus
 				}
 
 				std::uint32_t objectsLength = 0;
-				if (!parse_iop_into_objects(iopFilesRawData[i].data.data(), static_cast<std::uint32_t>(iopFilesRawData[i].data.size()), &objectsLength))
+				if (!objectPoolParser->parse_iop_into_objects(iopFilesRawData[i].data.data(), static_cast<std::uint32_t>(iopFilesRawData[i].data.size()), &objectsLength))
 				{
+					set_object_pool_fault(objectPoolParser->get_object_pool_faulting_object_id(), objectPoolParser->get_object_pool_faulting_parent_object_id());
 					lSuccess = false;
 					break;
 				}
-				else
-				{
-					// Load Version parses the stored transfers joined together, where this padding would read as objects
-					iopFilesRawData[i].data.resize(objectsLength);
-					iopFilesRawData[i].processed = true;
-				}
+				parsedTransfers.emplace_back(i, objectsLength);
 			}
 
 			if (lSuccess)
 			{
+				// Only now, as after a failure none of the objects of this run are taken over
+				for (const auto &transfer : parsedTransfers)
+				{
+					// Load Version parses the stored transfers joined together, where this padding would read as objects
+					iopFilesRawData[transfer.first].data.resize(transfer.second);
+					iopFilesRawData[transfer.first].processed = true;
+				}
 				LOG_INFO("[WS]: Object pool successfully parsed.");
 				set_object_pool_processing_state(ObjectPoolProcessingThreadState::Success);
 			}
