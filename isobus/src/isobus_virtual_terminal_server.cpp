@@ -3856,8 +3856,8 @@ namespace isobus
 	                                                              std::uint16_t functionObjectID,
 	                                                              std::shared_ptr<ControlFunction> destination) const
 	{
-		// 14 bytes, padded to the 8 byte boundary (ISO 11783-6 4.6.26)
-		const std::array<std::uint8_t, 2 * CAN_DATA_LENGTH> buffer = {
+		// Exactly 14 bytes (ISO 11783-6 J.7.5)
+		const std::array<std::uint8_t, 14> buffer = {
 			static_cast<std::uint8_t>(Function::AuxiliaryAssignmentTypeTwoCommand),
 			static_cast<std::uint8_t>(inputUnitName),
 			static_cast<std::uint8_t>(inputUnitName >> 8),
@@ -3871,9 +3871,7 @@ namespace isobus
 			get_low_byte(inputObjectID),
 			get_high_byte(inputObjectID),
 			get_low_byte(functionObjectID),
-			get_high_byte(functionObjectID),
-			0xFF,
-			0xFF
+			get_high_byte(functionObjectID)
 		};
 
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),

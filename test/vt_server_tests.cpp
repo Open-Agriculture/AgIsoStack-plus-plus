@@ -2738,7 +2738,7 @@ TEST_F(VirtualTerminalServerAuxiliaryControlTest, PreferredAssignmentEnablesTheI
 
 	EXPECT_EQ(INPUT_OBJECT_ID, enableCommand.data[1] | (enableCommand.data[2] << 8));
 	EXPECT_EQ(0x01, enableCommand.data[3]);
-	ASSERT_EQ(16U, assignmentCommand.size());
+	ASSERT_EQ(14U, assignmentCommand.size());
 	for (std::uint8_t i = 0; i < 8; i++)
 	{
 		EXPECT_EQ(static_cast<std::uint8_t>(inputUnit->get_NAME().get_full_name() >> (8 * i)), assignmentCommand[1 + i]);
@@ -2747,8 +2747,6 @@ TEST_F(VirtualTerminalServerAuxiliaryControlTest, PreferredAssignmentEnablesTheI
 	EXPECT_EQ(0x80 | BOOLEAN_NON_LATCHING, assignmentCommand[9]);
 	EXPECT_EQ(INPUT_OBJECT_ID, assignmentCommand[10] | (assignmentCommand[11] << 8));
 	EXPECT_EQ(FUNCTION_OBJECT_ID, assignmentCommand[12] | (assignmentCommand[13] << 8));
-	EXPECT_EQ(0xFF, assignmentCommand[14]);
-	EXPECT_EQ(0xFF, assignmentCommand[15]);
 
 	const auto assignments = server->get_auxiliary_assignments();
 	ASSERT_EQ(1U, assignments.size());
@@ -2775,7 +2773,7 @@ TEST_F(VirtualTerminalServerAuxiliaryControlTest, FunctionWithoutAPreferredAssig
 	receive_from_client(serverCF, implement, { 0x22, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
 	const bool isRemovedAgain = read_assignment_command(repeatedRemoval);
 
-	ASSERT_EQ(16U, removal.size());
+	ASSERT_EQ(14U, removal.size());
 	for (std::uint8_t i = 1; i < 9; i++)
 	{
 		EXPECT_EQ(0xFF, removal[i]);
