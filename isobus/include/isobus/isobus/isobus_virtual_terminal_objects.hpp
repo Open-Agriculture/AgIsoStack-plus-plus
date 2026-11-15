@@ -453,7 +453,7 @@ namespace isobus
 		void set_active_mask(std::uint16_t value);
 
 	private:
-		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 16; ///< The fewest bytes of IOP data that can represent this object
+		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 10; ///< The fewest bytes of IOP data that can represent this object
 
 		std::vector<std::string> languageCodes; ///< A list of 2 character language codes, like "en"
 		std::uint16_t activeMask = NULL_OBJECT_ID; ///< The currently active mask for this working set
@@ -529,7 +529,7 @@ namespace isobus
 		std::uint16_t get_soft_key_mask() const;
 
 	private:
-		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 12; ///< The fewest bytes of IOP data that can represent this object
+		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 8; ///< The fewest bytes of IOP data that can represent this object
 		std::uint16_t softKeyMaskObjectID = NULL_OBJECT_ID; ///< The object ID of the soft key mask associated with this data mask
 	};
 
