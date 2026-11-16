@@ -12,6 +12,8 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <ctime>
+#include <fstream>
 #include <future>
 #include <thread>
 
@@ -458,4 +460,37 @@ TEST(HARDWARE_INTERFACE_TESTS, VectorASCLoggerRemovesItsListenersOnDestruction)
 	EXPECT_EQ(CANHardwareInterface::get_can_frame_received_event_dispatcher().get_listener_count(), receivedListeners);
 	EXPECT_EQ(CANHardwareInterface::get_can_frame_transmitted_event_dispatcher().get_listener_count(), transmittedListeners);
 	EXPECT_EQ(std::remove(fileName.c_str()), 0);
+}
+
+/// @brief Returns the abbreviated weekday of a time, as std::strftime writes it in the C locale
+static std::string get_weekday_abbreviation(std::time_t time)
+{
+	char weekday[8] = {};
+	std::strftime(weekday, sizeof(weekday), "%a", std::localtime(&time));
+	return weekday;
+}
+
+TEST(HARDWARE_INTERFACE_TESTS, VectorASCLoggerWritesOneDateKeywordAndTheRightWeekday)
+{
+	const std::string fileName = "vector_asc_logger_date_test.asc";
+	const std::string weekdayBefore = get_weekday_abbreviation(std::time(nullptr));
+	{
+		VectorASCLogger logger(fileName);
+	}
+	const std::string weekdayAfter = get_weekday_abbreviation(std::time(nullptr));
+
+	std::string dateLine;
+	{
+		std::ifstream logFile(fileName);
+		std::getline(logFile, dateLine);
+	}
+	EXPECT_EQ(std::remove(fileName.c_str()), 0);
+
+	// "date <weekday> <month> <day> <time> <am or pm> <year>"
+	ASSERT_GE(dateLine.size(), 8U) << dateLine;
+	EXPECT_EQ("date ", dateLine.substr(0, 5)) << dateLine;
+	EXPECT_EQ(std::string::npos, dateLine.find("date date")) << dateLine;
+	// Either weekday, in case the day changed while the file was written
+	const std::string weekday = dateLine.substr(5, 3);
+	EXPECT_TRUE((weekdayBefore == weekday) || (weekdayAfter == weekday)) << dateLine << ", expected " << weekdayBefore;
 }

@@ -134,19 +134,20 @@ namespace isobus
 			"Nov",
 			"Dec"
 		};
+		// In the order of std::tm::tm_wday, which counts from Sunday
 		const std::string DAYS_OF_THE_WEEK_ABBREVIATED[] = {
+			"Sun",
 			"Mon",
 			"Tue",
 			"Wed",
 			"Thu",
 			"Fri",
-			"Sat",
-			"Sun"
+			"Sat"
 		};
 		std ::tm *now = std::localtime(&currentTime);
 		std::string amOrPM = now->tm_hour > 11 ? std::string("pm") : std::string("am");
-		std::string retVal = "date " +
-		  DAYS_OF_THE_WEEK_ABBREVIATED[now->tm_wday] +
+		// openFile() writes the "date " keyword in front of this
+		std::string retVal = DAYS_OF_THE_WEEK_ABBREVIATED[now->tm_wday] +
 		  " " +
 		  MONTH_ABBREVIATIONS[now->tm_mon] +
 		  " " +
