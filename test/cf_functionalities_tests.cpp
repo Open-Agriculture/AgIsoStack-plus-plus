@@ -264,7 +264,8 @@ TEST_F(ControlFunctionFunctionalitiesTest, CFFunctionalitiesTest)
 	auto aux_n_inputs_test_wrapper = [&cfFunctionalitiesUnderTest](ControlFunctionFunctionalities::AuxNOptions functionalityOption) {
 		bool retVal = true;
 
-		for (std::uint32_t i = 1; i <= 0x80; i = i << 1)
+		// Types 0 to 7 are in the first option byte, types 8 to 14 in the second
+		for (std::uint32_t i = 1; i <= static_cast<std::uint32_t>(ControlFunctionFunctionalities::AuxNOptions::SupportsType14Function); i = i << 1)
 		{
 			if (static_cast<ControlFunctionFunctionalities::AuxNOptions>(i) == functionalityOption)
 			{
@@ -279,7 +280,7 @@ TEST_F(ControlFunctionFunctionalitiesTest, CFFunctionalitiesTest)
 	};
 
 	cfFunctionalitiesUnderTest.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::AuxNInputs, 1, true);
-	for (std::uint8_t i = static_cast<std::uint8_t>(ControlFunctionFunctionalities::AuxNOptions::SupportsType0Function); i != static_cast<std::uint8_t>(ControlFunctionFunctionalities::AuxNOptions::SupportsType14Function); i = i << 1)
+	for (std::uint16_t i = static_cast<std::uint16_t>(ControlFunctionFunctionalities::AuxNOptions::SupportsType0Function); i <= static_cast<std::uint16_t>(ControlFunctionFunctionalities::AuxNOptions::SupportsType14Function); i = static_cast<std::uint16_t>(i << 1))
 	{
 		cfFunctionalitiesUnderTest.set_aux_N_inputs_option_state(static_cast<ControlFunctionFunctionalities::AuxNOptions>(i), true);
 		aux_n_inputs_test_wrapper(static_cast<ControlFunctionFunctionalities::AuxNOptions>(i));
@@ -291,7 +292,8 @@ TEST_F(ControlFunctionFunctionalitiesTest, CFFunctionalitiesTest)
 	auto aux_n_functions_test_wrapper = [&cfFunctionalitiesUnderTest](ControlFunctionFunctionalities::AuxNOptions functionalityOption) {
 		bool retVal = true;
 
-		for (std::uint32_t i = 1; i <= 0x80; i = i << 1)
+		// Types 0 to 7 are in the first option byte, types 8 to 14 in the second
+		for (std::uint32_t i = 1; i <= static_cast<std::uint32_t>(ControlFunctionFunctionalities::AuxNOptions::SupportsType14Function); i = i << 1)
 		{
 			if (static_cast<ControlFunctionFunctionalities::AuxNOptions>(i) == functionalityOption)
 			{
@@ -306,7 +308,7 @@ TEST_F(ControlFunctionFunctionalitiesTest, CFFunctionalitiesTest)
 	};
 
 	cfFunctionalitiesUnderTest.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::AuxNFunctions, 1, true);
-	for (std::uint8_t i = static_cast<std::uint8_t>(ControlFunctionFunctionalities::AuxNOptions::SupportsType0Function); i != static_cast<std::uint8_t>(ControlFunctionFunctionalities::AuxNOptions::SupportsType14Function); i = i << 1)
+	for (std::uint16_t i = static_cast<std::uint16_t>(ControlFunctionFunctionalities::AuxNOptions::SupportsType0Function); i <= static_cast<std::uint16_t>(ControlFunctionFunctionalities::AuxNOptions::SupportsType14Function); i = static_cast<std::uint16_t>(i << 1))
 	{
 		cfFunctionalitiesUnderTest.set_aux_N_functions_option_state(static_cast<ControlFunctionFunctionalities::AuxNOptions>(i), true);
 		aux_n_functions_test_wrapper(static_cast<ControlFunctionFunctionalities::AuxNOptions>(i));
