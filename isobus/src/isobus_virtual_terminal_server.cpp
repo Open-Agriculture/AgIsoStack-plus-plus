@@ -643,7 +643,7 @@ namespace isobus
 				};
 				const std::unique_ptr<std::uint8_t, PopRunningMacro> pop(&numberOfRunningMacros);
 
-				for (std::uint8_t j = 0; j < macro->get_number_of_commands(); j++)
+				for (std::uint16_t j = 0; j < macro->get_number_of_commands(); j++)
 				{
 					std::vector<std::uint8_t> commandPacket;
 

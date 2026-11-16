@@ -7349,9 +7349,10 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		// Macro Object IDs shall be in the range 0 to 255 for VT version 4 and prior.
-		// Macro Object IDs can be in the range of 0 to 65534 for VT version 5 and later.
-		if (commandPackets.size() <= 65534)
+		// A macro holds at most 65535 bytes of commands (ISO 11783-6:2018 Table B.56), so it never has 65535 commands
+		constexpr std::size_t MAX_NUMBER_OF_COMMANDS = 65534;
+
+		if (commandPackets.size() < MAX_NUMBER_OF_COMMANDS)
 		{
 			commandPackets.push_back(command);
 			retVal = true;
@@ -7363,12 +7364,12 @@ namespace isobus
 		return retVal;
 	}
 
-	std::uint8_t Macro::get_number_of_commands() const
+	std::uint16_t Macro::get_number_of_commands() const
 	{
-		return static_cast<std::uint8_t>(commandPackets.size());
+		return static_cast<std::uint16_t>(commandPackets.size());
 	}
 
-	bool Macro::get_command_packet(std::uint8_t index, std::vector<std::uint8_t> &command)
+	bool Macro::get_command_packet(std::uint16_t index, std::vector<std::uint8_t> &command)
 	{
 		bool retVal = false;
 
@@ -7380,7 +7381,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool Macro::remove_command_packet(std::uint8_t index)
+	bool Macro::remove_command_packet(std::uint16_t index)
 	{
 		bool retVal = false;
 

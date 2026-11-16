@@ -2504,6 +2504,54 @@ TEST_F(VirtualTerminalServerMaskChangeMacroTest, ChangeSoftKeyMaskUsesTheVisibil
 	EXPECT_EQ((std::vector<std::uint16_t>{ 10, 12, 13, 16, 17, 18 }), macrosThatRan);
 }
 
+TEST_F(VirtualTerminalServerMessagingTest, MacroWithMoreThan255CommandsRunsAllOfThem)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0xEC, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xED, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	// Number Variable 1, and Macro 5 with 260 Change Numeric Value commands that set it to 0, 1, ... 259.
+	// 260 commands of 8 bytes fit the 65535 bytes a macro can hold (ISO 11783-6:2018 Table B.56).
+	constexpr std::uint16_t NUMBER_OF_COMMANDS = 260;
+	constexpr std::uint16_t MACRO_LENGTH = NUMBER_OF_COMMANDS * 8;
+	std::vector<std::uint8_t> pool = { 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::NumberVariable), 0x00, 0x00, 0x00, 0x00 };
+	pool.insert(pool.end(), { 0x05, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Macro), static_cast<std::uint8_t>(MACRO_LENGTH & 0xFF), static_cast<std::uint8_t>(MACRO_LENGTH >> 8) });
+	for (std::uint16_t i = 0; i < NUMBER_OF_COMMANDS; i++)
+	{
+		pool.insert(pool.end(), { static_cast<std::uint8_t>(Macro::Command::ChangeNumericValue), 0x01, 0x00, 0xFF, static_cast<std::uint8_t>(i & 0xFF), static_cast<std::uint8_t>(i >> 8), 0x00, 0x00 });
+	}
+	auto workingSet = std::make_shared<TestWorkingSet>(client);
+	workingSet->add_iop_raw_data(pool);
+	workingSet->start_parsing_thread();
+	workingSet->join_parsing_thread();
+	serverUnderTest.add_managed_working_set(workingSet);
+
+	const auto macro = std::static_pointer_cast<Macro>(workingSet->get_object_by_id(5));
+	const auto variable = std::static_pointer_cast<NumberVariable>(workingSet->get_object_by_id(1));
+	const bool parsed = (nullptr != macro) && (nullptr != variable);
+	const bool ran = parsed && serverUnderTest.execute_macro_for_test(5, workingSet);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(parsed);
+	EXPECT_EQ(NUMBER_OF_COMMANDS, macro->get_number_of_commands());
+	std::vector<std::uint8_t> lastCommand;
+	EXPECT_TRUE(macro->get_command_packet(NUMBER_OF_COMMANDS - 1, lastCommand));
+	EXPECT_TRUE(ran);
+	EXPECT_EQ(NUMBER_OF_COMMANDS - 1U, variable->get_value()); // The last command ran
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(client);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
 /// @brief A managed working set whose macros change one string variable, so that a test can see which of them ran
 class MacroNestingTest : public VirtualTerminalServerMessagingTest
 {
