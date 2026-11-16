@@ -169,6 +169,7 @@ namespace isobus
 		/// @param[in] functionality The functionality to change
 		/// @param[in] functionalityGeneration The generation of the functionality to report
 		/// @param[in] isSupported If true, this class will add reporting as such on the ISOBUS. If false, it will not be reported on the bus.
+		/// @details If the functionality is already supported, passing true updates its generation and keeps its options.
 		/// @note Minimum Control Function is enabled by default, and generally should not be disabled.
 		void set_functionality_is_supported(Functionalities functionality, std::uint8_t functionalityGeneration, bool isSupported);
 
