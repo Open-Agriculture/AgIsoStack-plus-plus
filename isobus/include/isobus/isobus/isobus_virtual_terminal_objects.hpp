@@ -10,12 +10,12 @@
 #define ISOBUS_VIRTUAL_TERMINAL_OBJECTS_HPP
 
 #include "isobus/isobus/can_constants.hpp"
+#include "isobus/utility/to_string.hpp"
 
 #include <algorithm>
 #include <array>
 #include <map>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -191,6 +191,7 @@ namespace isobus
 			InvalidObjectID = 0,
 			InvalidAttributeID = 1,
 			InvalidValue = 2,
+			ValueInUse = 3,
 			AnyOtherError = 4
 		};
 
@@ -713,7 +714,7 @@ namespace isobus
 		void set_hidden(bool value);
 
 	private:
-		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 9; ///< The fewest bytes of IOP data that can represent this object
+		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 10; ///< The fewest bytes of IOP data that can represent this object
 
 		bool hidden = false; ///< The hidden attribute state for this container object. True means it will be hidden when rendered.
 	};
@@ -1714,7 +1715,7 @@ namespace isobus
 		void set_option(Options option, bool value);
 
 	private:
-		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 16; ///< The fewest bytes of IOP data that can represent this object
+		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 17; ///< The fewest bytes of IOP data that can represent this object
 	};
 
 	/// @brief This object is used to format and output a numeric value based on a supplied integer value.
@@ -2912,6 +2913,10 @@ namespace isobus
 		/// @param[in] dataByte One byte of bitmap data
 		void add_raw_data(std::uint8_t dataByte);
 
+		/// @brief Reserves space for decoded pixels, at most actual width times actual height
+		/// @param[in] pixels The most pixels the encoded data can decode to
+		void reserve_raw_data(std::uint64_t pixels);
+
 		/// @brief Returns the number of bytes in the raw data that comprises the underlying bitmap
 		/// @returns The number of bytes in the raw data that comprises the underlying bitmap
 		std::uint32_t get_number_of_bytes_in_raw_data() const;
@@ -3497,7 +3502,7 @@ namespace isobus
 		void set_validation_type(ValidationType newValidationType);
 
 	private:
-		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 7; ///< The fewest bytes of IOP data that can represent this object
+		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 6; ///< The fewest bytes of IOP data that can represent this object
 
 		std::string validationString; ///< String containing all valid or invalid character codes
 		ValidationType validationType = ValidationType::ValidCharactersAreListed; ///< Describes how to interpret the validation string
@@ -3849,21 +3854,22 @@ namespace isobus
 		/// @returns true if the command was added to the macro, otherwise false (maybe the max number of commands has been hit)
 		bool add_command_packet(const std::vector<std::uint8_t> &command);
 
-		/// @brief Returns the number of stored command packets inside this macro (max 255)
+		/// @brief Returns the number of stored command packets inside this macro
+		/// @details A macro holds at most 65535 bytes of commands (ISO 11783-6:2018 Table B.56), so the count fits 16 bits.
 		/// @returns The number of stored command packets inside this macro
-		std::uint8_t get_number_of_commands() const;
+		std::uint16_t get_number_of_commands() const;
 
 		/// @brief Returns a command packet by index
 		/// @param[in] index The index of the packet to retrieve
 		/// @param[out] command The returned command packet if the return value is true, otherwise the returned
 		/// command packet content is undefined.
 		/// @returns true if a valid command packet was returned, otherwise false (index out of range)
-		bool get_command_packet(std::uint8_t index, std::vector<std::uint8_t> &command);
+		bool get_command_packet(std::uint16_t index, std::vector<std::uint8_t> &command);
 
 		/// @brief Deletes a command packet from the macro by index
 		/// @param[in] index The index of the packet to delete
 		/// @returns true if the specified command packet was removed, otherwise false (index out of range)
-		bool remove_command_packet(std::uint8_t index);
+		bool remove_command_packet(std::uint16_t index);
 
 		/// @brief Returns if the command packets in this macro are valid
 		/// @returns true if the command packets in this macro are valid, otherwise false
@@ -4873,9 +4879,7 @@ namespace isobus
 		{
 			return "NULL";
 		}
-		std::ostringstream oss;
-		oss << object_id;
-		return oss.str();
+		return isobus::to_string(object_id);
 	}
 } // namespace isobus
 

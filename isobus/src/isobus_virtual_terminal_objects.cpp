@@ -1714,7 +1714,9 @@ namespace isobus
 
 				case AttributeName::Width:
 				{
+					// An Input Boolean is square, so its width is also its height (ISO 11783-6:2018, B.8.2)
 					set_width(static_cast<std::uint16_t>(rawAttributeData));
+					set_height(static_cast<std::uint16_t>(rawAttributeData));
 					retVal = true;
 				}
 				break;
@@ -1958,7 +1960,8 @@ namespace isobus
 
 			if (nullptr != objectToCheck)
 			{
-				if (VirtualTerminalObjectType::InputAttributes != objectToCheck->get_object_type())
+				if ((VirtualTerminalObjectType::InputAttributes != objectToCheck->get_object_type()) &&
+				    (VirtualTerminalObjectType::ExtendedInputAttributes != objectToCheck->get_object_type()))
 				{
 					anyWrongChildType = true;
 				}
@@ -2053,7 +2056,8 @@ namespace isobus
 
 					if ((NULL_OBJECT_ID == rawAttributeData) ||
 					    ((nullptr != inputAttributesObject) &&
-					     (VirtualTerminalObjectType::InputAttributes == inputAttributesObject->get_object_type())))
+					     ((VirtualTerminalObjectType::InputAttributes == inputAttributesObject->get_object_type()) ||
+					      (VirtualTerminalObjectType::ExtendedInputAttributes == inputAttributesObject->get_object_type()))))
 					{
 						set_input_attributes(static_cast<std::uint16_t>(rawAttributeData));
 						retVal = true;
@@ -3544,6 +3548,55 @@ namespace isobus
 		return MIN_OBJECT_LENGTH;
 	}
 
+	/// @brief Checks if an object type can be an Output List item
+	/// @param[in] type The object type to check
+	/// @returns true if the type can be an Output List item
+	static bool is_allowed_output_list_item(VirtualTerminalObjectType type)
+	{
+		bool retVal = false;
+
+		switch (type)
+		{
+			case VirtualTerminalObjectType::WorkingSet:
+			case VirtualTerminalObjectType::Container:
+			case VirtualTerminalObjectType::Button:
+			case VirtualTerminalObjectType::InputBoolean:
+			case VirtualTerminalObjectType::InputString:
+			case VirtualTerminalObjectType::InputNumber:
+			case VirtualTerminalObjectType::InputList:
+			case VirtualTerminalObjectType::OutputString:
+			case VirtualTerminalObjectType::OutputNumber:
+			case VirtualTerminalObjectType::OutputList:
+			case VirtualTerminalObjectType::OutputLine:
+			case VirtualTerminalObjectType::OutputRectangle:
+			case VirtualTerminalObjectType::OutputEllipse:
+			case VirtualTerminalObjectType::OutputPolygon:
+			case VirtualTerminalObjectType::OutputMeter:
+			case VirtualTerminalObjectType::OutputLinearBarGraph:
+			case VirtualTerminalObjectType::OutputArchedBarGraph:
+			case VirtualTerminalObjectType::GraphicsContext:
+			case VirtualTerminalObjectType::Animation:
+			case VirtualTerminalObjectType::PictureGraphic:
+			case VirtualTerminalObjectType::ScaledGraphic:
+			case VirtualTerminalObjectType::ObjectPointer:
+			case VirtualTerminalObjectType::ExternalObjectPointer:
+			case VirtualTerminalObjectType::AuxiliaryFunctionType2:
+			case VirtualTerminalObjectType::AuxiliaryInputType2:
+			case VirtualTerminalObjectType::AuxiliaryControlDesignatorType2:
+			{
+				retVal = true;
+			}
+			break;
+
+			default:
+			{
+				// Not an allowed list item
+			}
+			break;
+		}
+		return retVal;
+	}
+
 	bool OutputList::get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const
 	{
 		bool anyWrongChildType = false;
@@ -3571,43 +3624,9 @@ namespace isobus
 			auto childObject = get_object_by_id(child.id, objectPool);
 			if (nullptr != childObject)
 			{
-				switch (childObject->get_object_type())
+				if (!is_allowed_output_list_item(childObject->get_object_type()))
 				{
-					case VirtualTerminalObjectType::OutputString:
-					case VirtualTerminalObjectType::Macro:
-					case VirtualTerminalObjectType::WorkingSet:
-					case VirtualTerminalObjectType::Container:
-					case VirtualTerminalObjectType::Button:
-					case VirtualTerminalObjectType::KeyGroup:
-					case VirtualTerminalObjectType::InputBoolean:
-					case VirtualTerminalObjectType::InputString:
-					case VirtualTerminalObjectType::InputNumber:
-					case VirtualTerminalObjectType::InputList:
-					case VirtualTerminalObjectType::OutputLine:
-					case VirtualTerminalObjectType::OutputRectangle:
-					case VirtualTerminalObjectType::OutputEllipse:
-					case VirtualTerminalObjectType::OutputPolygon:
-					case VirtualTerminalObjectType::OutputMeter:
-					case VirtualTerminalObjectType::OutputLinearBarGraph:
-					case VirtualTerminalObjectType::OutputArchedBarGraph:
-					case VirtualTerminalObjectType::Animation:
-					case VirtualTerminalObjectType::PictureGraphic:
-					case VirtualTerminalObjectType::ScaledGraphic:
-					case VirtualTerminalObjectType::ObjectPointer:
-					case VirtualTerminalObjectType::ExternalObjectPointer:
-					case VirtualTerminalObjectType::AuxiliaryFunctionType2:
-					case VirtualTerminalObjectType::AuxiliaryInputType2:
-					case VirtualTerminalObjectType::AuxiliaryControlDesignatorType2:
-					{
-						// Valid Child Object
-					}
-					break;
-
-					default:
-					{
-						anyWrongChildType = true;
-					}
-					break;
+					anyWrongChildType = true;
 				}
 			}
 		}
@@ -3756,7 +3775,7 @@ namespace isobus
 		if ((index < children.size()) &&
 		    ((NULL_OBJECT_ID == newListItem) ||
 		     ((nullptr != get_object_by_id(newListItem, objectPool)) &&
-		      (VirtualTerminalObjectType::NumberVariable == get_object_by_id(newListItem, objectPool)->get_object_type()))))
+		      is_allowed_output_list_item(get_object_by_id(newListItem, objectPool)->get_object_type()))))
 		{
 			children.at(index).id = newListItem;
 			retVal = true;
@@ -4802,7 +4821,9 @@ namespace isobus
 			{
 				case AttributeName::Width:
 				{
+					// An Output Meter is square, so its width is also its height (ISO 11783-6:2018, B.11.2)
 					set_width(static_cast<std::uint16_t>(rawAttributeData));
+					set_height(static_cast<std::uint16_t>(rawAttributeData));
 					retVal = true;
 				}
 				break;
@@ -6091,10 +6112,15 @@ namespace isobus
 
 	void PictureGraphic::add_raw_data(std::uint8_t dataByte)
 	{
-		if (rawData.size() < (get_actual_width() * get_actual_height()))
+		if (rawData.size() < (static_cast<std::uint32_t>(get_actual_width()) * get_actual_height()))
 		{
 			rawData.push_back(dataByte);
 		}
+	}
+
+	void PictureGraphic::reserve_raw_data(std::uint64_t pixels)
+	{
+		rawData.reserve(static_cast<std::size_t>(std::min<std::uint64_t>(pixels, static_cast<std::uint32_t>(get_actual_width()) * get_actual_height())));
 	}
 
 	std::uint32_t PictureGraphic::get_number_of_bytes_in_raw_data() const
@@ -6105,7 +6131,6 @@ namespace isobus
 	void PictureGraphic::set_number_of_bytes_in_raw_data(std::uint32_t value)
 	{
 		numberOfBytesInRawData = value;
-		rawData.reserve(value);
 	}
 
 	std::uint16_t PictureGraphic::get_actual_width() const
@@ -7328,9 +7353,10 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		// Macro Object IDs shall be in the range 0 to 255 for VT version 4 and prior.
-		// Macro Object IDs can be in the range of 0 to 65534 for VT version 5 and later.
-		if (commandPackets.size() <= 65534)
+		// A macro holds at most 65535 bytes of commands (ISO 11783-6:2018 Table B.56), so it never has 65535 commands
+		constexpr std::size_t MAX_NUMBER_OF_COMMANDS = 65534;
+
+		if (commandPackets.size() < MAX_NUMBER_OF_COMMANDS)
 		{
 			commandPackets.push_back(command);
 			retVal = true;
@@ -7342,12 +7368,12 @@ namespace isobus
 		return retVal;
 	}
 
-	std::uint8_t Macro::get_number_of_commands() const
+	std::uint16_t Macro::get_number_of_commands() const
 	{
-		return static_cast<std::uint8_t>(commandPackets.size());
+		return static_cast<std::uint16_t>(commandPackets.size());
 	}
 
-	bool Macro::get_command_packet(std::uint8_t index, std::vector<std::uint8_t> &command)
+	bool Macro::get_command_packet(std::uint16_t index, std::vector<std::uint8_t> &command)
 	{
 		bool retVal = false;
 
@@ -7359,7 +7385,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool Macro::remove_command_packet(std::uint8_t index)
+	bool Macro::remove_command_packet(std::uint16_t index)
 	{
 		bool retVal = false;
 

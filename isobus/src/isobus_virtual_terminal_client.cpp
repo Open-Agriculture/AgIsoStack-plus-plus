@@ -27,6 +27,11 @@
 
 namespace isobus
 {
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+	/// @brief The client whose worker runs on this thread. Not get_id(): on ESP-IDF it aborts outside pthreads.
+	static thread_local const VirtualTerminalClient *workerThreadOwner = nullptr;
+#endif
+
 	/// @brief Pads a version label with spaces, or truncates it, to the label length a version command uses
 	/// @param[in] versionLabel The object pool version label
 	/// @returns The label as sent in a version command
@@ -38,6 +43,14 @@ namespace isobus
 		retVal.fill(' ');
 		std::copy_n(versionLabel.begin(), std::min(LABEL_LENGTH, versionLabel.size()), retVal.begin());
 		return retVal;
+	}
+
+	/// @brief Reads a 16-bit value, such as an object ID, from an object pool, which stores values low byte first
+	/// @param[in] data The low byte, followed by the high byte
+	/// @returns The value
+	static std::uint16_t read_little_endian_uint16(const std::uint8_t *data)
+	{
+		return static_cast<std::uint16_t>(data[0] | (data[1] << 8));
 	}
 
 	/// @brief Validates preferred assignments for a single auxiliary input device
@@ -77,6 +90,20 @@ namespace isobus
 
 	void VirtualTerminalClient::initialize(bool spawnThread)
 	{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		if (this == workerThreadOwner)
+		{
+			LOG_ERROR("[VT]: initialize() cannot be called from the client's own worker thread.");
+			return;
+		}
+		LOCK_GUARD(Mutex, workerThreadMutex);
+		if (shouldTerminate)
+		{
+			// A worker that terminated the client from one of its own callbacks has been told to exit,
+			// and is joined before a new one starts, so the old one cannot carry on beside it.
+			join_worker_thread();
+		}
+#endif
 		if (shouldTerminate)
 		{
 			shouldTerminate = false;
@@ -119,7 +146,30 @@ namespace isobus
 		return (StateMachineState::Connected == state);
 	}
 
+	VirtualTerminalClient::StateMachineState VirtualTerminalClient::get_state() const
+	{
+		return state;
+	}
+
 	void VirtualTerminalClient::terminate()
+	{
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		if (this == workerThreadOwner)
+		{
+			// From the worker itself (a callback it runs). It cannot join itself, nor wait for
+			// workerThreadMutex, which an owner joining it may hold. It exits after this update, and the
+			// owner's terminate() or initialize(), or the destructor, joins it.
+			stop(false);
+			return;
+		}
+		// Held through the whole call, so a second caller waits until the first has finished: it cannot
+		// return to an owner that destroys the client while the first is still inside.
+		LOCK_GUARD(Mutex, workerThreadMutex);
+#endif
+		stop(true);
+	}
+
+	void VirtualTerminalClient::stop(bool joinWorker)
 	{
 		if (initialized)
 		{
@@ -135,22 +185,37 @@ namespace isobus
 				CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_message, this);
 				CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal), process_rx_message, this);
 			}
-
 			shouldTerminate = true;
+		}
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
-			if (nullptr != workerThread)
-			{
-				workerThread->join();
-				delete workerThread;
-				workerThread = nullptr;
-			}
+		if (joinWorker)
+		{
+			// Also a worker that terminated the client from one of its own callbacks earlier.
+			join_worker_thread();
+		}
+#else
+		(void)joinWorker;
 #endif
+		if (initialized)
+		{
 			initialized = false;
 			set_state(StateMachineState::Disconnected);
 			LOG_INFO("[VT]: VT Client connection has been terminated.");
 		}
 		store_pending_auxiliary_preferences();
 	}
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+	void VirtualTerminalClient::join_worker_thread()
+	{
+		std::thread *thread = workerThread.exchange(nullptr);
+		if (nullptr != thread)
+		{
+			thread->join();
+			delete thread;
+		}
+	}
+#endif
 
 	void VirtualTerminalClient::restart_communication()
 	{
@@ -433,7 +498,7 @@ namespace isobus
 		return queue_command(buffer, true);
 	}
 
-	bool VirtualTerminalClient::send_change_child_location(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint8_t relativeXPositionChange, std::uint8_t relativeYPositionChange)
+	bool VirtualTerminalClient::send_change_child_location(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint8_t relativeXPositionChange, std::uint8_t relativeYPositionChange, bool autoScale)
 	{
 		const std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ChangeChildLocationCommand),
 			                                         static_cast<std::uint8_t>(parentObjectID & 0xFF),
@@ -443,10 +508,10 @@ namespace isobus
 			                                         relativeXPositionChange,
 			                                         relativeYPositionChange,
 			                                         0xFF };
-		return queue_command(buffer, true);
+		return queue_command(buffer, true, autoScale);
 	}
 
-	bool VirtualTerminalClient::send_change_child_position(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint16_t xPosition, std::uint16_t yPosition)
+	bool VirtualTerminalClient::send_change_child_position(std::uint16_t objectID, std::uint16_t parentObjectID, std::uint16_t xPosition, std::uint16_t yPosition, bool autoScale)
 	{
 		const std::vector<std::uint8_t> buffer = {
 			static_cast<std::uint8_t>(Function::ChangeChildPositionCommand),
@@ -459,10 +524,10 @@ namespace isobus
 			static_cast<std::uint8_t>(yPosition & 0xFF),
 			static_cast<std::uint8_t>(yPosition >> 8),
 		};
-		return queue_command(buffer, true);
+		return queue_command(buffer, true, autoScale);
 	}
 
-	bool VirtualTerminalClient::send_change_size_command(std::uint16_t objectID, std::uint16_t newWidth, std::uint16_t newHeight)
+	bool VirtualTerminalClient::send_change_size_command(std::uint16_t objectID, std::uint16_t newWidth, std::uint16_t newHeight, bool autoScale)
 	{
 		const std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ChangeSizeCommand),
 			                                         static_cast<std::uint8_t>(objectID & 0xFF),
@@ -472,7 +537,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(newHeight & 0xFF),
 			                                         static_cast<std::uint8_t>(newHeight >> 8),
 			                                         0xFF };
-		return queue_command(buffer, true);
+		return queue_command(buffer, true, autoScale);
 	}
 
 	bool VirtualTerminalClient::send_change_background_colour(std::uint16_t objectID, std::uint8_t colour)
@@ -545,7 +610,7 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalClient::send_change_endpoint(std::uint16_t objectID, std::uint16_t width_px, std::uint16_t height_px, LineDirection direction)
+	bool VirtualTerminalClient::send_change_endpoint(std::uint16_t objectID, std::uint16_t width_px, std::uint16_t height_px, LineDirection direction, bool autoScale)
 	{
 		const std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ChangeEndPointCommand),
 			                                         static_cast<std::uint8_t>(objectID & 0xFF),
@@ -555,7 +620,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(height_px & 0xFF),
 			                                         static_cast<std::uint8_t>(height_px >> 8),
 			                                         static_cast<std::uint8_t>(direction) };
-		return queue_command(buffer, true);
+		return queue_command(buffer, true, autoScale);
 	}
 
 	bool VirtualTerminalClient::send_change_font_attributes(std::uint16_t objectID, std::uint8_t colour, FontSize size, std::uint8_t type, std::uint8_t styleBitfield)
@@ -706,7 +771,7 @@ namespace isobus
 		return queue_command(buffer);
 	}
 
-	bool VirtualTerminalClient::send_change_polygon_point(std::uint16_t objectID, std::uint8_t pointIndex, std::uint16_t newXValue, std::uint16_t newYValue)
+	bool VirtualTerminalClient::send_change_polygon_point(std::uint16_t objectID, std::uint8_t pointIndex, std::uint16_t newXValue, std::uint16_t newYValue, bool autoScale)
 	{
 		const std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ChangePolygonPointCommand),
 			                                         static_cast<std::uint8_t>(objectID & 0xFF),
@@ -716,10 +781,10 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(newXValue >> 8),
 			                                         static_cast<std::uint8_t>(newYValue & 0xFF),
 			                                         static_cast<std::uint8_t>(newYValue >> 8) };
-		return queue_command(buffer, true);
+		return queue_command(buffer, true, autoScale);
 	}
 
-	bool VirtualTerminalClient::send_change_polygon_scale(std::uint16_t objectID, std::uint16_t widthAttribute, std::uint16_t heightAttribute)
+	bool VirtualTerminalClient::send_change_polygon_scale(std::uint16_t objectID, std::uint16_t widthAttribute, std::uint16_t heightAttribute, bool autoScale)
 	{
 		const std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ChangePolygonScaleCommand),
 			                                         static_cast<std::uint8_t>(objectID & 0xFF),
@@ -729,7 +794,7 @@ namespace isobus
 			                                         static_cast<std::uint8_t>(heightAttribute & 0xFF),
 			                                         static_cast<std::uint8_t>(heightAttribute >> 8),
 			                                         0xFF };
-		return queue_command(buffer, true);
+		return queue_command(buffer, true, autoScale);
 	}
 
 	bool VirtualTerminalClient::send_select_colour_map_or_palette(std::uint16_t objectID)
@@ -1174,7 +1239,7 @@ namespace isobus
 
 	bool VirtualTerminalClient::get_font_style_supported(FontStyleBits value) const
 	{
-		return (0 != (static_cast<std::uint8_t>(value) & fontStylesBitfield));
+		return (0 != ((1 << static_cast<std::uint8_t>(value)) & fontStylesBitfield));
 	}
 
 	VirtualTerminalClient::GraphicMode VirtualTerminalClient::get_graphic_mode() const
@@ -1443,6 +1508,7 @@ namespace isobus
 				case StateMachineState::Disconnected:
 				{
 					sendWorkingSetMaintenance = false;
+					objectPoolRejected = false;
 					unsupportedFunctions.clear();
 					{
 						LOCK_GUARD(Mutex, commandQueueMutex);
@@ -1611,6 +1677,16 @@ namespace isobus
 
 				case StateMachineState::SendLoadVersion:
 				{
+					if (firstTimeInState)
+					{
+						// The VT loads the scaled pools from its memory, so they are not scaled again: set the factors for the commands
+						prepare_command_scaling_for_loaded_pools();
+
+						// Reading a large pool through the data callback takes time, which mustn't count towards the timeout
+						LOCK_GUARD(Mutex, auxiliaryAssignmentMutex);
+						stateMachineTimestamp_ms = SystemTiming::get_timestamp_ms();
+					}
+
 					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
 						set_state(StateMachineState::Failed);
@@ -1686,8 +1762,9 @@ namespace isobus
 				{
 					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
-						set_state(StateMachineState::Failed);
-						LOG_ERROR("[VT]: Store Version Response Timeout");
+						// The pool is already in use, only storing it may have failed
+						LOG_WARNING("[VT]: Store Version Response Timeout");
+						set_state(StateMachineState::Connected);
 					}
 				}
 				break;
@@ -1707,6 +1784,7 @@ namespace isobus
 							if (!scale_object_pools())
 							{
 								set_state(StateMachineState::Failed);
+								break;
 							}
 						}
 					}
@@ -1778,11 +1856,8 @@ namespace isobus
 							}
 							else if (CurrentObjectPoolUploadState::Failed == currentObjectPoolState)
 							{
-								currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized;
 								LOG_ERROR("[VT]: An object pool failed to upload. Resetting connection to VT.");
 								set_state(StateMachineState::Disconnected);
-								// Don't start the next pool's transfer while the connection is reset
-								allPoolsProcessed = false;
 								break;
 							}
 							else
@@ -1799,7 +1874,7 @@ namespace isobus
 						}
 					}
 
-					if (allPoolsProcessed)
+					if (allPoolsProcessed && (StateMachineState::UploadObjectPool == state))
 					{
 						set_state(StateMachineState::SendEndOfObjectPool);
 					}
@@ -1833,8 +1908,9 @@ namespace isobus
 					constexpr std::uint32_t VT_STATE_MACHINE_RETRY_TIMEOUT_MS = 5000;
 					sendWorkingSetMaintenance = false;
 
-					// Retry connecting after a while
-					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATE_MACHINE_RETRY_TIMEOUT_MS))
+					// The same VT would reject the same pool again, so wait until it goes away (ISO 11783-6 C.2.5)
+					const bool retry = objectPoolRejected ? SystemTiming::time_expired_ms(lastVTStatusTimestamp_ms, VT_STATUS_TIMEOUT_MS) : SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATE_MACHINE_RETRY_TIMEOUT_MS);
+					if (retry)
 					{
 						LOG_INFO("[VT]: Resetting Failed VT Connection");
 						set_state(StateMachineState::Disconnected);
@@ -2580,6 +2656,10 @@ namespace isobus
 
 		if (value != state)
 		{
+			if (StateMachineState::UploadObjectPool == state)
+			{
+				currentObjectPoolState = CurrentObjectPoolUploadState::Uninitialized;
+			}
 			firstTimeInState = true;
 			if ((StateMachineState::WaitForEndOfObjectPoolResponse == value) ||
 			    (StateMachineState::WaitForLoadVersionResponse == value))
@@ -2596,6 +2676,11 @@ namespace isobus
 
 		if (StateMachineState::Disconnected == value)
 		{
+			{
+				// The next VT may need other factors: commands still queued are scaled when sent
+				LOCK_GUARD(Mutex, commandScalingMutex);
+				commandScaling = CommandScaling();
+			}
 			lastVTStatusTimestamp_ms = 0;
 			++auxiliaryAssignmentSessionGeneration;
 			auxiliaryAssignmentTransaction.reset();
@@ -2834,7 +2919,8 @@ namespace isobus
 					if (AcknowledgementType::Negative == static_cast<AcknowledgementType>(message.get_uint8_at(0)))
 					{
 						std::uint32_t targetParameterGroupNumber = message.get_uint24_at(5);
-						if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == targetParameterGroupNumber)
+						if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == targetParameterGroupNumber) &&
+						    (StateMachineState::Failed != parentVT->state))
 						{
 							LOG_ERROR("[VT]: The VT Server is NACK-ing our VT messages. Disconnecting.");
 							parentVT->set_state(StateMachineState::Disconnected);
@@ -3685,6 +3771,7 @@ namespace isobus
 								}
 								else
 								{
+									parentVT->objectPoolRejected = true;
 									parentVT->set_state(StateMachineState::Failed);
 									LOG_ERROR("[VT]: Error in end of object pool message." +
 									          std::string("Faulty Object ") +
@@ -4047,13 +4134,184 @@ namespace isobus
 		return retVal;
 	}
 
-	bool VirtualTerminalClient::scale_object_pools()
+	std::vector<std::uint16_t> VirtualTerminalClient::get_soft_key_scaled_object_ids(const std::vector<std::vector<std::uint8_t> *> &pools)
+	{
+		constexpr std::size_t OBJECT_ID_LENGTH = 2;
+		constexpr std::size_t OBJECT_TYPE_OFFSET = 2; // ID
+		constexpr std::size_t KEY_NUMBER_OF_OBJECTS_OFFSET = 5; // ID, type, background colour, key code
+		constexpr std::size_t KEY_CHILDREN_OFFSET = 7; // ID, type, background colour, key code, number of objects, number of macros
+		constexpr std::size_t CONTAINER_NUMBER_OF_OBJECTS_OFFSET = 8; // ID, type, width, height, hidden
+		constexpr std::size_t CONTAINER_CHILDREN_OFFSET = 10; // ID, type, width, height, hidden, number of objects, number of macros
+		constexpr std::size_t ANIMATION_NUMBER_OF_OBJECTS_OFFSET = 15; // ID, type, width, height, refresh interval, value, enabled, first, last and default child index, options
+		constexpr std::size_t ANIMATION_CHILDREN_OFFSET = 17; // As above, then number of objects, number of macros
+		constexpr std::size_t CHILD_REFERENCE_LENGTH = 6; // ID, X, Y
+		constexpr std::size_t FONT_ATTRIBUTES_OFFSET = 8; // Output and input strings and numbers: ID, type, width, height, background colour
+		constexpr std::size_t OBJECT_POINTER_VALUE_OFFSET = 3; // ID, type
+
+		auto read_id = [](const ObjectPoolEntry &object, std::size_t relativeOffset) {
+			return read_little_endian_uint16(&(*object.pool)[object.offset + relativeOffset]);
+		};
+		auto uses_font = [](VirtualTerminalObjectType type) {
+			return (VirtualTerminalObjectType::OutputString == type) ||
+			  (VirtualTerminalObjectType::OutputNumber == type) ||
+			  (VirtualTerminalObjectType::InputString == type) ||
+			  (VirtualTerminalObjectType::InputNumber == type);
+		};
+
+		// Index every pool of the working set by object ID, and start from the children of every key.
+		// A key in one pool may show objects from another, so the search has to see all of them.
+		std::map<std::uint16_t, ObjectPoolEntry> objects;
+		std::vector<std::uint16_t> pending;
+
+		for (auto pool : pools)
+		{
+			if (nullptr == pool)
+			{
+				continue;
+			}
+			std::size_t offset = 0;
+
+			while ((offset + OBJECT_TYPE_OFFSET) < pool->size())
+			{
+				const std::uint32_t objectSize = get_number_bytes_in_object(&(*pool)[offset], static_cast<std::uint32_t>(pool->size() - offset));
+
+				if ((0 == objectSize) || ((offset + objectSize) > pool->size()))
+				{
+					break;
+				}
+				const ObjectPoolEntry object{ pool, offset, objectSize, static_cast<VirtualTerminalObjectType>((*pool)[offset + OBJECT_TYPE_OFFSET]) };
+				objects.emplace(read_id(object, 0), object);
+
+				if ((VirtualTerminalObjectType::Key == object.type) && (objectSize > KEY_NUMBER_OF_OBJECTS_OFFSET))
+				{
+					for (std::size_t i = 0; i < (*pool)[offset + KEY_NUMBER_OF_OBJECTS_OFFSET]; i++)
+					{
+						const std::size_t childOffset = KEY_CHILDREN_OFFSET + (CHILD_REFERENCE_LENGTH * i);
+
+						if ((childOffset + OBJECT_ID_LENGTH) <= objectSize)
+						{
+							pending.push_back(read_id(object, childOffset));
+						}
+					}
+				}
+				offset += objectSize;
+			}
+		}
+
+		// Follow the key children down through containers, animations and object pointers, collecting the fonts they use
+		std::set<std::uint16_t> shownOnKeys;
+		std::set<std::uint16_t> fontsOnKeys;
+
+		while (!pending.empty())
+		{
+			const std::uint16_t objectID = pending.back();
+			pending.pop_back();
+
+			auto location = objects.find(objectID);
+			if ((objects.end() == location) || (!shownOnKeys.insert(objectID).second))
+			{
+				// Not an object in any pool (such as the null ID), or already visited
+				continue;
+			}
+			const ObjectPoolEntry &object = location->second;
+
+			switch (object.type)
+			{
+				case VirtualTerminalObjectType::Container:
+				{
+					if (object.size > CONTAINER_NUMBER_OF_OBJECTS_OFFSET)
+					{
+						for (std::size_t i = 0; i < (*object.pool)[object.offset + CONTAINER_NUMBER_OF_OBJECTS_OFFSET]; i++)
+						{
+							const std::size_t childOffset = CONTAINER_CHILDREN_OFFSET + (CHILD_REFERENCE_LENGTH * i);
+
+							if ((childOffset + OBJECT_ID_LENGTH) <= object.size)
+							{
+								pending.push_back(read_id(object, childOffset));
+							}
+						}
+					}
+				}
+				break;
+
+				case VirtualTerminalObjectType::Animation:
+				{
+					if (object.size > ANIMATION_NUMBER_OF_OBJECTS_OFFSET)
+					{
+						for (std::size_t i = 0; i < (*object.pool)[object.offset + ANIMATION_NUMBER_OF_OBJECTS_OFFSET]; i++)
+						{
+							const std::size_t childOffset = ANIMATION_CHILDREN_OFFSET + (CHILD_REFERENCE_LENGTH * i);
+
+							if ((childOffset + OBJECT_ID_LENGTH) <= object.size)
+							{
+								pending.push_back(read_id(object, childOffset));
+							}
+						}
+					}
+				}
+				break;
+
+				case VirtualTerminalObjectType::ObjectPointer:
+				{
+					if ((OBJECT_POINTER_VALUE_OFFSET + OBJECT_ID_LENGTH) <= object.size)
+					{
+						pending.push_back(read_id(object, OBJECT_POINTER_VALUE_OFFSET));
+					}
+				}
+				break;
+
+				case VirtualTerminalObjectType::OutputString:
+				case VirtualTerminalObjectType::OutputNumber:
+				{
+					if ((FONT_ATTRIBUTES_OFFSET + OBJECT_ID_LENGTH) <= object.size)
+					{
+						fontsOnKeys.insert(read_id(object, FONT_ATTRIBUTES_OFFSET));
+					}
+				}
+				break;
+
+				default:
+					break;
+			}
+		}
+
+		// A font that is also used off the keys, in any pool, keeps the data mask factor
+		for (const auto &entry : objects)
+		{
+			const ObjectPoolEntry &object = entry.second;
+
+			if (uses_font(object.type) &&
+			    ((FONT_ATTRIBUTES_OFFSET + OBJECT_ID_LENGTH) <= object.size) &&
+			    (0 == shownOnKeys.count(entry.first)))
+			{
+				const std::uint16_t fontID = read_id(object, FONT_ATTRIBUTES_OFFSET);
+
+				if (0 != fontsOnKeys.erase(fontID))
+				{
+					LOG_DEBUG("[VT]: Font attributes " + isobus::to_string(static_cast<int>(fontID)) +
+					          " are used on a soft key and by object " + isobus::to_string(static_cast<int>(entry.first)) +
+					          " outside the soft keys, so they keep the data mask scale factor");
+				}
+			}
+		}
+
+		// Only fonts that exist in a pool are reported
+		for (const auto fontID : fontsOnKeys)
+		{
+			if (objects.end() != objects.find(fontID))
+			{
+				shownOnKeys.insert(fontID);
+			}
+		}
+		return std::vector<std::uint16_t>(shownOnKeys.begin(), shownOnKeys.end());
+	}
+
+	bool VirtualTerminalClient::copy_object_pools()
 	{
 		bool retVal = true;
 
 		for (auto &objectPool : objectPools)
 		{
-			// Step 1: Make a read/write copy of the pool
 			if (nullptr != objectPool.objectPoolDataPointer)
 			{
 				objectPool.scaledObjectPool.resize(objectPool.objectPoolSize);
@@ -4075,37 +4333,132 @@ namespace isobus
 
 				if (!retVal)
 				{
-					break;
+					return false;
 				}
 			}
+		}
+		return retVal;
+	}
 
-			// Step 2, Parse the pool and resize each object as we iterate through it
+	VirtualTerminalClient::CommandScaling VirtualTerminalClient::build_command_scaling()
+	{
+		CommandScaling retVal;
+
+		// The objects drawn on soft keys across the whole working set, which scale like the keys
+		std::vector<std::vector<std::uint8_t> *> allPools;
+		allPools.reserve(objectPools.size());
+		for (auto &objectPool : objectPools)
+		{
+			allPools.push_back(&objectPool.scaledObjectPool);
+		}
+		retVal.softKeyObjectIDs = get_soft_key_scaled_object_ids(allPools);
+		retVal.pools.resize(objectPools.size());
+
+		for (std::size_t i = 0; i < objectPools.size(); i++)
+		{
+			ObjectPoolDataStruct &objectPool = objectPools[i];
+			CommandScalingPool &scaling = retVal.pools[i];
+			const bool autoScaled = (0 != objectPool.autoScaleDataMaskOriginalDimension) &&
+			  (0 != objectPool.autoScaleSoftKeyDesignatorOriginalHeight);
+
+			if (autoScaled)
+			{
+				scaling.dataMaskScaleFactor = static_cast<float>(get_number_x_pixels()) / static_cast<float>(objectPool.autoScaleDataMaskOriginalDimension);
+				scaling.softKeyScaleFactor = static_cast<float>(get_softkey_x_axis_pixels()) / static_cast<float>(objectPool.autoScaleSoftKeyDesignatorOriginalHeight);
+			}
+
+			std::vector<std::uint8_t> &pool = objectPool.scaledObjectPool;
+			std::size_t offset = 0;
+			while ((pool.size() - offset) > 2)
+			{
+				const std::uint32_t objectSize = get_number_bytes_in_object(&pool[offset], static_cast<std::uint32_t>(pool.size() - offset));
+				if ((0 == objectSize) || ((offset + objectSize) > pool.size()))
+				{
+					break; // A broken or truncated pool, which scale_object_pools() or the VT reports
+				}
+
+				const std::uint16_t objectID = read_little_endian_uint16(&pool[offset]);
+				const auto type = static_cast<VirtualTerminalObjectType>(pool[offset + 2]);
+				scaling.objectIDs.push_back(objectID);
+				if (!get_is_object_scalable(type))
+				{
+					scaling.unscaledObjectIDs.push_back(objectID);
+				}
+				else if (autoScaled && (VirtualTerminalObjectType::Key == type))
+				{
+					retVal.softKeyObjectIDs.push_back(objectID);
+				}
+				offset += objectSize;
+			}
+			std::sort(scaling.objectIDs.begin(), scaling.objectIDs.end());
+			std::sort(scaling.unscaledObjectIDs.begin(), scaling.unscaledObjectIDs.end());
+		}
+		std::sort(retVal.softKeyObjectIDs.begin(), retVal.softKeyObjectIDs.end());
+		return retVal;
+	}
+
+	bool VirtualTerminalClient::scale_object_pools()
+	{
+		// Step 1: Make a read/write copy of every pool, including the ones that are not auto-scaled,
+		// because the pools are uploaded as one working set and may reference each other's objects
+		bool retVal = copy_object_pools();
+		if (!retVal)
+		{
+			return false;
+		}
+
+		// Step 2, Work out the factors, and which objects are on the soft keys, from the pools before they are scaled
+		CommandScaling scaling = build_command_scaling();
+
+		// Step 3, Parse each auto-scaled pool and resize each object with that pool's factors
+		for (std::size_t i = 0; i < objectPools.size(); i++)
+		{
+			ObjectPoolDataStruct &objectPool = objectPools[i];
+			if ((0 == objectPool.autoScaleDataMaskOriginalDimension) ||
+			    (0 == objectPool.autoScaleSoftKeyDesignatorOriginalHeight))
+			{
+				// Not auto-scaled: the pool is uploaded as given, the copy was only needed for the search above
+				objectPool.scaledObjectPool.clear();
+				objectPool.scaledObjectPool.shrink_to_fit();
+				continue;
+			}
+
+			const float dataMaskScaleFactor = scaling.pools[i].dataMaskScaleFactor;
+			const float softKeyScaleFactor = scaling.pools[i].softKeyScaleFactor;
 			auto poolIterator = objectPool.scaledObjectPool.begin();
 
 			while ((poolIterator != objectPool.scaledObjectPool.end()) &&
 			       retVal)
 			{
-				if (VirtualTerminalObjectType::Key == static_cast<VirtualTerminalObjectType>(poolIterator[2]))
+				// Sized first, so that resize_object() never writes past the end of a truncated pool
+				const std::uint32_t objectSize = get_number_bytes_in_object(&poolIterator[0], static_cast<std::uint32_t>(objectPool.scaledObjectPool.end() - poolIterator));
+				if (0 == objectSize)
+				{
+					retVal = false;
+					break;
+				}
+				const std::uint16_t objectID = read_little_endian_uint16(&poolIterator[0]);
+
+				if ((VirtualTerminalObjectType::Key == static_cast<VirtualTerminalObjectType>(poolIterator[2])) ||
+				    std::binary_search(scaling.softKeyObjectIDs.begin(), scaling.softKeyObjectIDs.end(), objectID))
 				{
 					retVal &= resize_object(&poolIterator[0],
-					                        static_cast<float>(get_softkey_x_axis_pixels()) / static_cast<float>(objectPool.autoScaleSoftKeyDesignatorOriginalHeight),
+					                        softKeyScaleFactor,
 					                        static_cast<VirtualTerminalObjectType>(poolIterator[2]));
 				}
 				else
 				{
 					retVal &= resize_object(&poolIterator[0],
-					                        static_cast<float>(get_number_x_pixels()) / static_cast<float>(objectPool.autoScaleDataMaskOriginalDimension),
+					                        dataMaskScaleFactor,
 					                        static_cast<VirtualTerminalObjectType>(poolIterator[2]));
 				}
 
-				std::uint32_t objectSize = get_number_bytes_in_object(&poolIterator[0], static_cast<std::uint32_t>(objectPool.scaledObjectPool.end() - poolIterator));
-				retVal &= (0 != objectSize);
 				if (retVal)
 				{
 					if (get_is_object_scalable(static_cast<VirtualTerminalObjectType>(*(poolIterator + 2))))
 					{
 						LOG_DEBUG("[VT]: Resized an object: " +
-						          isobus::to_string(static_cast<int>((*poolIterator)) | (static_cast<int>((*poolIterator + 1))) << 8) +
+						          isobus::to_string(static_cast<int>(objectID)) +
 						          " with type " +
 						          isobus::to_string(static_cast<int>((*(poolIterator + 2)))) +
 						          " with size " +
@@ -4115,16 +4468,175 @@ namespace isobus
 				else
 				{
 					LOG_ERROR("[VT]: Failed to resize an object: " +
-					          isobus::to_string(static_cast<int>((*poolIterator)) | (static_cast<int>((*poolIterator + 1))) << 8) +
+					          isobus::to_string(static_cast<int>(objectID)) +
 					          " with type " +
-					          isobus::to_string(static_cast<int>((*poolIterator + 2))) +
+					          isobus::to_string(static_cast<int>((*(poolIterator + 2)))) +
 					          " with size " +
 					          isobus::to_string(static_cast<int>(objectSize)));
 				}
 				poolIterator += objectSize;
 			}
 		}
+
+		if (retVal)
+		{
+			LOCK_GUARD(Mutex, commandScalingMutex);
+			commandScaling = std::move(scaling);
+		}
 		return retVal;
+	}
+
+	void VirtualTerminalClient::prepare_command_scaling_for_loaded_pools()
+	{
+		if (!get_any_pool_needs_scaling())
+		{
+			return;
+		}
+
+		if (copy_object_pools())
+		{
+			CommandScaling scaling = build_command_scaling();
+			LOCK_GUARD(Mutex, commandScalingMutex);
+			commandScaling = std::move(scaling);
+		}
+		else
+		{
+			LOG_ERROR("[VT]: Could not read the object pools for the loaded version, commands with autoScale go out unscaled");
+		}
+
+		// The VT already has the scaled pools: the copies were only needed to find the objects
+		for (auto &objectPool : objectPools)
+		{
+			objectPool.scaledObjectPool.clear();
+			objectPool.scaledObjectPool.shrink_to_fit();
+		}
+	}
+
+	float VirtualTerminalClient::get_object_scale_factor(std::uint16_t objectID) const
+	{
+		LOCK_GUARD(Mutex, commandScalingMutex);
+		return get_object_scale_factor_locked(objectID);
+	}
+
+	float VirtualTerminalClient::get_object_scale_factor_locked(std::uint16_t objectID) const
+	{
+		// From the last pool: when pools share an object ID, the VT keeps the object it got last (4.6.10.3)
+		for (auto pool = commandScaling.pools.rbegin(); pool != commandScaling.pools.rend(); ++pool)
+		{
+			if (std::binary_search(pool->objectIDs.begin(), pool->objectIDs.end(), objectID))
+			{
+				if (std::binary_search(pool->unscaledObjectIDs.begin(), pool->unscaledObjectIDs.end(), objectID))
+				{
+					return 1.0f;
+				}
+				if (std::binary_search(commandScaling.softKeyObjectIDs.begin(), commandScaling.softKeyObjectIDs.end(), objectID))
+				{
+					return pool->softKeyScaleFactor;
+				}
+				return pool->dataMaskScaleFactor;
+			}
+		}
+		return 1.0f;
+	}
+
+	std::vector<std::uint8_t> VirtualTerminalClient::scale_command(const std::vector<std::uint8_t> &command) const
+	{
+		std::vector<std::uint8_t> retVal = command;
+
+		if (retVal.size() < 3)
+		{
+			return retVal;
+		}
+
+		// Bytes 1-2 hold the object whose factor applies: the parent for the two child commands,
+		// because the parent positions its children, and the object itself for the others
+		float scaleFactor = 1.0f;
+		{
+			LOCK_GUARD(Mutex, commandScalingMutex);
+			scaleFactor = get_object_scale_factor_locked(read_little_endian_uint16(&retVal[1]));
+		}
+
+		const auto get = [&retVal](std::size_t offset) { return read_little_endian_uint16(&retVal[offset]); };
+		const auto put = [&retVal](std::size_t offset, std::uint16_t value) {
+			retVal[offset] = static_cast<std::uint8_t>(value & 0xFF);
+			retVal[offset + 1] = static_cast<std::uint8_t>(value >> 8);
+		};
+
+		switch (static_cast<Function>(retVal[0]))
+		{
+			case Function::ChangeChildLocationCommand: // Parent, object, X change, Y change
+			{
+				if (retVal.size() >= 7)
+				{
+					retVal[5] = scale_command_position_change(retVal[5], scaleFactor);
+					retVal[6] = scale_command_position_change(retVal[6], scaleFactor);
+				}
+			}
+			break;
+
+			case Function::ChangeChildPositionCommand: // Parent, object, X, Y
+			{
+				if (retVal.size() >= 9)
+				{
+					put(5, scale_command_position(get(5), scaleFactor));
+					put(7, scale_command_position(get(7), scaleFactor));
+				}
+			}
+			break;
+
+			case Function::ChangeSizeCommand: // Object, width, height
+			case Function::ChangeEndPointCommand: // Object, width, height, direction
+			case Function::ChangePolygonScaleCommand: // Object, width, height
+			{
+				if (retVal.size() >= 7)
+				{
+					put(3, scale_command_dimension(get(3), scaleFactor));
+					put(5, scale_command_dimension(get(5), scaleFactor));
+				}
+			}
+			break;
+
+			case Function::ChangePolygonPointCommand: // Object, point index, X, Y
+			{
+				if (retVal.size() >= 8)
+				{
+					put(4, scale_command_coordinate(get(4), scaleFactor));
+					put(6, scale_command_coordinate(get(6), scaleFactor));
+				}
+			}
+			break;
+
+			default:
+				break;
+		}
+		return retVal;
+	}
+
+	std::uint16_t VirtualTerminalClient::scale_command_dimension(std::uint16_t value, float scaleFactor)
+	{
+		const std::uint16_t scaled = scale_command_coordinate(value, scaleFactor);
+		return ((0 != value) && (0 == scaled)) ? 1 : scaled;
+	}
+
+	std::uint16_t VirtualTerminalClient::scale_command_coordinate(std::uint16_t value, float scaleFactor)
+	{
+		// Truncated like autoscaling does, so a command gives the same size as the uploaded pool
+		const float scaled = static_cast<float>(value) * scaleFactor;
+		return (scaled >= 65535.0f) ? 0xFFFF : static_cast<std::uint16_t>(scaled);
+	}
+
+	std::uint16_t VirtualTerminalClient::scale_command_position(std::uint16_t value, float scaleFactor)
+	{
+		float scaled = static_cast<float>(static_cast<std::int16_t>(value)) * scaleFactor;
+		scaled = std::max(-32768.0f, std::min(32767.0f, scaled));
+		return static_cast<std::uint16_t>(static_cast<std::int16_t>(scaled));
+	}
+
+	std::uint8_t VirtualTerminalClient::scale_command_position_change(std::uint8_t value, float scaleFactor)
+	{
+		float scaled = static_cast<float>(static_cast<int>(value) - 127) * scaleFactor;
+		scaled = std::max(-127.0f, std::min(128.0f, scaled));
+		return static_cast<std::uint8_t>(static_cast<int>(scaled) + 127);
 	}
 
 	bool VirtualTerminalClient::get_is_object_scalable(VirtualTerminalObjectType type)
@@ -4159,6 +4671,7 @@ namespace isobus
 			case VirtualTerminalObjectType::OutputLinearBarGraph:
 			case VirtualTerminalObjectType::OutputArchedBarGraph:
 			case VirtualTerminalObjectType::PictureGraphic:
+			case VirtualTerminalObjectType::Animation:
 			case VirtualTerminalObjectType::AuxiliaryFunctionType1:
 			case VirtualTerminalObjectType::AuxiliaryInputType1:
 			case VirtualTerminalObjectType::AuxiliaryFunctionType2:
@@ -4184,9 +4697,32 @@ namespace isobus
 
 		while ((!get_font_size_supported(retVal)) && (FontSize::Size6x8 != retVal))
 		{
-			retVal = static_cast<FontSize>(static_cast<std::uint8_t>(originalFont) - 1);
+			retVal = static_cast<FontSize>(static_cast<std::uint8_t>(retVal) - 1);
 		}
 		return retVal;
+	}
+
+	std::uint8_t VirtualTerminalClient::scale_proportional_font_height(std::uint8_t originalHeight, float scaleFactor) const
+	{
+		// A proportional font can be any height from 8 pixels up to the height of the VT's largest font (ISO 11783-6 4.6.19.4)
+		static constexpr std::uint8_t MIN_PROPORTIONAL_FONT_HEIGHT = 8;
+		static constexpr std::array<std::uint8_t, 15> FONT_HEIGHTS = { 8, 8, 12, 16, 16, 24, 32, 32, 48, 64, 64, 96, 128, 128, 192 };
+		std::uint8_t maxHeight = MIN_PROPORTIONAL_FONT_HEIGHT;
+
+		for (std::uint8_t i = 0; i < FONT_HEIGHTS.size(); i++)
+		{
+			if (get_font_size_supported(static_cast<FontSize>(i)))
+			{
+				maxHeight = std::max(maxHeight, FONT_HEIGHTS[i]);
+			}
+		}
+
+		const float scaledHeight = (originalHeight * scaleFactor) + 0.5f;
+		if (scaledHeight >= maxHeight)
+		{
+			return maxHeight;
+		}
+		return std::max(MIN_PROPORTIONAL_FONT_HEIGHT, static_cast<std::uint8_t>(scaledHeight));
 	}
 
 	VirtualTerminalClient::FontSize VirtualTerminalClient::remap_font_to_scale(FontSize originalFont, float scaleFactor)
@@ -4197,205 +4733,255 @@ namespace isobus
 
 		if (scaleFactor > SCALE_FACTOR_POSITIVE_FUDGE || scaleFactor < SCALE_FACTOR_NEGATIVE_FUDGE)
 		{
-			const std::unordered_map<FontSize, std::map<float, FontSize, std::greater<float>>> FONT_SCALING_MAPPER{
-				{ FontSize::Size6x8,
-				  { { 23.95f, FontSize::Size128x192 },
-				    { 21.30f, FontSize::Size128x128 },
-				    { 15.95f, FontSize::Size96x128 },
-				    { 11.95f, FontSize::Size64x96 },
-				    { 10.60f, FontSize::Size64x64 },
-				    { 7.95f, FontSize::Size48x64 },
-				    { 5.95f, FontSize::Size32x48 },
-				    { 5.30f, FontSize::Size32x32 },
-				    { 3.95f, FontSize::Size24x32 },
-				    { 2.95f, FontSize::Size16x24 },
-				    { 2.60f, FontSize::Size16x16 },
-				    { 1.95f, FontSize::Size12x16 },
-				    { 1.45f, FontSize::Size8x12 },
-				    { 1.30f, FontSize::Size8x8 } } },
-				{ FontSize::Size8x8,
-				  { { 23.95f, FontSize::Size128x192 },
-				    { 15.95f, FontSize::Size128x128 },
-				    { 11.95f, FontSize::Size64x96 },
-				    { 7.95f, FontSize::Size64x64 },
-				    { 5.95f, FontSize::Size32x48 },
-				    { 3.95f, FontSize::Size32x32 },
-				    { 2.95f, FontSize::Size16x24 },
-				    { 1.95f, FontSize::Size16x16 },
-				    { 1.45f, FontSize::Size8x12 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size8x12,
-				  { { 15.95f, FontSize::Size128x192 },
-				    { 11.95f, FontSize::Size96x128 },
-				    { 7.95f, FontSize::Size64x96 },
-				    { 5.95f, FontSize::Size48x64 },
-				    { 3.95f, FontSize::Size32x48 },
-				    { 2.95f, FontSize::Size24x32 },
-				    { 1.95f, FontSize::Size16x24 },
-				    { 1.45f, FontSize::Size12x16 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size12x16,
-				  { { 11.95f, FontSize::Size128x192 },
-				    { 10.60f, FontSize::Size128x128 },
-				    { 7.95f, FontSize::Size96x128 },
-				    { 5.95f, FontSize::Size64x96 },
-				    { 5.30f, FontSize::Size64x64 },
-				    { 3.95f, FontSize::Size48x64 },
-				    { 2.95f, FontSize::Size32x48 },
-				    { 2.60f, FontSize::Size32x32 },
-				    { 1.95f, FontSize::Size24x32 },
-				    { 1.45f, FontSize::Size16x24 },
-				    { 1.30f, FontSize::Size16x16 },
-				    { 0.75f, FontSize::Size8x12 },
-				    { 0.67f, FontSize::Size8x8 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size16x16,
-				  { { 11.95f, FontSize::Size128x192 },
-				    { 7.95f, FontSize::Size128x128 },
-				    { 5.95f, FontSize::Size64x96 },
-				    { 3.95f, FontSize::Size64x64 },
-				    { 2.95f, FontSize::Size32x48 },
-				    { 1.95f, FontSize::Size32x32 },
-				    { 1.45f, FontSize::Size16x24 },
-				    { 0.75f, FontSize::Size8x12 },
-				    { 0.50f, FontSize::Size8x8 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size16x24,
-				  { { 7.95f, FontSize::Size128x128 },
-				    { 5.95f, FontSize::Size96x128 },
-				    { 3.95f, FontSize::Size64x96 },
-				    { 2.95f, FontSize::Size48x64 },
-				    { 1.95f, FontSize::Size32x48 },
-				    { 1.45f, FontSize::Size24x32 },
-				    { 0.75f, FontSize::Size12x16 },
-				    { 0.50f, FontSize::Size8x12 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size24x32,
-				  { { 5.95f, FontSize::Size128x192 },
-				    { 5.30f, FontSize::Size128x128 },
-				    { 3.95f, FontSize::Size96x128 },
-				    { 2.95f, FontSize::Size64x96 },
-				    { 2.60f, FontSize::Size64x64 },
-				    { 1.95f, FontSize::Size48x64 },
-				    { 1.45f, FontSize::Size32x48 },
-				    { 1.30f, FontSize::Size32x32 },
-				    { 0.75f, FontSize::Size16x24 },
-				    { 0.60f, FontSize::Size16x16 },
-				    { 0.50f, FontSize::Size12x16 },
-				    { 0.37f, FontSize::Size8x12 },
-				    { 0.30f, FontSize::Size8x8 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size32x32,
-				  { { 5.95f, FontSize::Size128x192 },
-				    { 3.95f, FontSize::Size128x128 },
-				    { 2.95f, FontSize::Size64x96 },
-				    { 1.95f, FontSize::Size64x64 },
-				    { 1.45f, FontSize::Size32x48 },
-				    { 0.75f, FontSize::Size16x24 },
-				    { 0.50f, FontSize::Size16x16 },
-				    { 0.37f, FontSize::Size8x12 },
-				    { 0.20f, FontSize::Size8x8 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size32x48,
-				  { { 3.95f, FontSize::Size128x192 },
-				    { 2.95f, FontSize::Size96x128 },
-				    { 1.95f, FontSize::Size64x96 },
-				    { 1.45f, FontSize::Size48x64 },
-				    { 0.75f, FontSize::Size24x32 },
-				    { 0.50f, FontSize::Size16x24 },
-				    { 0.37f, FontSize::Size12x16 },
-				    { 0.20f, FontSize::Size8x12 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size48x64,
-				  { { 2.95f, FontSize::Size128x192 },
-				    { 2.60f, FontSize::Size128x128 },
-				    { 1.95f, FontSize::Size96x128 },
-				    { 1.45f, FontSize::Size64x96 },
-				    { 1.30f, FontSize::Size64x64 },
-				    { 0.75f, FontSize::Size32x48 },
-				    { 0.60f, FontSize::Size32x32 },
-				    { 0.50f, FontSize::Size24x32 },
-				    { 0.37f, FontSize::Size16x24 },
-				    { 0.33f, FontSize::Size16x16 },
-				    { 0.25f, FontSize::Size12x16 },
-				    { 0.18f, FontSize::Size8x12 },
-				    { 0.16f, FontSize::Size8x8 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size64x64,
-				  { { 2.95f, FontSize::Size128x192 },
-				    { 1.95f, FontSize::Size128x128 },
-				    { 1.45f, FontSize::Size64x96 },
-				    { 0.75f, FontSize::Size32x48 },
-				    { 0.50f, FontSize::Size32x32 },
-				    { 0.37f, FontSize::Size16x24 },
-				    { 0.25f, FontSize::Size16x16 },
-				    { 0.18f, FontSize::Size8x12 },
-				    { 0.12f, FontSize::Size8x8 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size64x96,
-				  { { 1.95f, FontSize::Size128x192 },
-				    { 1.45f, FontSize::Size96x128 },
-				    { 0.75f, FontSize::Size48x64 },
-				    { 0.50f, FontSize::Size32x48 },
-				    { 0.37f, FontSize::Size24x32 },
-				    { 0.25f, FontSize::Size16x24 },
-				    { 0.18f, FontSize::Size12x16 },
-				    { 0.12f, FontSize::Size8x12 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size96x128,
-				  { { 1.45f, FontSize::Size128x192 },
-				    { 1.30f, FontSize::Size128x128 },
-				    { 0.75f, FontSize::Size64x96 },
-				    { 0.60f, FontSize::Size64x64 },
-				    { 0.50f, FontSize::Size48x64 },
-				    { 0.37f, FontSize::Size32x48 },
-				    { 0.33f, FontSize::Size32x32 },
-				    { 0.25f, FontSize::Size24x32 },
-				    { 0.18f, FontSize::Size16x24 },
-				    { 0.16f, FontSize::Size16x16 },
-				    { 0.125f, FontSize::Size12x16 },
-				    { 0.09f, FontSize::Size8x12 },
-				    { 0.08f, FontSize::Size8x8 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size128x128,
-				  { { 1.45f, FontSize::Size128x192 },
-				    { 0.75f, FontSize::Size64x96 },
-				    { 0.50f, FontSize::Size64x64 },
-				    { 0.37f, FontSize::Size32x48 },
-				    { 0.25f, FontSize::Size32x32 },
-				    { 0.18f, FontSize::Size16x24 },
-				    { 0.125f, FontSize::Size16x16 },
-				    { 0.09f, FontSize::Size8x12 },
-				    { 0.06f, FontSize::Size8x8 },
-				    { 0.0f, FontSize::Size6x8 } } },
-				{ FontSize::Size128x192,
-				  { { 0.75f, FontSize::Size96x128 },
-				    { 0.50f, FontSize::Size64x96 },
-				    { 0.37f, FontSize::Size48x64 },
-				    { 0.25f, FontSize::Size32x48 },
-				    { 0.18f, FontSize::Size24x32 },
-				    { 0.125f, FontSize::Size16x24 },
-				    { 0.09f, FontSize::Size12x16 },
-				    { 0.06f, FontSize::Size8x12 },
-				    { 0.0f, FontSize::Size6x8 } } }
+			// Constant tables, so nothing is allocated here: this runs for every font attributes object
+			// in a pool that is auto-scaled.
+			/// @brief One step of a font's scaling table
+			struct FontStep
+			{
+				float threshold; ///< The lowest scale factor this step applies to
+				FontSize font; ///< The font to use from that scale factor up
+			};
+			/// @brief Where one original font's steps are in FONT_STEPS
+			struct FontRow
+			{
+				FontSize original; ///< The font size found in the object pool
+				std::uint16_t first; ///< The index of its first step
+				std::uint16_t count; ///< The number of steps it has
+			};
+			// The steps of each original font, in descending order of scale factor
+			static constexpr FontStep FONT_STEPS[] = {
+				// Size6x8
+				{ 23.95f, FontSize::Size128x192 },
+				{ 21.30f, FontSize::Size128x128 },
+				{ 15.95f, FontSize::Size96x128 },
+				{ 11.95f, FontSize::Size64x96 },
+				{ 10.60f, FontSize::Size64x64 },
+				{ 7.95f, FontSize::Size48x64 },
+				{ 5.95f, FontSize::Size32x48 },
+				{ 5.30f, FontSize::Size32x32 },
+				{ 3.95f, FontSize::Size24x32 },
+				{ 2.95f, FontSize::Size16x24 },
+				{ 2.60f, FontSize::Size16x16 },
+				{ 1.95f, FontSize::Size12x16 },
+				{ 1.45f, FontSize::Size8x12 },
+				{ 1.30f, FontSize::Size8x8 },
+				// Size8x8
+				{ 23.95f, FontSize::Size128x192 },
+				{ 15.95f, FontSize::Size128x128 },
+				{ 11.95f, FontSize::Size64x96 },
+				{ 7.95f, FontSize::Size64x64 },
+				{ 5.95f, FontSize::Size32x48 },
+				{ 3.95f, FontSize::Size32x32 },
+				{ 2.95f, FontSize::Size16x24 },
+				{ 1.95f, FontSize::Size16x16 },
+				{ 1.45f, FontSize::Size8x12 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size8x12
+				{ 15.95f, FontSize::Size128x192 },
+				{ 11.95f, FontSize::Size96x128 },
+				{ 7.95f, FontSize::Size64x96 },
+				{ 5.95f, FontSize::Size48x64 },
+				{ 3.95f, FontSize::Size32x48 },
+				{ 2.95f, FontSize::Size24x32 },
+				{ 1.95f, FontSize::Size16x24 },
+				{ 1.45f, FontSize::Size12x16 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size12x16
+				{ 11.95f, FontSize::Size128x192 },
+				{ 10.60f, FontSize::Size128x128 },
+				{ 7.95f, FontSize::Size96x128 },
+				{ 5.95f, FontSize::Size64x96 },
+				{ 5.30f, FontSize::Size64x64 },
+				{ 3.95f, FontSize::Size48x64 },
+				{ 2.95f, FontSize::Size32x48 },
+				{ 2.60f, FontSize::Size32x32 },
+				{ 1.95f, FontSize::Size24x32 },
+				{ 1.45f, FontSize::Size16x24 },
+				{ 1.30f, FontSize::Size16x16 },
+				{ 0.75f, FontSize::Size8x12 },
+				{ 0.67f, FontSize::Size8x8 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size16x16
+				{ 11.95f, FontSize::Size128x192 },
+				{ 7.95f, FontSize::Size128x128 },
+				{ 5.95f, FontSize::Size64x96 },
+				{ 3.95f, FontSize::Size64x64 },
+				{ 2.95f, FontSize::Size32x48 },
+				{ 1.95f, FontSize::Size32x32 },
+				{ 1.45f, FontSize::Size16x24 },
+				{ 0.75f, FontSize::Size8x12 },
+				{ 0.50f, FontSize::Size8x8 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size16x24
+				{ 7.95f, FontSize::Size128x128 },
+				{ 5.95f, FontSize::Size96x128 },
+				{ 3.95f, FontSize::Size64x96 },
+				{ 2.95f, FontSize::Size48x64 },
+				{ 1.95f, FontSize::Size32x48 },
+				{ 1.45f, FontSize::Size24x32 },
+				{ 0.75f, FontSize::Size12x16 },
+				{ 0.50f, FontSize::Size8x12 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size24x32
+				{ 5.95f, FontSize::Size128x192 },
+				{ 5.30f, FontSize::Size128x128 },
+				{ 3.95f, FontSize::Size96x128 },
+				{ 2.95f, FontSize::Size64x96 },
+				{ 2.60f, FontSize::Size64x64 },
+				{ 1.95f, FontSize::Size48x64 },
+				{ 1.45f, FontSize::Size32x48 },
+				{ 1.30f, FontSize::Size32x32 },
+				{ 0.75f, FontSize::Size16x24 },
+				{ 0.60f, FontSize::Size16x16 },
+				{ 0.50f, FontSize::Size12x16 },
+				{ 0.37f, FontSize::Size8x12 },
+				{ 0.30f, FontSize::Size8x8 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size32x32
+				{ 5.95f, FontSize::Size128x192 },
+				{ 3.95f, FontSize::Size128x128 },
+				{ 2.95f, FontSize::Size64x96 },
+				{ 1.95f, FontSize::Size64x64 },
+				{ 1.45f, FontSize::Size32x48 },
+				{ 0.75f, FontSize::Size16x24 },
+				{ 0.50f, FontSize::Size16x16 },
+				{ 0.37f, FontSize::Size8x12 },
+				{ 0.20f, FontSize::Size8x8 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size32x48
+				{ 3.95f, FontSize::Size128x192 },
+				{ 2.95f, FontSize::Size96x128 },
+				{ 1.95f, FontSize::Size64x96 },
+				{ 1.45f, FontSize::Size48x64 },
+				{ 0.75f, FontSize::Size24x32 },
+				{ 0.50f, FontSize::Size16x24 },
+				{ 0.37f, FontSize::Size12x16 },
+				{ 0.20f, FontSize::Size8x12 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size48x64
+				{ 2.95f, FontSize::Size128x192 },
+				{ 2.60f, FontSize::Size128x128 },
+				{ 1.95f, FontSize::Size96x128 },
+				{ 1.45f, FontSize::Size64x96 },
+				{ 1.30f, FontSize::Size64x64 },
+				{ 0.75f, FontSize::Size32x48 },
+				{ 0.60f, FontSize::Size32x32 },
+				{ 0.50f, FontSize::Size24x32 },
+				{ 0.37f, FontSize::Size16x24 },
+				{ 0.33f, FontSize::Size16x16 },
+				{ 0.25f, FontSize::Size12x16 },
+				{ 0.18f, FontSize::Size8x12 },
+				{ 0.16f, FontSize::Size8x8 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size64x64
+				{ 2.95f, FontSize::Size128x192 },
+				{ 1.95f, FontSize::Size128x128 },
+				{ 1.45f, FontSize::Size64x96 },
+				{ 0.75f, FontSize::Size32x48 },
+				{ 0.50f, FontSize::Size32x32 },
+				{ 0.37f, FontSize::Size16x24 },
+				{ 0.25f, FontSize::Size16x16 },
+				{ 0.18f, FontSize::Size8x12 },
+				{ 0.12f, FontSize::Size8x8 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size64x96
+				{ 1.95f, FontSize::Size128x192 },
+				{ 1.45f, FontSize::Size96x128 },
+				{ 0.75f, FontSize::Size48x64 },
+				{ 0.50f, FontSize::Size32x48 },
+				{ 0.37f, FontSize::Size24x32 },
+				{ 0.25f, FontSize::Size16x24 },
+				{ 0.18f, FontSize::Size12x16 },
+				{ 0.12f, FontSize::Size8x12 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size96x128
+				{ 1.45f, FontSize::Size128x192 },
+				{ 1.30f, FontSize::Size128x128 },
+				{ 0.75f, FontSize::Size64x96 },
+				{ 0.60f, FontSize::Size64x64 },
+				{ 0.50f, FontSize::Size48x64 },
+				{ 0.37f, FontSize::Size32x48 },
+				{ 0.33f, FontSize::Size32x32 },
+				{ 0.25f, FontSize::Size24x32 },
+				{ 0.18f, FontSize::Size16x24 },
+				{ 0.16f, FontSize::Size16x16 },
+				{ 0.125f, FontSize::Size12x16 },
+				{ 0.09f, FontSize::Size8x12 },
+				{ 0.08f, FontSize::Size8x8 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size128x128
+				{ 1.45f, FontSize::Size128x192 },
+				{ 0.75f, FontSize::Size64x96 },
+				{ 0.50f, FontSize::Size64x64 },
+				{ 0.37f, FontSize::Size32x48 },
+				{ 0.25f, FontSize::Size32x32 },
+				{ 0.18f, FontSize::Size16x24 },
+				{ 0.125f, FontSize::Size16x16 },
+				{ 0.09f, FontSize::Size8x12 },
+				{ 0.06f, FontSize::Size8x8 },
+				{ 0.0f, FontSize::Size6x8 },
+				// Size128x192
+				{ 0.75f, FontSize::Size96x128 },
+				{ 0.50f, FontSize::Size64x96 },
+				{ 0.37f, FontSize::Size48x64 },
+				{ 0.25f, FontSize::Size32x48 },
+				{ 0.18f, FontSize::Size24x32 },
+				{ 0.125f, FontSize::Size16x24 },
+				{ 0.09f, FontSize::Size12x16 },
+				{ 0.06f, FontSize::Size8x12 },
+				{ 0.0f, FontSize::Size6x8 },
+			};
+			static constexpr FontRow FONT_ROWS[] = {
+				{ FontSize::Size6x8, 0, 14 },
+				{ FontSize::Size8x8, 14, 10 },
+				{ FontSize::Size8x12, 24, 9 },
+				{ FontSize::Size12x16, 33, 14 },
+				{ FontSize::Size16x16, 47, 10 },
+				{ FontSize::Size16x24, 57, 9 },
+				{ FontSize::Size24x32, 66, 14 },
+				{ FontSize::Size32x32, 80, 10 },
+				{ FontSize::Size32x48, 90, 9 },
+				{ FontSize::Size48x64, 99, 14 },
+				{ FontSize::Size64x64, 113, 10 },
+				{ FontSize::Size64x96, 123, 9 },
+				{ FontSize::Size96x128, 132, 14 },
+				{ FontSize::Size128x128, 146, 10 },
+				{ FontSize::Size128x192, 156, 9 },
 			};
 
-			auto iterator = FONT_SCALING_MAPPER.find(originalFont);
-			if (iterator != FONT_SCALING_MAPPER.end())
+			const FontRow *row = nullptr;
+			for (const auto &candidate : FONT_ROWS)
 			{
-				for (auto &pair : iterator->second)
+				if (candidate.original == originalFont)
 				{
-					if (scaleFactor >= pair.first)
+					row = &candidate;
+					break;
+				}
+			}
+			if (nullptr != row)
+			{
+				for (std::uint16_t i = 0; i < row->count; i++)
+				{
+					const FontStep &pair = FONT_STEPS[row->first + i];
+					if (scaleFactor >= pair.threshold)
 					{
-						retVal = pair.second;
+						retVal = pair.font;
 						break;
 					}
 				}
-			}
 
-			if (retVal == originalFont)
+				// Most tables go from their lowest upscale entry straight to their first downscale entry,
+				// so a factor between the fudge and that upscale entry would pick a smaller font.
+				// Scaling up never returns a smaller font, and scaling down never a larger one.
+				if (((scaleFactor > 1.0f) && (retVal < originalFont)) ||
+				    ((scaleFactor < 1.0f) && (retVal > originalFont)))
+				{
+					retVal = originalFont;
+				}
+			}
+			else
 			{
-				// Unknown font? Newer version than we support of the ISO standard? Or scaling factor out of range?
+				// Unknown font? Newer version than we support of the ISO standard?
 				LOG_ERROR("[VT]: Unable to scale font type " + isobus::to_string(static_cast<int>(originalFont)) +
 				          " with scale factor " + isobus::to_string(scaleFactor) + ". Returning original font.");
 			}
@@ -4417,7 +5003,6 @@ namespace isobus
 
 			case VirtualTerminalObjectType::OutputList:
 			case VirtualTerminalObjectType::ExternalReferenceNAME:
-			case VirtualTerminalObjectType::ObjectLabelRefrenceList:
 			{
 				retVal = 12;
 			}
@@ -4438,7 +5023,6 @@ namespace isobus
 			break;
 
 			case VirtualTerminalObjectType::SoftKeyMask:
-			case VirtualTerminalObjectType::ColourMap:
 			case VirtualTerminalObjectType::InputAttributes:
 			{
 				retVal = 6;
@@ -4534,6 +5118,8 @@ namespace isobus
 			case VirtualTerminalObjectType::ExtendedInputAttributes:
 			case VirtualTerminalObjectType::ObjectPointer:
 			case VirtualTerminalObjectType::Macro:
+			case VirtualTerminalObjectType::ColourMap:
+			case VirtualTerminalObjectType::ObjectLabelRefrenceList:
 			{
 				retVal = 5;
 			}
@@ -4577,9 +5163,32 @@ namespace isobus
 		return retVal;
 	}
 
-	std::uint32_t VirtualTerminalClient::get_number_bytes_in_object(std::uint8_t *buffer, std::uint32_t bufferLength)
+	std::uint32_t VirtualTerminalClient::get_number_bytes_in_object(const std::uint8_t *buffer, std::uint32_t bufferLength)
 	{
-		auto currentObjectType = static_cast<VirtualTerminalObjectType>(buffer[2]);
+		constexpr std::uint32_t OBJECT_HEADER_LENGTH = 3;
+		std::uint32_t retVal = 0;
+
+		if ((bufferLength < OBJECT_HEADER_LENGTH) ||
+		    (get_minimum_object_length(static_cast<VirtualTerminalObjectType>(buffer[2])) > bufferLength))
+		{
+			LOG_ERROR("[VT]: The object pool ends inside an object");
+		}
+		else
+		{
+			retVal = get_declared_object_length(buffer, bufferLength);
+
+			if (retVal > bufferLength)
+			{
+				LOG_ERROR("[VT]: Object " + isobus::to_string(static_cast<int>(buffer[0] | (buffer[1] << 8))) + " runs past the end of the object pool");
+				retVal = 0;
+			}
+		}
+		return retVal;
+	}
+
+	std::uint32_t VirtualTerminalClient::get_declared_object_length(const std::uint8_t *buffer, std::uint32_t bufferLength)
+	{
+		const auto currentObjectType = static_cast<VirtualTerminalObjectType>(buffer[2]);
 		std::uint32_t retVal = get_minimum_object_length(currentObjectType);
 
 		switch (currentObjectType)
@@ -4644,7 +5253,7 @@ namespace isobus
 			case VirtualTerminalObjectType::InputString:
 			{
 				const std::uint32_t sizeOfValue = buffer[16];
-				const std::uint32_t sizeOfMacros = (buffer[18 + sizeOfValue] * 2);
+				const std::uint32_t sizeOfMacros = ((18 + sizeOfValue) < bufferLength) ? (buffer[18 + sizeOfValue] * 2) : 0;
 				retVal += (sizeOfValue + sizeOfMacros);
 			}
 			break;
@@ -4667,7 +5276,7 @@ namespace isobus
 			case VirtualTerminalObjectType::OutputString:
 			{
 				const std::uint32_t sizeOfValue = (static_cast<std::uint16_t>(buffer[14]) | static_cast<std::uint16_t>(buffer[15] << 8));
-				const std::uint32_t sizeOfMacros = (buffer[16 + sizeOfValue] * 2);
+				const std::uint32_t sizeOfMacros = ((16 + sizeOfValue) < bufferLength) ? (buffer[16 + sizeOfValue] * 2) : 0;
 				retVal += (sizeOfMacros + sizeOfValue);
 			}
 			break;
@@ -4744,7 +5353,8 @@ namespace isobus
 				                                     (static_cast<std::uint32_t>(buffer[13]) << 8) |
 				                                     (static_cast<std::uint32_t>(buffer[14]) << 16) |
 				                                     (static_cast<std::uint32_t>(buffer[15]) << 24));
-				retVal += (sizeOfRawData + sizeOfMacros);
+				// Capped, so that a huge length can't wrap the sum back under bufferLength
+				retVal += (std::min(sizeOfRawData, bufferLength) + sizeOfMacros);
 			}
 			break;
 
@@ -4778,7 +5388,7 @@ namespace isobus
 			case VirtualTerminalObjectType::InputAttributes:
 			{
 				const std::uint32_t sizeOfValidationString = buffer[4];
-				const std::uint32_t sizeOfMacros = (buffer[5 + sizeOfValidationString] * 2);
+				const std::uint32_t sizeOfMacros = ((5 + sizeOfValidationString) < bufferLength) ? (buffer[5 + sizeOfValidationString] * 2) : 0;
 				retVal += (sizeOfMacros + sizeOfValidationString);
 			}
 			break;
@@ -4837,7 +5447,7 @@ namespace isobus
 
 			case VirtualTerminalObjectType::ObjectLabelRefrenceList:
 			{
-				const std::uint32_t sizeOfLabeledObjects = ((static_cast<std::uint16_t>(buffer[4]) | static_cast<std::uint16_t>(buffer[5]) << 8) * 7);
+				const std::uint32_t sizeOfLabeledObjects = ((static_cast<std::uint16_t>(buffer[3]) | static_cast<std::uint16_t>(buffer[4]) << 8) * 7);
 				retVal += sizeOfLabeledObjects;
 			}
 			break;
@@ -4859,6 +5469,7 @@ namespace isobus
 
 			case VirtualTerminalObjectType::AuxiliaryFunctionType1:
 			case VirtualTerminalObjectType::AuxiliaryFunctionType2:
+			case VirtualTerminalObjectType::AuxiliaryInputType2:
 			{
 				const std::uint32_t sizeOfObjects = (buffer[5] * 6);
 				retVal += sizeOfObjects;
@@ -4866,7 +5477,6 @@ namespace isobus
 			break;
 
 			case VirtualTerminalObjectType::AuxiliaryInputType1:
-			case VirtualTerminalObjectType::AuxiliaryInputType2:
 			{
 				const std::uint32_t sizeOfObjects = (buffer[6] * 6);
 				retVal += sizeOfObjects;
@@ -4979,7 +5589,8 @@ namespace isobus
 
 				case VirtualTerminalObjectType::InputBoolean:
 				{
-					auto width = static_cast<std::uint16_t>((static_cast<std::uint16_t>(buffer[4]) | (static_cast<std::uint16_t>(buffer[5]) << 8)));
+					// The width is the maximum width and height of the box (B.8.1), so it scales like a Container's maximum size
+					auto width = static_cast<std::uint16_t>(static_cast<float>(read_little_endian_uint16(&buffer[4])) * scaleFactor);
 
 					// Modify the object in memory
 					buffer[4] = (width & 0xFF);
@@ -5071,12 +5682,13 @@ namespace isobus
 					// Iterate over the list of children and move them proportionally to the new size
 					for (std::uint_fast8_t i = 0; i < childrenToFollow; i++)
 					{
-						auto childX = static_cast<std::int16_t>((static_cast<std::int16_t>(buffer[20 + (6 * i)]) | (static_cast<std::int16_t>(buffer[21 + (6 * i)]) << 8)) * scaleFactor);
-						auto childY = static_cast<std::int16_t>((static_cast<std::int16_t>(buffer[22 + (6 * i)]) | (static_cast<std::int16_t>(buffer[23 + (6 * i)]) << 8)) * scaleFactor);
-						buffer[20 + (6 * i)] = (childX & 0xFF);
-						buffer[21 + (6 * i)] = (childX >> 8);
-						buffer[22 + (6 * i)] = (childY & 0xFF);
-						buffer[23 + (6 * i)] = (childY >> 8);
+						// The children follow the 17 byte header: ID, then X at 19 and Y at 21, both signed
+						const std::uint16_t childX = scale_command_position(read_little_endian_uint16(&buffer[19 + (6 * i)]), scaleFactor);
+						const std::uint16_t childY = scale_command_position(read_little_endian_uint16(&buffer[21 + (6 * i)]), scaleFactor);
+						buffer[19 + (6 * i)] = static_cast<std::uint8_t>(childX & 0xFF);
+						buffer[20 + (6 * i)] = static_cast<std::uint8_t>(childX >> 8);
+						buffer[21 + (6 * i)] = static_cast<std::uint8_t>(childY & 0xFF);
+						buffer[22 + (6 * i)] = static_cast<std::uint8_t>(childY >> 8);
 					}
 					retVal = true;
 				}
@@ -5101,7 +5713,15 @@ namespace isobus
 
 				case VirtualTerminalObjectType::FontAttributes:
 				{
-					buffer[4] = static_cast<std::uint8_t>(get_font_or_next_smallest_font(remap_font_to_scale(static_cast<FontSize>(buffer[4]), scaleFactor)));
+					if (0 != (buffer[6] & (1 << static_cast<std::uint8_t>(FontStyleBits::ProportionalFontRendering))))
+					{
+						// The font size is a height in pixels, not one of the FontSize values
+						buffer[4] = scale_proportional_font_height(buffer[4], scaleFactor);
+					}
+					else
+					{
+						buffer[4] = static_cast<std::uint8_t>(get_font_or_next_smallest_font(remap_font_to_scale(static_cast<FontSize>(buffer[4]), scaleFactor)));
+					}
 					retVal = true;
 				}
 				break;
@@ -5202,7 +5822,7 @@ namespace isobus
 		return success;
 	}
 
-	bool VirtualTerminalClient::queue_command(const std::vector<std::uint8_t> &data, bool replace)
+	bool VirtualTerminalClient::queue_command(const std::vector<std::uint8_t> &data, bool replace, bool autoScale)
 	{
 		std::uint8_t functionCode = data[0];
 		if (is_function_unsupported(functionCode))
@@ -5210,30 +5830,30 @@ namespace isobus
 			return false;
 		}
 
-		if (get_is_connected() && send_command(data))
+		if (get_is_connected() && send_command(autoScale ? scale_command(data) : data))
 		{
 			return true;
 		}
 
 		LOCK_GUARD(Mutex, commandQueueMutex);
-		if (replace && replace_command(data))
+		if (replace && replace_command(data, autoScale))
 		{
 			return true;
 		}
-		commandQueue.emplace_back(data);
+		commandQueue.push_back(QueuedCommand{ data, autoScale });
 		return true;
 	}
 
-	bool VirtualTerminalClient::replace_command(const std::vector<std::uint8_t> &data)
+	bool VirtualTerminalClient::replace_command(const std::vector<std::uint8_t> &data, bool autoScale)
 	{
 		bool alreadyReplaced = false;
 		for (auto it = commandQueue.begin(); it != commandQueue.end();)
 		{
-			if (are_commands_similar(*it, data))
+			if (are_commands_similar(it->data, data))
 			{
 				if (!alreadyReplaced)
 				{
-					*it = data;
+					*it = QueuedCommand{ data, autoScale };
 					alreadyReplaced = true;
 					it++;
 				}
@@ -5363,7 +5983,7 @@ namespace isobus
 		LOCK_GUARD(Mutex, commandQueueMutex);
 		for (auto it = commandQueue.begin(); it != commandQueue.end();)
 		{
-			if (send_command(*it))
+			if (send_command(it->autoScale ? scale_command(it->data) : it->data))
 			{
 				it = commandQueue.erase(it);
 			}
@@ -5377,6 +5997,7 @@ namespace isobus
 	void VirtualTerminalClient::worker_thread_function()
 	{
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+		workerThreadOwner = this;
 		for (;;)
 		{
 			if (shouldTerminate)
