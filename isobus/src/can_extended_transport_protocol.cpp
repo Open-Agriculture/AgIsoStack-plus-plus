@@ -30,8 +30,9 @@ namespace isobus
 
 	void ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::set_state(StateMachineState value)
 	{
-		state = value;
+		// Timestamp first, so a thread that sees the new state doesn't time it out from the old timestamp
 		update_timestamp();
+		state = value;
 	}
 
 	std::uint32_t ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::get_total_bytes_transferred() const
@@ -141,6 +142,14 @@ namespace isobus
 			            parameterGroupNumber);
 			send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, parameterGroupNumber, ConnectionAbortReason::AlreadyInCMSession);
 		}
+		else if (totalMessageSize > MAX_PROTOCOL_DATA_LENGTH)
+		{
+			LOG_WARNING("[ETP]: Replying with abort to Request To Send (RTS) for 0x%05X, message size (%u) is greater than the maximum (%u).",
+			            parameterGroupNumber,
+			            totalMessageSize,
+			            MAX_PROTOCOL_DATA_LENGTH);
+			send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, parameterGroupNumber, ConnectionAbortReason::AnyOtherError);
+		}
 		else
 		{
 			auto oldSession = get_session(source, destination);
@@ -170,7 +179,7 @@ namespace isobus
 			                                                                     nullptr);
 
 			// Request the maximum number of packets per DPO via the CTS message
-			newSession->set_cts_number_of_packet_limit(configuration->get_number_of_packets_per_dpo_message());
+			newSession->set_cts_number_of_packet_limit(configuration->get_number_of_packets_per_etp_cts_message());
 
 			newSession->set_state(StateMachineState::SendClearToSend);
 			{
@@ -878,7 +887,7 @@ namespace isobus
 		}
 		if (packetsThisSegment > configuration->get_number_of_packets_per_dpo_message())
 		{
-			LOG_DEBUG("[TP]: Received Request To Send (RTS) with a CTS packet count of %hu, which is greater than the configured maximum of %hu, using the configured maximum instead.",
+			LOG_DEBUG("[ETP]: Received Clear To Send (CTS) allows %hu packets, which is greater than the configured maximum of %hu per DPO, using the configured maximum instead.",
 			          packetsThisSegment,
 			          configuration->get_number_of_packets_per_dpo_message());
 			packetsThisSegment = configuration->get_number_of_packets_per_dpo_message();
