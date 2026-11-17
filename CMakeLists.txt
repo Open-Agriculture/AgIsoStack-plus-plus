@@ -15,7 +15,10 @@ include(cmake/CheckHasStdThreads.cmake)
 # Make CTest available and the BUILD_TESTING option (OFF by default)
 option(BUILD_TESTING "Set to ON to enable building of tests from top level" OFF)
 include(CTest)
+option(BUILD_COVERAGE "Set to ON to build the tests with --coverage for gcovr"
+       ON)
 if(BUILD_TESTING
+   AND BUILD_COVERAGE
    AND NOT MSVC
    AND NOT APPLE)
   # Set --coverage flag for gcovr (SonarCloud)

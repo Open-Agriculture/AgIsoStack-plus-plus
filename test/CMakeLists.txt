@@ -45,6 +45,8 @@ set(TEST_SRC
     address_claim_tests.cpp
     can_name_tests.cpp
     hardware_interface_tests.cpp
+    candlelight_bittiming_tests.cpp
+    candlelight_io_tests.cpp
     vt_client_tests.cpp
     vt_server_tests.cpp
     language_command_interface_tests.cpp
@@ -61,6 +63,8 @@ set(TEST_SRC
     nmea2000_message_tests.cpp
     isobus_data_dictionary_tests.cpp
     can_message_tests.cpp
+    to_string_tests.cpp
+    logger_tests.cpp
     heartbeat_tests.cpp
     tc_server_tests.cpp
     helpers/test_time_source.cpp
@@ -71,11 +75,14 @@ set(TEST_SRC
 if(CAN_STACK_DISABLE_THREADS)
   # Most tests run on the VirtualCAN driver, which needs threads. Without
   # threads, build the tests for the single-threaded code paths only.
-  set(TEST_SRC hardware_interface_single_thread_tests.cpp)
+  set(TEST_SRC hardware_interface_single_thread_tests.cpp to_string_tests.cpp
+               logger_tests.cpp)
   set(TEST_INCLUDE "")
 endif()
 
 add_executable(unit_tests ${TEST_SRC} ${TEST_INCLUDE})
+target_include_directories(
+  unit_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../hardware_integration/src)
 set_target_properties(
   unit_tests
   PROPERTIES CXX_STANDARD 17

@@ -50,17 +50,27 @@ namespace isobus
 		/// @returns The minimum time to wait between sending BAM frames
 		std::uint32_t get_minimum_time_between_transport_protocol_bam_frames() const;
 
-		/// @brief Sets the max number of data frames the stack will use when
-		/// in an ETP session, between EDPO phases. The default is 16.
-		/// Note that the sending control function may choose to use a lower number of frames.
-		/// @param[in] numberFrames The max number of data frames to use
+		/// @brief Sets the max number of data frames the stack will send after each
+		/// DPO when it sends an ETP message. The default is 255, so the stack sends as many
+		/// frames as the receiver's CTS allows. Some VTs reject an object pool sent with
+		/// fewer frames per DPO than their CTS allowed.
+		/// @param[in] numberFrames The max number of data frames to send per DPO
 		void set_number_of_packets_per_dpo_message(std::uint8_t numberFrames);
 
-		/// @brief Returns the max number of data frames the stack will use when
-		/// in an ETP session, between EDPO phases. The default is 16.
-		/// Note that the sending control function may choose to use a lower number of frames.
-		/// @returns The number of data frames the stack will use when sending ETP messages between EDPOs
+		/// @brief Returns the max number of data frames the stack will send after each
+		/// DPO when it sends an ETP message. The default is 255.
+		/// @returns The max number of data frames the stack will send per DPO
 		std::uint8_t get_number_of_packets_per_dpo_message() const;
+
+		/// @brief Sets the number of packets per CTS message for ETP sessions the stack
+		/// receives. The default is 16. Note that the sending control function may choose
+		/// to use a lower number of packets.
+		/// @param[in] numberPackets The number of packets per CTS packet for received ETP sessions
+		void set_number_of_packets_per_etp_cts_message(std::uint8_t numberPackets);
+
+		/// @brief Get the number of packets per CTS packet for ETP sessions the stack receives.
+		/// @returns The number of packets per CTS packet for received ETP sessions
+		std::uint8_t get_number_of_packets_per_etp_cts_message() const;
 
 		/// @brief Sets the max number of data frames the stack will send from each
 		/// transport layer protocol, per update. The default is 255,
@@ -90,8 +100,9 @@ namespace isobus
 		std::uint32_t maxNumberTransportProtocolSessions = 4; ///< The max number of TP sessions allowed
 		std::uint32_t minimumTimeBetweenTransportProtocolBAMFrames = DEFAULT_BAM_PACKET_DELAY_TIME_MS; ///< The configurable time between BAM frames
 		std::uint8_t networkManagerMaxFramesToSendPerUpdate = 0xFF; ///< Used to control the max number of transport layer frames added to the driver queue per network manager update
-		std::uint8_t numberOfPacketsPerDPOMessage = 16; ///< The number of packets per DPO message for ETP sessions
+		std::uint8_t numberOfPacketsPerDPOMessage = 0xFF; ///< The max number of packets per DPO message for ETP sessions we send
 		std::uint8_t numberOfPacketsPerCTSMessage = 16; ///< The number of packets per CTS message for TP sessions
+		std::uint8_t numberOfPacketsPerETPCTSMessage = 16; ///< The number of packets per CTS message for ETP sessions we receive
 	};
 } // namespace isobus
 

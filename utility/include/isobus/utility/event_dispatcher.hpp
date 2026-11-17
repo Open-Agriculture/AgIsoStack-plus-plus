@@ -33,11 +33,10 @@ namespace isobus
 		/// @return A unique identifier for the callback, which can be used to remove the listener.
 		EventCallbackHandle add_listener(const Callback &callback)
 		{
+			LOCK_GUARD(Mutex, callbacksMutex);
 			EventCallbackHandle id = nextId;
 			nextId += 1;
-
-			LOCK_GUARD(Mutex, callbacksMutex);
-			if (isExecuting)
+			if (0 != executionDepth)
 			{
 				modifications.push([this, id, callback]() { callbacks[id] = callback; });
 			}
@@ -82,7 +81,7 @@ namespace isobus
 		void remove_listener(EventCallbackHandle id) noexcept
 		{
 			LOCK_GUARD(Mutex, callbacksMutex);
-			if (isExecuting)
+			if (0 != executionDepth)
 			{
 				modifications.push([this, id]() { callbacks.erase(id); });
 			}
@@ -96,7 +95,7 @@ namespace isobus
 		void clear_listeners() noexcept
 		{
 			LOCK_GUARD(Mutex, callbacksMutex);
-			if (isExecuting)
+			if (0 != executionDepth)
 			{
 				modifications.push([this]() { callbacks.clear(); });
 			}
@@ -128,34 +127,42 @@ namespace isobus
 		void call(const E &...args)
 		{
 			{
-				// Set flag to indicate we will be reading the list of callbacks, and
-				// prevent other threads from modifying the list directly during this time
 				LOCK_GUARD(Mutex, callbacksMutex);
-				isExecuting = true;
+				executionDepth += 1;
 			}
 
-			// Execute the callbacks
+			// So a throwing callback still ends the call()
+			struct EndCall
+			{
+				void operator()(EventDispatcher *dispatcher) const
+				{
+					dispatcher->end_call();
+				}
+			};
+			const std::unique_ptr<EventDispatcher, EndCall> guard(this);
+
 			for (const auto &callback : callbacks)
 			{
 				callback.second(args...);
 			}
-
-			{
-				LOCK_GUARD(Mutex, callbacksMutex);
-				isExecuting = false;
-
-				// Apply pending modifications to the callbacks list
-				while (!modifications.empty())
-				{
-					modifications.front()();
-					modifications.pop();
-				}
-			}
 		}
 
 	private:
+		/// @brief Ends a call(), and applies the queued modifications if no other call() is iterating
+		void end_call()
+		{
+			LOCK_GUARD(Mutex, callbacksMutex);
+			executionDepth -= 1;
+
+			while ((0 == executionDepth) && (!modifications.empty()))
+			{
+				modifications.front()();
+				modifications.pop();
+			}
+		}
+
 		std::unordered_map<EventCallbackHandle, Callback> callbacks; ///< The list of callbacks
-		bool isExecuting = false; ///< Whether the dispatcher is currently executing an event
+		std::size_t executionDepth = 0; ///< How many call()s are iterating the callbacks, nested or concurrent
 		std::queue<std::function<void()>> modifications; ///< The modifications to the callbacks list
 		Mutex callbacksMutex; ///< The mutex to protect the object from (unwanted) concurrent access
 		EventCallbackHandle nextId = 0; // Counter for generating unique IDs
