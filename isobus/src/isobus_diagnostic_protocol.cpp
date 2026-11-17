@@ -879,6 +879,9 @@ namespace isobus
 		}
 
 		std::vector<std::uint8_t> buffer(ecuIdString.begin(), ecuIdString.end());
+		// ISO 11783-3 5.2.8.2: a multi-packet capable PG with eight or fewer bytes is sent in one frame
+		// with a DLC of eight, and its unused bytes "not available"
+		buffer.resize(std::max<std::size_t>(buffer.size(), CAN_DATA_LENGTH), 0xFF);
 
 		auto it = pendingRequests.find(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUIdentificationInformation));
 		auto request = (((it != pendingRequests.end()) && (buffer.size() > CAN_DATA_LENGTH)) ? it->second : nullptr);
@@ -898,6 +901,8 @@ namespace isobus
 		bool retVal = false;
 		std::string productIdString = productIdentificationCode + "*" + productIdentificationBrand + "*" + productIdentificationModel + "*";
 		std::vector<std::uint8_t> buffer(productIdString.begin(), productIdString.end());
+		// Pad to a DLC of eight, see send_ecu_identification()
+		buffer.resize(std::max<std::size_t>(buffer.size(), CAN_DATA_LENGTH), 0xFF);
 
 		auto it = pendingRequests.find(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProductIdentification));
 		auto request = (((it != pendingRequests.end()) && (buffer.size() > CAN_DATA_LENGTH)) ? it->second : nullptr);
@@ -930,6 +935,8 @@ namespace isobus
 
 			softIDString = char(softwareIdentificationFields.size()) + softIDString;
 			std::vector<std::uint8_t> buffer(softIDString.begin(), softIDString.end());
+			// Pad to a DLC of eight, see send_ecu_identification()
+			buffer.resize(std::max<std::size_t>(buffer.size(), CAN_DATA_LENGTH), 0xFF);
 
 			auto it = pendingRequests.find(static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification));
 			auto request = (((it != pendingRequests.end()) && (buffer.size() > CAN_DATA_LENGTH)) ? it->second : nullptr);

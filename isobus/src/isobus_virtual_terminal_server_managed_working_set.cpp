@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -157,11 +158,17 @@ namespace isobus
 
 	void VirtualTerminalServerManagedWorkingSet::take_over_parsed_objects()
 	{
-		// Merged into the current object tree, so objects added to it while the thread ran stay
+		// Merged into the current object tree, so objects added to it while the thread ran stay.
+		// The parsed objects are in ID order, so replacedObjects stays sorted.
+		replacedObjects.clear();
 		for (const auto &object : objectPoolParser->get_object_tree())
 		{
 			if (objectPoolParser->is_parsed_object(object.first, object.second))
 			{
+				if (vtObjectTree.end() != vtObjectTree.find(object.first))
+				{
+					replacedObjects.push_back(object.first);
+				}
 				vtObjectTree[object.first] = object.second;
 			}
 		}
@@ -177,6 +184,9 @@ namespace isobus
 
 	void VirtualTerminalServerManagedWorkingSet::set_fault_from_parser()
 	{
+		// A failed parse leaves the object tree as it was, so it replaced nothing
+		replacedObjects.clear();
+
 		// The parent can be a new object or one of the current pool, and a new object replaces a current one with the same ID
 		const auto &parsedObjects = objectPoolParser->get_object_tree();
 		const std::uint16_t faultingID = objectPoolParser->get_object_pool_faulting_object_id();
@@ -248,19 +258,35 @@ namespace isobus
 		iopFilesRawData.clear();
 		transferredIopSize = 0;
 		workingSetID = NULL_OBJECT_ID;
-		focusedObject = NULL_OBJECT_ID;
+		focusedObject.store(NULL_OBJECT_ID);
+		openForInputObject.store(NULL_OBJECT_ID);
 		set_object_pool_faulting_object_id(NULL_OBJECT_ID);
 		set_object_pool_processing_state(ObjectPoolProcessingThreadState::None);
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::set_object_focus(std::uint16_t objectID)
 	{
-		focusedObject = objectID;
+		focusedObject.store(objectID);
 	}
 
 	std::uint16_t VirtualTerminalServerManagedWorkingSet::get_object_focus() const
 	{
-		return focusedObject;
+		return focusedObject.load();
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::set_object_open_for_input(std::uint16_t objectID)
+	{
+		openForInputObject.store(objectID);
+	}
+
+	std::uint16_t VirtualTerminalServerManagedWorkingSet::get_object_open_for_input() const
+	{
+		return openForInputObject.load();
+	}
+
+	bool VirtualTerminalServerManagedWorkingSet::was_object_replaced(std::uint16_t objectID) const
+	{
+		return std::binary_search(replacedObjects.begin(), replacedObjects.end(), objectID);
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::set_auxiliary_input_maintenance_timestamp_ms(std::uint32_t value)
