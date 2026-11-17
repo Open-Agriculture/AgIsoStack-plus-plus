@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
+#include "isobus/hardware_integration/vector_asc_logger.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/utility/system_timing.hpp"
 
@@ -8,7 +9,11 @@
 #include "isobus/hardware_integration/socket_can_interface.hpp"
 #endif
 
+#include <atomic>
 #include <chrono>
+#include <cstdio>
+#include <ctime>
+#include <fstream>
 #include <future>
 #include <thread>
 
@@ -61,7 +66,7 @@ TEST(HARDWARE_INTERFACE_TESTS, ReceiveMessageFromHardware)
 	fakeFrame.data[0] = 0x01;
 	fakeFrame.channel = 0;
 
-	int messageCount = 0;
+	std::atomic_int messageCount = { 0 };
 	std::function<void(const CANMessageFrame &)> receivedCallback = [&messageCount](const CANMessageFrame &frame) {
 		messageCount += 1;
 
@@ -79,6 +84,42 @@ TEST(HARDWARE_INTERFACE_TESTS, ReceiveMessageFromHardware)
 	EXPECT_TRUE(future.wait_for(std::chrono::seconds(5)) != std::future_status::timeout);
 
 	CANHardwareInterface::stop();
+}
+
+TEST(HARDWARE_INTERFACE_TESTS, FrameListenerCanCallTheInterface)
+{
+	auto device = std::make_shared<VirtualCANPlugin>();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, device);
+	CANHardwareInterface::start(false);
+
+	auto received = std::make_shared<std::atomic_bool>(false);
+	CANHardwareInterface::get_can_frame_received_event_dispatcher().add_listener([received](const CANMessageFrame &) {
+		// Refused while the interface runs, but it takes the interface's lock to check that
+		CANHardwareInterface::set_number_of_can_channels(1);
+		*received = true;
+	});
+
+	CANMessageFrame frame = {};
+	frame.identifier = 0x613;
+	frame.dataLength = 1;
+	device->write_frame_as_if_received(frame);
+
+	// A listener that deadlocks never returns, so update() runs on a thread the test can abandon
+	auto finished = std::make_shared<std::promise<void>>();
+	std::future<void> result = finished->get_future();
+	std::thread([received, finished]() {
+		while (!*received)
+		{
+			CANHardwareInterface::update();
+			std::this_thread::yield();
+		}
+		finished->set_value();
+	}).detach();
+	ASSERT_EQ(std::future_status::ready, result.wait_for(std::chrono::seconds(1)));
+
+	CANHardwareInterface::stop();
+	CANHardwareInterface::set_number_of_can_channels(0);
 }
 
 TEST(HARDWARE_INTERFACE_TESTS, MessageFrameSentEventListener)
@@ -100,7 +141,7 @@ TEST(HARDWARE_INTERFACE_TESTS, MessageFrameSentEventListener)
 	CANMessageFrame receiveFrame;
 	memset(&receiveFrame, 0, sizeof(CANMessageFrame));
 
-	int messageCount = 0;
+	std::atomic_int messageCount = { 0 };
 	std::function<void(const CANMessageFrame &)> sendCallback = [&messageCount](const CANMessageFrame &frame) {
 		messageCount += 1;
 
@@ -124,7 +165,7 @@ TEST(HARDWARE_INTERFACE_TESTS, PeriodicUpdateEventListener)
 {
 	CANHardwareInterface::start();
 
-	int updateCount = 0;
+	std::atomic_int updateCount = { 0 };
 	std::function<void()> periodicCallback = [&updateCount]() {
 		updateCount += 1;
 	};
@@ -157,6 +198,7 @@ TEST(HARDWARE_INTERFACE_TESTS, PeriodicUpdateIntervalSetting)
 
 	CANHardwareInterface::get_periodic_update_event_dispatcher().add_listener(periodicCallback);
 
+	const std::uint32_t originalInterval = CANHardwareInterface::get_periodic_update_interval();
 	CANHardwareInterface::set_periodic_update_interval(10);
 	EXPECT_EQ(CANHardwareInterface::get_periodic_update_interval(), 10);
 
@@ -175,6 +217,7 @@ TEST(HARDWARE_INTERFACE_TESTS, PeriodicUpdateIntervalSetting)
 	EXPECT_TRUE(future.wait_for(std::chrono::seconds(5)) != std::future_status::timeout);
 
 	CANHardwareInterface::stop();
+	CANHardwareInterface::set_periodic_update_interval(originalInterval);
 }
 
 TEST(HARDWARE_INTERFACE_TESTS, StopSetsStartedFalseInNonThreadingMode)
@@ -401,3 +444,53 @@ TEST(HARDWARE_INTERFACE_TESTS, SocketCANNameOver15CharactersIsRefused)
 	EXPECT_NE(std::string::npos, tooLong.get_last_error().find("longer than 15 characters"));
 }
 #endif
+
+TEST(HARDWARE_INTERFACE_TESTS, VectorASCLoggerRemovesItsListenersOnDestruction)
+{
+	const std::string fileName = "vector_asc_logger_listener_test.asc";
+	auto receivedListeners = CANHardwareInterface::get_can_frame_received_event_dispatcher().get_listener_count();
+	auto transmittedListeners = CANHardwareInterface::get_can_frame_transmitted_event_dispatcher().get_listener_count();
+
+	{
+		VectorASCLogger logger(fileName);
+		EXPECT_EQ(CANHardwareInterface::get_can_frame_received_event_dispatcher().get_listener_count(), receivedListeners + 1);
+		EXPECT_EQ(CANHardwareInterface::get_can_frame_transmitted_event_dispatcher().get_listener_count(), transmittedListeners + 1);
+	}
+
+	EXPECT_EQ(CANHardwareInterface::get_can_frame_received_event_dispatcher().get_listener_count(), receivedListeners);
+	EXPECT_EQ(CANHardwareInterface::get_can_frame_transmitted_event_dispatcher().get_listener_count(), transmittedListeners);
+	EXPECT_EQ(std::remove(fileName.c_str()), 0);
+}
+
+/// @brief Returns the abbreviated weekday of a time, as std::strftime writes it in the C locale
+static std::string get_weekday_abbreviation(std::time_t time)
+{
+	char weekday[8] = {};
+	std::strftime(weekday, sizeof(weekday), "%a", std::localtime(&time));
+	return weekday;
+}
+
+TEST(HARDWARE_INTERFACE_TESTS, VectorASCLoggerWritesOneDateKeywordAndTheRightWeekday)
+{
+	const std::string fileName = "vector_asc_logger_date_test.asc";
+	const std::string weekdayBefore = get_weekday_abbreviation(std::time(nullptr));
+	{
+		VectorASCLogger logger(fileName);
+	}
+	const std::string weekdayAfter = get_weekday_abbreviation(std::time(nullptr));
+
+	std::string dateLine;
+	{
+		std::ifstream logFile(fileName);
+		std::getline(logFile, dateLine);
+	}
+	EXPECT_EQ(std::remove(fileName.c_str()), 0);
+
+	// "date <weekday> <month> <day> <time> <am or pm> <year>"
+	ASSERT_GE(dateLine.size(), 8U) << dateLine;
+	EXPECT_EQ("date ", dateLine.substr(0, 5)) << dateLine;
+	EXPECT_EQ(std::string::npos, dateLine.find("date date")) << dateLine;
+	// Either weekday, in case the day changed while the file was written
+	const std::string weekday = dateLine.substr(5, 3);
+	EXPECT_TRUE((weekdayBefore == weekday) || (weekdayAfter == weekday)) << dateLine << ", expected " << weekdayBefore;
+}

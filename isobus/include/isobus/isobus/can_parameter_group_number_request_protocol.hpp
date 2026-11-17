@@ -78,6 +78,9 @@ namespace isobus
 		/// @param[in] callback The callback function to remove
 		/// @param[in] parentPointer Generic context variable, usually the `this` pointer of the class that registered the callback
 		/// @returns true if the callback was removed, false if no callback matched the parameters
+		/// @details This stops future calls only. A call on another thread can still start or finish after this returns,
+		/// so only destroy what the callback uses once it is removed on the thread that calls CANNetworkManager::update(),
+		/// or once that thread is stopped. A callback may remove itself.
 		bool remove_pgn_request_callback(std::uint32_t pgn, PGNRequestCallback callback, void *parentPointer);
 
 		/// @brief Removes a callback for repetition rate requests
@@ -85,6 +88,9 @@ namespace isobus
 		/// @param[in] callback The callback function to remove
 		/// @param[in] parentPointer Generic context variable, usually the `this` pointer of the class that registered the callback
 		/// @returns true if the callback was registered, false if the callback is nullptr or is already registered for the same PGN
+		/// @details This stops future calls only. A call on another thread can still start or finish after this returns,
+		/// so only destroy what the callback uses once it is removed on the thread that calls CANNetworkManager::update(),
+		/// or once that thread is stopped. A callback may remove itself.
 		bool remove_request_for_repetition_rate_callback(std::uint32_t pgn, PGNRequestForRepetitionRateCallback callback, void *parentPointer);
 
 		/// @brief Returns the number of PGN request callbacks that have been registered with this protocol instance
@@ -96,6 +102,8 @@ namespace isobus
 		std::size_t get_number_registered_request_for_repetition_rate_callbacks() const;
 
 	private:
+		friend class CANNetworkManager; ///< Allows the network manager to unregister this protocol
+
 		/// @brief A storage class for holding PGN callbacks and their associated PGN
 		class PGNRequestCallbackInfo
 		{
@@ -156,10 +164,14 @@ namespace isobus
 		/// @returns true if the message was sent, false otherwise
 		bool send_acknowledgement(AcknowledgementType type, std::uint32_t parameterGroupNumber, std::shared_ptr<ControlFunction> destination) const;
 
-		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The internal control function that this protocol will send from
+		/// @brief Removes this protocol's callbacks from the network manager, once
+		void unregister_from_network();
+
+		std::weak_ptr<InternalControlFunction> myControlFunction; ///< The internal control function that this protocol will send from, weak because it owns this protocol
 		std::vector<PGNRequestCallbackInfo> pgnRequestCallbacks; ///< A list of all registered PGN callbacks and the PGN associated with each callback
 		std::vector<PGNRequestForRepetitionRateCallbackInfo> repetitionRateCallbacks; ///< A list of all registered request for repetition rate callbacks and the PGN associated with the callback
 		Mutex pgnRequestMutex; ///< A mutex to protect the callback lists
+		bool registeredWithNetwork = true; ///< Cleared on unregister, so a protocol that outlives the network manager never touches it
 	};
 }
 

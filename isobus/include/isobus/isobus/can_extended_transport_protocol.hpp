@@ -17,6 +17,8 @@
 #include "isobus/isobus/can_transport_protocol_base.hpp"
 #include "isobus/utility/thread_synchronization.hpp"
 
+#include <atomic>
+
 namespace isobus
 {
 	/// @brief A class that handles the ISO11783 extended transport protocol.
@@ -135,7 +137,7 @@ namespace isobus
 			std::uint32_t get_total_number_of_packets() const;
 
 		private:
-			StateMachineState state = StateMachineState::None; ///< The state machine state for this session
+			std::atomic<StateMachineState> state{ StateMachineState::None }; ///< The state machine state for this session, read by update() while the thread that started a transmit sets it
 
 			std::uint32_t lastAcknowledgedPacketNumber = 0; ///< The last acknowledged packet number by the receiver
 			std::uint32_t sequenceNumberOffset = 0; ///< The offset of the sequence number relative to the packet number

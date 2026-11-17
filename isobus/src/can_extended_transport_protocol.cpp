@@ -30,8 +30,9 @@ namespace isobus
 
 	void ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::set_state(StateMachineState value)
 	{
-		state = value;
+		// Timestamp first, so a thread that sees the new state doesn't time it out from the old timestamp
 		update_timestamp();
+		state = value;
 	}
 
 	std::uint32_t ExtendedTransportProtocolManager::ExtendedTransportProtocolSession::get_total_bytes_transferred() const
@@ -140,6 +141,14 @@ namespace isobus
 			LOG_WARNING("[ETP]: Replying with abort to Request To Send (RTS) for 0x%05X, configured maximum number of sessions reached.",
 			            parameterGroupNumber);
 			send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, parameterGroupNumber, ConnectionAbortReason::AlreadyInCMSession);
+		}
+		else if (totalMessageSize > MAX_PROTOCOL_DATA_LENGTH)
+		{
+			LOG_WARNING("[ETP]: Replying with abort to Request To Send (RTS) for 0x%05X, message size (%u) is greater than the maximum (%u).",
+			            parameterGroupNumber,
+			            totalMessageSize,
+			            MAX_PROTOCOL_DATA_LENGTH);
+			send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, parameterGroupNumber, ConnectionAbortReason::AnyOtherError);
 		}
 		else
 		{
