@@ -81,6 +81,11 @@ namespace isobus
 		static bool start(bool start_thread = true);
 
 		/// @brief Stops all CAN management threads and discards all remaining messages in the Tx and Rx queues.
+		/// @attention This also removes every listener of get_can_frame_received_event_dispatcher(),
+		/// get_can_frame_transmitted_event_dispatcher() and get_periodic_update_event_dispatcher(), including listeners
+		/// that application code or a VectorASCLogger registered. Their handles no longer refer to a listener, and removing
+		/// them later does nothing. To keep receiving events after a later start(), register the listeners again, for example
+		/// by creating a new VectorASCLogger.
 		/// @returns `true` if the threads were stopped, otherwise `false`
 		static bool stop();
 
@@ -94,14 +99,17 @@ namespace isobus
 		static bool transmit_can_frame(const CANMessageFrame &frame);
 
 		/// @brief Get the event dispatcher for when a CAN message frame is received from hardware event
+		/// @note stop() removes all of its listeners, so register them again after a later start()
 		/// @returns The event dispatcher which can be used to register callbacks/listeners to
 		static EventDispatcher<const CANMessageFrame &> &get_can_frame_received_event_dispatcher();
 
 		/// @brief Get the event dispatcher for when a CAN message frame will be send to hardware event
+		/// @note stop() removes all of its listeners, so register them again after a later start()
 		/// @returns The event dispatcher which can be used to register callbacks/listeners to
 		static EventDispatcher<const CANMessageFrame &> &get_can_frame_transmitted_event_dispatcher();
 
 		/// @brief Get the event dispatcher for when a periodic update is called
+		/// @note stop() removes all of its listeners, so register them again after a later start()
 		/// @returns The event dispatcher which can be used to register callbacks/listeners to
 		static EventDispatcher<> &get_periodic_update_event_dispatcher();
 
