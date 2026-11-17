@@ -259,6 +259,10 @@ TEST(VirtualTerminalServerTest, ObjectThatRunsPastTheEndOfTheTransferIsRejected)
 		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::ExtendedInputAttributes), 0x00, 0x01 },
 		// Extended Input Attributes code plane of 2 character ranges with only 1 present
 		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::ExtendedInputAttributes), 0x00, 0x01, 0x00, 0x02, 0x41, 0x00, 0x4F, 0x00 },
+		// Data Mask with no macro count byte
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::DataMask), 0x00, 0xFF, 0xFF, 0x00 },
+		// Working Set with no language count byte
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSet), 0x00, 0x01, 0xE8, 0x03, 0x00, 0x00 },
 	};
 
 	for (std::size_t i = 0; i < truncatedObjects.size(); i++)
@@ -297,6 +301,10 @@ TEST(VirtualTerminalServerTest, ObjectThatEndsTheTransferIsAccepted)
 		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::PictureGraphic), 0x0A, 0x00, 0x00, 0x00, 0x01, 0x00, eightBitColour, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
 		// Extended Input Attributes of 2 code planes and 3 character ranges
 		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::ExtendedInputAttributes), 0x00, 0x02, 0x00, 0x02, 0x41, 0x00, 0x4F, 0x00, 0x61, 0x00, 0x6F, 0x00, 0x01, 0x01, 0x12, 0xAB, 0x1F, 0xAB },
+		// Data Mask without objects and macros
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::DataMask), 0x00, 0xFF, 0xFF, 0x00, 0x00 },
+		// Working Set with one object and without macros and languages
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSet), 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0xE8, 0x03, 0x00, 0x00, 0x00, 0x00 },
 	};
 
 	for (std::size_t i = 0; i < objects.size(); i++)

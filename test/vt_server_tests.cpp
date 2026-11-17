@@ -2217,13 +2217,15 @@ TEST_F(VirtualTerminalServerBusTest, FunctionsTheVTAcceptsWithoutAnAnswerOrAnswe
 
 TEST_F(VirtualTerminalServerBusTest, StatusMessageReportsTheNewAddressOfTheActiveWorkingSetMaster)
 {
-	// Working Set 0 with active mask 1000, and Data Mask 1000
+	// Working Set 0 with active mask 1000 and Container 2000 as its one object, Data Mask 1000, and Container 2000
 	constexpr auto WORKING_SET = static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSet);
 	constexpr auto DATA_MASK = static_cast<std::uint8_t>(VirtualTerminalObjectType::DataMask);
+	constexpr auto CONTAINER = static_cast<std::uint8_t>(VirtualTerminalObjectType::Container);
 	auto workingSet = std::make_shared<TestWorkingSet>(client);
-	workingSet->add_iop_raw_data({ 0x00, 0x00, WORKING_SET, 0x00, 0x01, 0xE8, 0x03, 0x00, 0x00, 0x00, 0xE8, 0x03, DATA_MASK, 0x00, 0xFF, 0xFF, 0x00, 0x00 });
+	workingSet->add_iop_raw_data({ 0x00, 0x00, WORKING_SET, 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0xD0, 0x07, 0x00, 0x00, 0x00, 0x00, 0xE8, 0x03, DATA_MASK, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xD0, 0x07, CONTAINER, 0x0A, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x00 });
 	workingSet->start_parsing_thread();
 	workingSet->join_parsing_thread();
+	ASSERT_NE(nullptr, workingSet->get_working_set_object());
 	server->add_managed_working_set(workingSet);
 	server->select_working_set(workingSet);
 
