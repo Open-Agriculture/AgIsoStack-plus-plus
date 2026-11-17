@@ -10,9 +10,11 @@
 #define ISOBUS_VIRTUAL_TERMINAL_MANAGED_WORKING_SET_HPP
 
 #include <array>
+#include <atomic>
 #include <map>
 #include <mutex>
 #include <thread>
+#include <vector>
 
 #include "isobus/isobus/can_badge.hpp"
 #include "isobus/isobus/can_control_function.hpp"
@@ -118,6 +120,21 @@ namespace isobus
 		/// @returns The object ID of the currently focused object
 		std::uint16_t get_object_focus() const;
 
+		/// @brief Sets the input object the operator is currently editing.
+		/// The application calls this when it opens or closes an input object for editing.
+		/// @param[in] objectID The object ID of the input object open for editing, or NULL_OBJECT_ID when none
+		void set_object_open_for_input(std::uint16_t objectID);
+
+		/// @brief Returns the input object the operator is currently editing
+		/// @returns The object ID of the input object open for editing, or NULL_OBJECT_ID when none
+		std::uint16_t get_object_open_for_input() const;
+
+		/// @brief Returns whether the last object pool parse replaced an object that already existed.
+		/// Only valid once object_pool_parse_finished() has been called for that parse.
+		/// @param[in] objectID The object ID to check
+		/// @returns true if the last parse replaced the object with this ID
+		bool was_object_replaced(std::uint16_t objectID) const;
+
 		/// @brief Sets the timestamp for when we received the last auxiliary input maintenance message
 		/// from the client.
 		/// @param[in] value New timestamp value in milliseconds
@@ -164,7 +181,9 @@ namespace isobus
 		std::uint32_t workingSetMaintenanceMessageTimestamp_ms = 0; ///< A timestamp (in ms) to track sending of the maintenance message
 		std::uint8_t workingSetVersion = 0xFF; ///< The VT version the working set master reported in its last maintenance message
 		std::uint32_t auxiliaryInputMaintenanceMessageTimestamp_ms = 0; ///< A timestamp (in ms) to track if/when the working set sent an auxiliary input maintenance message
-		std::uint16_t focusedObject = NULL_OBJECT_ID; ///< Stores the object ID of the currently focused object
+		std::atomic<std::uint16_t> focusedObject = { NULL_OBJECT_ID }; ///< Stores the object ID of the currently focused object
+		std::atomic<std::uint16_t> openForInputObject = { NULL_OBJECT_ID }; ///< Stores the object ID of the input object currently open for editing
+		std::vector<std::uint16_t> replacedObjects; ///< Sorted IDs of the objects the last parse replaced, written by the parsing thread before it reports its result
 		bool wasLoadedFromNonVolatileMemory = false; ///< Used to tell the server how this object pool was obtained
 		bool wasLoadedWithExtendedVersionLabel = false; ///< Used to tell the server which load version command restored this object pool
 		bool workingSetDeletionRequested = false; ///< Used to tell the server to delete this working set
