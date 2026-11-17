@@ -1716,27 +1716,22 @@ namespace isobus
 					switch (targetObject->get_object_type())
 					{
 						case VirtualTerminalObjectType::OutputMeter:
+						case VirtualTerminalObjectType::InputBoolean:
 						{
-							if (newWidth == newHeight) // Output meter must be square!
-							{
-								targetObject->set_width(newWidth);
-								targetObject->set_height(newHeight);
-								success = true;
-								LOG_DEBUG("[VT Server]: Client %u change size command: Object: %u, Width: %u, Height: %u", managedWorkingSet->get_control_function()->get_address(), objectID, newWidth, newHeight);
-								onRepaintEventDispatcher.call(managedWorkingSet);
-							}
-							else
-							{
-								LOG_WARNING("[VT Server]: Client %u change size command: invalid new size. Meter must be square! Object: %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-								send_change_size_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeSizeErrorBit::AnyOtherError)), message.get_source_control_function());
-							}
+							// These objects are square, sized by their width alone (ISO 11783-6:2018, B.8.2 and B.11.2).
+							// A width or height of 0 means a size of 0, so the object is not drawn (F.18).
+							const std::uint16_t side = ((0 == newWidth) || (0 == newHeight)) ? 0 : newWidth;
+							targetObject->set_width(side);
+							targetObject->set_height(side);
+							success = true;
+							LOG_DEBUG("[VT Server]: Client %u change size command: Object: %u, Width: %u, Height: %u, square side: %u", managedWorkingSet->get_control_function()->get_address(), objectID, newWidth, newHeight, side);
+							onRepaintEventDispatcher.call(managedWorkingSet);
 						}
 						break;
 
 						case VirtualTerminalObjectType::Animation:
 						case VirtualTerminalObjectType::Button:
 						case VirtualTerminalObjectType::Container:
-						case VirtualTerminalObjectType::InputBoolean:
 						case VirtualTerminalObjectType::InputList:
 						case VirtualTerminalObjectType::InputString:
 						case VirtualTerminalObjectType::InputNumber:

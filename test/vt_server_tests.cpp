@@ -3025,3 +3025,90 @@ TEST_F(VirtualTerminalServerOpenInputTest, ReplacingAListItemThatDoesNotHoldTheO
 	EXPECT_EQ(0, server->abortInputCount);
 	EXPECT_EQ(11, workingSet->get_object_open_for_input());
 }
+
+TEST_F(VirtualTerminalServerMessagingTest, OutputMeterAndInputBooleanStaySquare)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0xE5, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xE6, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	// Working Set 0 with Data Mask 1000, Output Meter 6 (width 50) and Input Boolean 7 (width 20)
+	constexpr auto WORKING_SET = static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSet);
+	constexpr auto DATA_MASK = static_cast<std::uint8_t>(VirtualTerminalObjectType::DataMask);
+	constexpr auto OUTPUT_METER = static_cast<std::uint8_t>(VirtualTerminalObjectType::OutputMeter);
+	constexpr auto INPUT_BOOLEAN = static_cast<std::uint8_t>(VirtualTerminalObjectType::InputBoolean);
+	auto workingSet = std::make_shared<TestWorkingSet>(client);
+	workingSet->add_iop_raw_data({ 0x00, 0x00, WORKING_SET, 0x00, 0x01, 0xE8, 0x03, 0x00, 0x00, 0x00, 0xE8, 0x03, DATA_MASK, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x06, 0x00, OUTPUT_METER, 0x32, 0x00, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0xB4, 0x00, 0x00, 0x64, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x07, 0x00, INPUT_BOOLEAN, 0x00, 0x14, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x01, 0x00 });
+	workingSet->start_parsing_thread();
+	workingSet->join_parsing_thread();
+	serverUnderTest.add_managed_working_set(workingSet);
+	const auto meter = workingSet->get_object_by_id(6);
+	const auto inputBoolean = workingSet->get_object_by_id(7);
+	CANMessageFrame response = {};
+
+	const bool parsed = (nullptr != meter) && (nullptr != inputBoolean);
+	std::uint16_t meterAfterAttribute[2] = { 0, 0 };
+	std::uint16_t booleanAfterAttribute[2] = { 0, 0 };
+	int sizeZeroError = -1;
+	std::uint16_t meterAfterSizeZero[2] = { 1, 1 };
+	std::uint16_t meterAfterSize[2] = { 0, 0 };
+	std::uint16_t booleanAfterSize[2] = { 0, 0 };
+
+	if (parsed)
+	{
+		// Change Attribute width: the height follows (ISO 11783-6:2018, B.8.2 and B.11.2)
+		receive_from_client(internalECU, client, { 0xAF, 0x06, 0x00, 0x01, 0x50, 0x00, 0x00, 0x00 });
+		poll_for_response(serverUnderTest, testPlugin, 0xAF, response);
+		meterAfterAttribute[0] = meter->get_width();
+		meterAfterAttribute[1] = meter->get_height();
+		receive_from_client(internalECU, client, { 0xAF, 0x07, 0x00, 0x02, 0x1E, 0x00, 0x00, 0x00 });
+		poll_for_response(serverUnderTest, testPlugin, 0xAF, response);
+		booleanAfterAttribute[0] = inputBoolean->get_width();
+		booleanAfterAttribute[1] = inputBoolean->get_height();
+
+		// Change Size with a height of 0: the size is 0 and the object is not drawn (F.18). The command is accepted.
+		receive_from_client(internalECU, client, { 0xA6, 0x06, 0x00, 0x64, 0x00, 0x00, 0x00, 0xFF });
+		if (poll_for_response(serverUnderTest, testPlugin, 0xA6, response))
+		{
+			sizeZeroError = response.data[3];
+		}
+		meterAfterSizeZero[0] = meter->get_width();
+		meterAfterSizeZero[1] = meter->get_height();
+
+		// Change Size to a size that is not square: the width is the side of the square
+		receive_from_client(internalECU, client, { 0xA6, 0x06, 0x00, 0x64, 0x00, 0x3C, 0x00, 0xFF });
+		poll_for_response(serverUnderTest, testPlugin, 0xA6, response);
+		meterAfterSize[0] = meter->get_width();
+		meterAfterSize[1] = meter->get_height();
+		receive_from_client(internalECU, client, { 0xA6, 0x07, 0x00, 0x28, 0x00, 0x14, 0x00, 0xFF });
+		poll_for_response(serverUnderTest, testPlugin, 0xA6, response);
+		booleanAfterSize[0] = inputBoolean->get_width();
+		booleanAfterSize[1] = inputBoolean->get_height();
+	}
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(parsed);
+	EXPECT_EQ(80, meterAfterAttribute[0]);
+	EXPECT_EQ(80, meterAfterAttribute[1]);
+	EXPECT_EQ(30, booleanAfterAttribute[0]);
+	EXPECT_EQ(30, booleanAfterAttribute[1]);
+	EXPECT_EQ(0x00, sizeZeroError);
+	EXPECT_EQ(0, meterAfterSizeZero[0]);
+	EXPECT_EQ(0, meterAfterSizeZero[1]);
+	EXPECT_EQ(100, meterAfterSize[0]);
+	EXPECT_EQ(100, meterAfterSize[1]);
+	EXPECT_EQ(40, booleanAfterSize[0]);
+	EXPECT_EQ(40, booleanAfterSize[1]);
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(client);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}

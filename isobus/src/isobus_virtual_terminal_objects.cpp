@@ -1714,7 +1714,9 @@ namespace isobus
 
 				case AttributeName::Width:
 				{
+					// An Input Boolean is square, so its width is also its height (ISO 11783-6:2018, B.8.2)
 					set_width(static_cast<std::uint16_t>(rawAttributeData));
+					set_height(static_cast<std::uint16_t>(rawAttributeData));
 					retVal = true;
 				}
 				break;
@@ -4819,7 +4821,9 @@ namespace isobus
 			{
 				case AttributeName::Width:
 				{
+					// An Output Meter is square, so its width is also its height (ISO 11783-6:2018, B.11.2)
 					set_width(static_cast<std::uint16_t>(rawAttributeData));
+					set_height(static_cast<std::uint16_t>(rawAttributeData));
 					retVal = true;
 				}
 				break;
