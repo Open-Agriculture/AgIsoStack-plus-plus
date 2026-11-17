@@ -53,7 +53,8 @@ namespace isobus
 		/// @brief Assigns a CAN driver to a channel
 		/// @param[in] channelIndex The channel to assign to
 		/// @param[in] canDriver The driver to assign to the channel
-		/// @note The function will fail if the channel is already assigned to a driver or the interface is already started
+		/// @note The function will fail if the channel is already assigned to a driver, if the driver is
+		/// already assigned to a different channel, or if the interface is already started
 		/// @returns `true` if the driver was assigned to the channel, otherwise `false`
 		static bool assign_can_channel_frame_handler(std::uint8_t channelIndex, std::shared_ptr<CANHardwarePlugin> canDriver);
 
@@ -73,10 +74,18 @@ namespace isobus
 		/// the worker thread for the hardware layer is started. Typically you'll want to leave this as true.
 		/// However, if you want to drive the hardware layer yourself by calling update manually, you can
 		/// pass this in as false to not spawn the worker thread.
-		/// @returns `true` if the threads were started, otherwise false (perhaps they are already running)
+		/// @returns `true` if every channel with a frame handler assigned started, otherwise `false`.
+		/// On `false` the interface still counts as started and any channels that did open stay open,
+		/// so call stop() if a partial start is not good enough. A failed channel's driver may say why
+		/// through `get_assigned_can_channel_frame_handler(channelIndex)->get_last_error()`.
 		static bool start(bool start_thread = true);
 
 		/// @brief Stops all CAN management threads and discards all remaining messages in the Tx and Rx queues.
+		/// @attention This also removes every listener of get_can_frame_received_event_dispatcher(),
+		/// get_can_frame_transmitted_event_dispatcher() and get_periodic_update_event_dispatcher(), including listeners
+		/// that application code or a VectorASCLogger registered. Their handles no longer refer to a listener, and removing
+		/// them later does nothing. To keep receiving events after a later start(), register the listeners again, for example
+		/// by creating a new VectorASCLogger.
 		/// @returns `true` if the threads were stopped, otherwise `false`
 		static bool stop();
 
@@ -90,14 +99,17 @@ namespace isobus
 		static bool transmit_can_frame(const CANMessageFrame &frame);
 
 		/// @brief Get the event dispatcher for when a CAN message frame is received from hardware event
+		/// @note stop() removes all of its listeners, so register them again after a later start()
 		/// @returns The event dispatcher which can be used to register callbacks/listeners to
 		static EventDispatcher<const CANMessageFrame &> &get_can_frame_received_event_dispatcher();
 
 		/// @brief Get the event dispatcher for when a CAN message frame will be send to hardware event
+		/// @note stop() removes all of its listeners, so register them again after a later start()
 		/// @returns The event dispatcher which can be used to register callbacks/listeners to
 		static EventDispatcher<const CANMessageFrame &> &get_can_frame_transmitted_event_dispatcher();
 
 		/// @brief Get the event dispatcher for when a periodic update is called
+		/// @note stop() removes all of its listeners, so register them again after a later start()
 		/// @returns The event dispatcher which can be used to register callbacks/listeners to
 		static EventDispatcher<> &get_periodic_update_event_dispatcher();
 
@@ -160,6 +172,7 @@ namespace isobus
 
 			LockFreeQueue<CANMessageFrame> messagesToBeTransmittedQueue; ///< Transmit message queue for a CAN channel
 			LockFreeQueue<CANMessageFrame> receivedMessagesQueue; ///< Receive message queue for a CAN channel
+			const std::size_t maxFramesReceivedPerUpdate; ///< Most frames update() takes from the driver in one call when there are no threads
 		};
 
 		/// @brief Singleton instance of the CANHardwareInterface class
@@ -186,7 +199,7 @@ namespace isobus
 		static std::condition_variable updateThreadWakeupCondition; ///< A condition variable to allow for signaling the `updateThread` to wakeup
 #endif
 		static std::uint32_t lastUpdateTimestamp; ///< The last time the network manager was updated
-		static std::uint32_t periodicUpdateInterval; ///< The period between calls to the network manager update function in milliseconds
+		static std::atomic<std::uint32_t> periodicUpdateInterval; ///< The period between calls to the network manager update function in milliseconds
 		static EventDispatcher<const CANMessageFrame &> frameReceivedEventDispatcher; ///< The event dispatcher for when a CAN message frame is received from hardware event
 		static EventDispatcher<const CANMessageFrame &> frameTransmittedEventDispatcher; ///< The event dispatcher for when a CAN message has been transmitted via hardware
 		static EventDispatcher<> periodicUpdateEventDispatcher; ///< The event dispatcher for when a periodic update is called

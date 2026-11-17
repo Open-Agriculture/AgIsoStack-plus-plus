@@ -50,6 +50,12 @@ namespace isobus
 		state = value;
 	}
 
+	bool InternalControlFunction::holds_address() const
+	{
+		const State state = get_current_state();
+		return (State::AddressClaimingComplete == state) || (State::SendReclaimAddressOnRequest == state);
+	}
+
 	std::uint8_t InternalControlFunction::get_end_arbitration_address_for_industry_group(NAME::IndustryGroup industryGroup)
 	{
 		// Search the range of available dynamic addresses based on industry group
@@ -162,8 +168,6 @@ namespace isobus
 						deviceAtOurPreferredAddress = CANNetworkManager::CANNetwork.get_control_function(get_can_port(), preferredAddress);
 					}
 
-					const std::uint8_t arbitrationRangeEnd = get_end_arbitration_address_for_industry_group(static_cast<NAME::IndustryGroup>(get_NAME().get_industry_group()));
-
 					// Time to find a free address
 					if ((nullptr == deviceAtOurPreferredAddress) && (NULL_CAN_ADDRESS != preferredAddress))
 					{
@@ -220,9 +224,12 @@ namespace isobus
 			{
 				const std::uint8_t endAddress = get_end_arbitration_address_for_industry_group(static_cast<NAME::IndustryGroup>(get_NAME().get_industry_group()));
 
-				for (std::uint8_t i = ARBITRATION_STARTING_ADDRESS; i <= endAddress; i++)
+				bool freeAddressFound = false;
+
+				for (std::uint8_t i = ARBITRATION_STARTING_ADDRESS; (i <= endAddress) && (!freeAddressFound); i++)
 				{
-					if ((nullptr == CANNetworkManager::CANNetwork.get_control_function(get_can_port(), i)) && (send_address_claim(i)))
+					freeAddressFound = (nullptr == CANNetworkManager::CANNetwork.get_control_function(get_can_port(), i));
+					if (freeAddressFound && send_address_claim(i))
 					{
 						hasClaimedAddress = true;
 
@@ -242,11 +249,14 @@ namespace isobus
 							          get_can_port());
 						}
 						set_current_state(State::AddressClaimingComplete);
-						break;
+					}
+					else if (freeAddressFound)
+					{
+						set_current_state(State::None);
 					}
 				}
 
-				if (!hasClaimedAddress)
+				if (!freeAddressFound)
 				{
 					LOG_CRITICAL("[AC]: Internal control function %016llx failed to claim an address on channel %u",
 					             get_NAME().get_full_name(),
@@ -363,40 +373,36 @@ namespace isobus
 
 	void InternalControlFunction::process_commanded_address(std::uint8_t commandedAddress)
 	{
-		if (State::AddressClaimingComplete == get_current_state())
+		if (State::AddressClaimingComplete != get_current_state())
 		{
-			if (!controlFunctionNAME.get_arbitrary_address_capable())
-			{
-				LOG_ERROR("[AC]: Our address was commanded to a new value, but our ISO NAME doesn't support changing our address.");
-			}
-			else
-			{
-				std::shared_ptr<ControlFunction> deviceAtOurPreferredAddress = CANNetworkManager::CANNetwork.get_control_function(canPortIndex, commandedAddress);
-				preferredAddress = commandedAddress;
-
-				if (nullptr == deviceAtOurPreferredAddress)
-				{
-					// Commanded address is free. We'll claim it.
-					set_current_state(State::SendPreferredAddressClaim);
-					LOG_INFO("[AC]: Our address was commanded to a new value of %u", commandedAddress);
-				}
-				else if (deviceAtOurPreferredAddress->get_NAME().get_full_name() < controlFunctionNAME.get_full_name())
-				{
-					// We can steal the address of the device at our commanded address and force it to move
-					set_current_state(State::SendArbitraryAddressClaim);
-					LOG_INFO("[AC]: Our address was commanded to a new value of %u, and an ECU at the target address is being evicted.", commandedAddress);
-				}
-				else
-				{
-					// We can't steal the address of the device at our commanded address, so we'll just ignore the command
-					// and log an error.
-					LOG_ERROR("[AC]: Our address was commanded to a new value of %u, but we cannot move to the target address.", commandedAddress);
-				}
-			}
+			LOG_WARNING("[AC]: Our address was commanded to a new value, but we are not in a state to change our address.");
+		}
+		else if (commandedAddress >= NULL_CAN_ADDRESS)
+		{
+			LOG_WARNING("[AC]: Ignoring a commanded address of %u, which is not a valid address.", commandedAddress);
+			set_current_state(State::SendReclaimAddressOnRequest);
+		}
+		else if (!controlFunctionNAME.get_arbitrary_address_capable())
+		{
+			LOG_ERROR("[AC]: Our address was commanded to a new value, but our ISO NAME doesn't support changing our address.");
+			set_current_state(State::SendReclaimAddressOnRequest);
 		}
 		else
 		{
-			LOG_WARNING("[AC]: Our address was commanded to a new value, but we are not in a state to change our address.");
+			std::shared_ptr<ControlFunction> deviceAtCommandedAddress = CANNetworkManager::CANNetwork.get_control_function(canPortIndex, commandedAddress);
+
+			if ((nullptr != deviceAtCommandedAddress) &&
+			    (deviceAtCommandedAddress->get_NAME().get_full_name() < controlFunctionNAME.get_full_name()))
+			{
+				LOG_ERROR("[AC]: Our address was commanded to a new value of %u, but we cannot move to the target address.", commandedAddress);
+				set_current_state(State::SendReclaimAddressOnRequest);
+			}
+			else
+			{
+				preferredAddress = commandedAddress;
+				set_current_state(State::SendPreferredAddressClaim);
+				LOG_INFO("[AC]: Our address was commanded to a new value of %u", commandedAddress);
+			}
 		}
 	}
 

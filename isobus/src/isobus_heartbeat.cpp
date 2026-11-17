@@ -137,7 +137,7 @@ namespace isobus
 	bool HeartbeatInterface::Heartbeat::send(const HeartbeatInterface &parent)
 	{
 		bool retVal = false;
-		const std::array<std::uint8_t, 1> buffer = { sequenceCounter };
+		const std::array<std::uint8_t, 8> buffer = { sequenceCounter, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 
 		retVal = parent.sendCANFrameCallback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage),
 		                                     CANDataSpan(buffer.data(), buffer.size()),
@@ -168,17 +168,20 @@ namespace isobus
 			{
 				managedHeartbeat->timestamp_ms = SystemTiming::get_timestamp_ms();
 
+				// A CF sends the initial value 251 once, then runs 0-250 and restarts at 0
+				const std::uint8_t expectedSequenceCounter = (static_cast<std::uint8_t>(SequenceCounterSpecialValue::Initial) == managedHeartbeat->sequenceCounter) ? 0 : ((managedHeartbeat->sequenceCounter + 1) % 251);
+
 				if (message.get_uint8_at(0) == managedHeartbeat->sequenceCounter)
 				{
 					LOG_ERROR("[HB]: Duplicate sequence counter received in heartbeat.");
 					heartbeatErrorEventDispatcher.call(HeartBeatError::InvalidSequenceCounter, message.get_source_control_function());
 				}
-				else if (message.get_uint8_at(0) != ((managedHeartbeat->sequenceCounter + 1) % 250))
+				else if (message.get_uint8_at(0) != expectedSequenceCounter)
 				{
 					LOG_ERROR("[HB]: Invalid sequence counter received in heartbeat.");
 					heartbeatErrorEventDispatcher.call(HeartBeatError::InvalidSequenceCounter, message.get_source_control_function());
 				}
-				trackedHeartbeats.back().sequenceCounter = message.get_uint8_at(0);
+				managedHeartbeat->sequenceCounter = message.get_uint8_at(0);
 			}
 			else
 			{

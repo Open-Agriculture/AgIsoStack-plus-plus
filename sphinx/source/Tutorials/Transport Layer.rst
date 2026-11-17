@@ -27,7 +27,7 @@ To send a message of more than 8 bytes, simply send a message like normal, but w
 
    std::uint8_t longMessage[2000] = {0};
 
-   isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, longMessage, 2000, myECU.get(), myPartner.get());
+   isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, longMessage, 2000, myECU, myPartner);
 
 That's it! Your message will be sent with either TP or ETP depending on the size of the payload.
 
@@ -55,7 +55,7 @@ See the :doc:`receiving messages tutorial <./Receiving Messages>` for instructio
 Sending and Receiving a Fast Packet Message
 --------------------------------------------
 
-To send a NMEA 2000 Fast Packet message, you'll need to call the function :code:`isobus::FastPacketProtocol::Protocol.send_multipacket_message`. You can view the API docs for this function `here <https://delgrossoengineering.com/isobus-docs/classisobus_1_1FastPacketProtocol.html#a5ba5d9ca1467b87aee566c6346431707>`_.
+To send a NMEA 2000 Fast Packet message, you'll need to call the function :code:`isobus::CANNetworkManager::CANNetwork.get_fast_packet_protocol(0)->send_multipacket_message`. You can view the API docs for this function `here <https://delgrossoengineering.com/isobus-docs/classisobus_1_1FastPacketProtocol.html#a5ba5d9ca1467b87aee566c6346431707>`_.
 
 Here's an example:
 
@@ -63,13 +63,13 @@ Here's an example:
 
 	std::uint8_t testMessageData[100] = {0};
 
-	isobus::FastPacketProtocol::Protocol.send_multipacket_message(0x1F001, testMessageData, 100, someInternalControlFunction, nullptr, isobus::CANIdentifier::CANPriority::PriorityLowest7, nullptr);
+	isobus::CANNetworkManager::CANNetwork.get_fast_packet_protocol(0)->send_multipacket_message(0x1F001, testMessageData, 100, someInternalControlFunction, nullptr, isobus::CANIdentifier::CANPriority::PriorityLowest7, nullptr);
 
-This example would send a 100 byte message from `someInternalControlFunction` to the broadcast address with the PGN 0x1F001.
+This example would send a 100 byte message from `someInternalControlFunction` to the broadcast address with the PGN 0x1F001. The stack holds one Fast Packet instance per CAN channel, so pass the index of the channel your source control function is on — channel 0 here.
 
 To receive messages sent via Fast Packet, you have to tell the CAN stack that it should interpret a certain PGN using that protocol rather than treating it as regular 8 byte frames with the same PGN.
 
-You can do this by calling :code:`isobus::FastPacketProtocol::Protocol.register_multipacket_message_callback`. You can view the API docs for this function `in the doxygen <https://delgrossoengineering.com/isobus-docs/classisobus_1_1FastPacketProtocol.html#a97f39f3272dfa9133abaab26592b1f50>`_.
+You can do this by calling :code:`isobus::CANNetworkManager::CANNetwork.get_fast_packet_protocol(0)->register_multipacket_message_callback`. You can view the API docs for this function `in the doxygen <https://delgrossoengineering.com/isobus-docs/classisobus_1_1FastPacketProtocol.html#a97f39f3272dfa9133abaab26592b1f50>`_.
 
 .. note::
 

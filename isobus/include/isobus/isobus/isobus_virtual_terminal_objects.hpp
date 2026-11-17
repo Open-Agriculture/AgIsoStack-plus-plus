@@ -10,12 +10,12 @@
 #define ISOBUS_VIRTUAL_TERMINAL_OBJECTS_HPP
 
 #include "isobus/isobus/can_constants.hpp"
+#include "isobus/utility/to_string.hpp"
 
 #include <algorithm>
 #include <array>
 #include <map>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -51,6 +51,7 @@ namespace isobus
 		Animation = 44, ///< The Animation object is used to display simple animations
 		PictureGraphic = 20, ///< Used to output a picture graphic (bitmap).
 		GraphicData = 46, ///< Used to define the data for a graphic image
+		WorkingSetSpecialControls = 47, ///< Used to define the initial Colour Map object and/or the initial Colour Palette object to use for the Working Set
 		ScaledGraphic = 48, ///< Used to display a scaled representation of a graphic object
 		NumberVariable = 21, ///< Used to store a 32-bit unsigned integer value.
 		StringVariable = 22, ///< Used to store a fixed length string value.
@@ -190,6 +191,7 @@ namespace isobus
 			InvalidObjectID = 0,
 			InvalidAttributeID = 1,
 			InvalidValue = 2,
+			ValueInUse = 3,
 			AnyOtherError = 4
 		};
 
@@ -418,14 +420,13 @@ namespace isobus
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
 
-		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @brief Rejects every attribute, because all Working Set attributes are read-only.
 		/// @param[in] attributeID The ID of the attribute to change
 		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
 		/// bytes/bits set to zero.
 		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
-		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
-		/// returns true, this value is undefined.
-		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		/// @param[out] returnedError Always set to AttributeError::InvalidAttributeID
+		/// @returns Always false
 		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
 
 		/// @brief Gets an attribute and returns the raw data in the last parameter
@@ -564,8 +565,8 @@ namespace isobus
 		{
 			Highest = 0, ///< Most aggressive beeping
 			Medium = 1, ///< Medium beeping
-			Lowest = 3, ///< Low beeping
-			None = 4 ///< No beeping
+			Lowest = 2, ///< Low beeping
+			None = 3 ///< No beeping
 		};
 
 		/// @brief Constructor for a alarm mask object
@@ -713,7 +714,7 @@ namespace isobus
 		void set_hidden(bool value);
 
 	private:
-		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 9; ///< The fewest bytes of IOP data that can represent this object
+		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 10; ///< The fewest bytes of IOP data that can represent this object
 
 		bool hidden = false; ///< The hidden attribute state for this container object. True means it will be hidden when rendered.
 	};
@@ -1714,7 +1715,7 @@ namespace isobus
 		void set_option(Options option, bool value);
 
 	private:
-		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 16; ///< The fewest bytes of IOP data that can represent this object
+		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 17; ///< The fewest bytes of IOP data that can represent this object
 	};
 
 	/// @brief This object is used to format and output a numeric value based on a supplied integer value.
@@ -2912,6 +2913,10 @@ namespace isobus
 		/// @param[in] dataByte One byte of bitmap data
 		void add_raw_data(std::uint8_t dataByte);
 
+		/// @brief Reserves space for decoded pixels, at most actual width times actual height
+		/// @param[in] pixels The most pixels the encoded data can decode to
+		void reserve_raw_data(std::uint64_t pixels);
+
 		/// @brief Returns the number of bytes in the raw data that comprises the underlying bitmap
 		/// @returns The number of bytes in the raw data that comprises the underlying bitmap
 		std::uint32_t get_number_of_bytes_in_raw_data() const;
@@ -3497,7 +3502,7 @@ namespace isobus
 		void set_validation_type(ValidationType newValidationType);
 
 	private:
-		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 7; ///< The fewest bytes of IOP data that can represent this object
+		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 6; ///< The fewest bytes of IOP data that can represent this object
 
 		std::string validationString; ///< String containing all valid or invalid character codes
 		ValidationType validationType = ValidationType::ValidCharactersAreListed; ///< Describes how to interpret the validation string
@@ -3849,21 +3854,22 @@ namespace isobus
 		/// @returns true if the command was added to the macro, otherwise false (maybe the max number of commands has been hit)
 		bool add_command_packet(const std::vector<std::uint8_t> &command);
 
-		/// @brief Returns the number of stored command packets inside this macro (max 255)
+		/// @brief Returns the number of stored command packets inside this macro
+		/// @details A macro holds at most 65535 bytes of commands (ISO 11783-6:2018 Table B.56), so the count fits 16 bits.
 		/// @returns The number of stored command packets inside this macro
-		std::uint8_t get_number_of_commands() const;
+		std::uint16_t get_number_of_commands() const;
 
 		/// @brief Returns a command packet by index
 		/// @param[in] index The index of the packet to retrieve
 		/// @param[out] command The returned command packet if the return value is true, otherwise the returned
 		/// command packet content is undefined.
 		/// @returns true if a valid command packet was returned, otherwise false (index out of range)
-		bool get_command_packet(std::uint8_t index, std::vector<std::uint8_t> &command);
+		bool get_command_packet(std::uint16_t index, std::vector<std::uint8_t> &command);
 
 		/// @brief Deletes a command packet from the macro by index
 		/// @param[in] index The index of the packet to delete
 		/// @returns true if the specified command packet was removed, otherwise false (index out of range)
-		bool remove_command_packet(std::uint8_t index);
+		bool remove_command_packet(std::uint16_t index);
 
 		/// @brief Returns if the command packets in this macro are valid
 		/// @returns true if the command packets in this macro are valid, otherwise false
@@ -4529,6 +4535,340 @@ namespace isobus
 		std::uint8_t pointerType = 0; ///< The pointer type, defines how this should be rendered
 	};
 
+	/// @brief Defines an Scaled Graphic object.
+	/// The Scaled Graphic object, available in VT version 6 and later, displays a scaled representation of a
+	/// referenced graphic object. The VT shall scale the raw data from the referenced graphic object from the
+	/// actual width and height to the target width and height. See Table B.75 and Table B.76. Therefore the
+	/// target width attribute in the Picture Graphic object shall be ignored when referenced from the Scaled
+	/// Graphic  object.
+	class ScaledGraphicObject : public VTObject
+	{
+	public:
+		/// @brief Enumerates this object's attributes that have Attribute IDs (AID)
+		enum class AttributeName : std::uint8_t
+		{
+			Width = 1,
+			Height = 2,
+			ScaleType = 3,
+			Options = 4,
+
+			NumberOfAttributes = 5
+		};
+
+		/// @brief Enumerates the option bits in the options bitfield for a Scale graphics object
+		enum class Options
+		{
+			Flashing = 0, // Flashing. Flash style and rate determined by VT design.
+		};
+
+		/// @brief Enumerates the scaling types for a Scaled graphics object
+		enum class ScalingValue : std::uint8_t
+		{
+			NotScaled = 0,
+			ScaleToWidthMaintainAspectRatio = 1,
+			ScaleToHeightMaintainAspectRatio = 2,
+			ScaleToWidthAndHeight = 3,
+			ScaleToWidthAndHeightMaintainAspectRatio = 4,
+			Reserved_1 = 5,
+			Reserved_2 = 6,
+			Reserved_3 = 7
+		};
+
+		/// @brief Indicates how the graphic is positioned within the field defined by the width
+		enum class HorizontalJustification : std::uint8_t
+		{
+			PositionLeft = 0,
+			PositionMiddle = 1,
+			PositionRight = 2,
+		};
+
+		/// @brief Indicates how the graphic is positioned within the field defined by the height
+		enum class VerticalJustification : std::uint8_t
+		{
+			PositionTop = 0,
+			PositionMiddle = 1,
+			PositionBottom = 2,
+		};
+
+		/// @brief Bitmask of the horizontal justification bits in the scale type attribute of a Scaled graphics object
+		static constexpr std::uint8_t HORIZONTAL_JUSTIFICATION_MASK = 0x18;
+
+		/// @brief Bitmask of the vertical justification bits in the scale type attribute of a Scaled graphics object
+		static constexpr std::uint8_t VERTICAL_JUSTIFICATION_MASK = 0x60;
+
+		/// @brief Constructor for a Scaled Graphic object
+		ScaledGraphicObject() = default;
+
+		/// @brief Virtual destructor for a Scaled Graphic object
+		~ScaledGraphicObject() override = default;
+
+		/// @brief Returns the VT object type of the underlying derived object
+		/// @returns The VT object type of the underlying derived objec
+		VirtualTerminalObjectType get_object_type() const override;
+
+		/// @brief Returns the minimum binary serialized length of the associated object
+		/// @returns The minimum binary serialized length of the associated object
+		std::uint32_t get_minumum_object_length() const override;
+
+		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
+		/// @returns `true` if the object passed basic error checks
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
+
+		/// @brief Gets an attribute and returns the raw data in the last parameter
+		/// @param[in] attributeID The ID of the attribute to get
+		/// @param[out] returnedAttributeData The raw data of the attribute, as decoded in little endian format with unused
+		/// bytes/bits set to zero. You may need to cast this to the correct type. If this function
+		/// returns false, this value is undefined.
+		/// @returns True if the attribute was retrieved, otherwise false (the attribute ID was invalid)
+		bool get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const override;
+
+		/// @brief Returns the state of a single option in the object's option bitfield
+		/// @param[in] option The option to check the value of in the object's option bitfield
+		/// @returns The state of the associated option bit
+		bool get_option(Options option) const;
+
+		/// @brief Sets a single option in the options bitfield to the specified value
+		/// @param[in] option The option to set
+		/// @param[in] value The new value of the option bit
+		void set_option(Options option, bool value);
+
+		/// @brief Sets the options bitfield for this object to a new value
+		/// @param[in] options The new value for the options bitfield
+		void set_options(std::uint8_t options);
+
+		/// @brief Returns the scale type of the scaled graphic object
+		/// @returns Scaling type value
+		std::uint8_t get_scale_type() const;
+
+		/// @brief Sets the scaling type of the scaled graphic object
+		/// @param[in] scale_type Scaling type value
+		void set_scale_type(std::uint8_t scale_type);
+
+		/// @brief Returns the scaling value of the scaled graphic object
+		/// @returns Scaling value
+		ScalingValue get_scaling_value() const;
+
+		/// @brief Sets the scaling value of the scaled graphic object
+		/// @param[in] scaling_value The new scaling value
+		void set_scaling_value(ScalingValue scaling_value);
+
+		/// @brief Helper method the query the vertical and horizontal justification with a single call
+		/// @param[in] vjust reference parameter for the vertical justification
+		/// @param[in] hjust reference parameter for the horizontal justification
+		void get_justification(VerticalJustification &vjust, HorizontalJustification &hjust) const;
+
+		/// @brief Returns the object ID of the referenced Graphics Data, Picture Graphic or object pointer
+		/// @returns The object ID of the referenced Graphics Data, Picture Graphic or object pointer or the null object ID
+		std::uint16_t get_graphic_id() const;
+
+		/// @brief Sets the object ID of the referenced Graphics Data, Picture Graphic or object pointer
+		/// @param[in] newGraphicID The object ID of the referenced Graphics Data, Picture Graphic or object pointer or the null object ID
+		void set_graphic_id(std::uint16_t newGraphicID);
+
+	private:
+		/// ScaleType bit-field
+		/// Bits 0-2 : scaling type
+		/// Bits 3-4 : horizontal justification
+		/// Bits 5-6 : vertical justification
+		/// Bit 7    : reserved
+		std::uint8_t scaleType = 0;
+
+		/// Options bit-field
+		/// Bit 0 = Flashing
+		/// Bits 1–7 = reserved
+		std::uint8_t optionsBitfield = 0;
+
+		std::uint16_t graphicID = NULL_OBJECT_ID; ///< Object ID of a referenced Graphics Data, Picture Graphic or object pointer or NULL_OBJECT_ID
+	};
+
+	/// @brief Defines an Graphic Data object.
+	/// Available in VT version 6 and later, this contains the raw data for a graphic
+	/// presentation. This object contains its full colour palette within the object itself, therefore,
+	/// unlike other objects, this one is not affected by either the Colour Map object or the Colour Palette object.
+	class GraphicDataObject : public VTObject
+	{
+	public:
+		/// @brief Constructor for a graphic data object
+		GraphicDataObject() = default;
+
+		/// @brief Virtual destructor for a graphic data object
+		~GraphicDataObject() override = default;
+
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			Format = 1,
+
+			NumberOfAttributes = 2
+		};
+
+		/// @brief As of version 6, the only supported graphic format is PNG
+		enum class Format : std::uint8_t
+		{
+			PNG = 0 // 32 bit RGBA max PNG
+		};
+
+		/// @brief Returns the VT object type of the underlying derived object
+		/// @returns The VT object type of the underlying derived objec
+		VirtualTerminalObjectType get_object_type() const override;
+
+		/// @brief Returns the minimum binary serialized length of the associated object
+		/// @returns The minimum binary serialized length of the associated object
+		std::uint32_t get_minumum_object_length() const override;
+
+		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
+		/// @returns `true` if the object passed basic error checks
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
+
+		/// @brief Gets an attribute and returns the raw data in the last parameter
+		/// @param[in] attributeID The ID of the attribute to get
+		/// @param[out] returnedAttributeData The raw data of the attribute, as decoded in little endian format with unused
+		/// bytes/bits set to zero. You may need to cast this to the correct type. If this function
+		/// returns false, this value is undefined.
+		/// @returns True if the attribute was retrieved, otherwise false (the attribute ID was invalid)
+		bool get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const override;
+
+		/// @brief Returns the format of graphic data contained in this object
+		/// @returns The format of graphic data contained in this object
+		Format get_format() const;
+
+		/// @brief Sets the format of graphic data contained in this object.
+		/// PNG is the only format supported in version 6, but this function allows for future expansion.
+		/// @param[in] type The format of graphic data contained in this object
+		void set_format(Format type);
+
+		/// @brief Sets the raw data of the graphic, in the format specified by the Format attribute.
+		/// @param[in] data The raw data of the graphic, in the format specified by the Format attribute
+		void set_raw_data(std::vector<std::uint8_t> data);
+
+		/// @brief Returns the raw data of the graphic, in the format specified by the Format attribute
+		/// @returns The raw data of the graphic, in the format specified by the Format attribute
+		const std::vector<std::uint8_t> &get_raw_data() const;
+
+	private:
+		Format format = Format::PNG; ///< The format/type of graphic data contained in this object
+		std::vector<std::uint8_t> rawData; ///< The raw data of the graphic, in the format specified by the Format attribute
+	};
+
+	/// @brief The Working Set Special Controls object, available in VT version 6 and later, can be used to define the
+	// initial Colour Map object and/or the initial Colour Palette object to use for the Working Set, and to define
+	// a list of language and country code pairs that supercede the list of languages in the Working Set object.
+	// The object pool can contain zero or one Working Set Special Controls object. If this object, or one
+	// or more of its attributes (AID 2 and higher) do not exist, as determined by the Number of Bytes to
+	// follow attribute, the VT shall use the equivalent to the NULL values for the corresponding attribute(s)
+	class WorkingSetSpecialControlsObject : public VTObject
+	{
+	public:
+		/// @brief Constructor for a working set special controls object
+		WorkingSetSpecialControlsObject() = default;
+
+		/// @brief Virtual destructor for a working set special controls object
+		~WorkingSetSpecialControlsObject() override = default;
+
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			NumberOfBytesToFollow = 1,
+			ObjectIDOfColourMapObject = 2,
+			ObjectIDOfColourPaletteObject = 3,
+
+			NumberOfAttributes = 4
+		};
+
+		/// @brief A struct to hold a language code and country code pair
+		struct LanguageCountryCodePair
+		{
+			std::string languageCode; ///< The ISO 639-1 language code
+			std::string countryCode; ///< The ISO 3166-1 country code (or 0x20, 0x20 if N/A)
+		};
+
+		/// @brief Returns the VT object type of the underlying derived object
+		/// @returns The VT object type of the underlying derived objec
+		VirtualTerminalObjectType get_object_type() const override;
+
+		/// @brief Returns the minimum binary serialized length of the associated object
+		/// @returns The minimum binary serialized length of the associated object
+		std::uint32_t get_minumum_object_length() const override;
+
+		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @param[in] objectPool The object pool to use when validating the object
+		/// @returns `true` if the object passed basic error checks
+		bool get_is_valid(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool) const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[in] objectPool The object pool to use when validating the objects affected by setting this attribute
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectPool, AttributeError &returnedError) override;
+
+		/// @brief Gets an attribute and returns the raw data in the last parameter
+		/// @param[in] attributeID The ID of the attribute to get
+		/// @param[out] returnedAttributeData The raw data of the attribute, as decoded in little endian format with unused
+		/// bytes/bits set to zero. You may need to cast this to the correct type. If this function
+		/// returns false, this value is undefined.
+		/// @returns True if the attribute was retrieved, otherwise false (the attribute ID was invalid)
+		bool get_attribute(std::uint8_t attributeID, std::uint32_t &returnedAttributeData) const override;
+
+		/// @brief Returns the object ID of the referenced Colour Map object or the null object ID.
+		/// @returns The object ID of the referenced Colour Map object or the null object ID
+		std::uint16_t get_colour_map_object_id() const;
+
+		/// @brief Sets the object ID of the referenced Colour Map object
+		/// @param[in] id The object ID of the referenced Colour Map object or the null object ID
+		void set_colour_map_object_id(std::uint16_t id);
+
+		/// @brief Returns the object ID of the referenced Colour Palette object or the null object ID.
+		/// @returns The object ID of the referenced Colour Palette object or the null object ID
+		std::uint16_t get_colour_palette_object_id() const;
+
+		/// @brief Sets the object ID of the referenced Colour Palette object
+		/// @param[in] id The object ID of the referenced Colour Palette object or the null object ID
+		void set_colour_palette_object_id(std::uint16_t id);
+
+		/// @brief Returns the language and country codes
+		/// @returns A constant reference to the vector of LanguageCountryCodePair
+		const std::vector<LanguageCountryCodePair> &get_language_codes() const;
+
+		/// @brief Sets the language and country codes
+		/// @param[in] codes A vector of LanguageCountryCodePair to set
+		void set_language_codes(std::vector<LanguageCountryCodePair> codes);
+
+	private:
+		std::uint16_t colourMapObjectID = NULL_OBJECT_ID; ///< Object ID of a referenced Colour Map object or NULL_OBJECT_ID
+		std::uint16_t colourPaletteObjectID = NULL_OBJECT_ID; ///< Object ID of a referenced Colour Palette object or NULL_OBJECT_ID
+		std::vector<LanguageCountryCodePair> languageCodes; ///< A vector of LanguageCountryCodePair representing the language and country codes to override in the working set object
+	};
+
 	template<typename T>
 	/// @brief A specialized replacement for std::to_string
 	/// @param object_id An ID of an IsoBus object
@@ -4539,9 +4879,7 @@ namespace isobus
 		{
 			return "NULL";
 		}
-		std::ostringstream oss;
-		oss << object_id;
-		return oss.str();
+		return isobus::to_string(object_id);
 	}
 } // namespace isobus
 

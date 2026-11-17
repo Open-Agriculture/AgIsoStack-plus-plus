@@ -11,6 +11,7 @@
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/isobus/isobus_device_descriptor_object_pool_helpers.hpp"
 #include "isobus/isobus/isobus_task_controller_server.hpp"
 #include "isobus/utility/system_timing.hpp"
@@ -18,6 +19,9 @@
 #include "helpers/control_function_helpers.hpp"
 #include "helpers/messaging_helpers.hpp"
 #include "helpers/test_fixture.hpp"
+
+#include <chrono>
+#include <future>
 
 using namespace isobus;
 
@@ -248,7 +252,7 @@ public:
 	{
 	}
 
-	void on_client_version_received(std::shared_ptr<ControlFunction> clientCF, std::uint8_t version) override
+	void on_client_version_received(std::shared_ptr<ControlFunction>, std::uint8_t version) override
 	{
 		lastClientVersion = version;
 		lastClientVersionReceived = true;
@@ -284,6 +288,11 @@ public:
 	bool send_status() const
 	{
 		return send_status_message();
+	}
+
+	std::size_t get_number_of_active_clients() const
+	{
+		return activeClients.size();
 	}
 
 	std::vector<std::uint8_t> testStructureLabel;
@@ -505,18 +514,8 @@ TEST_F(TaskControllerServerTest, MessageEncoding)
 	CANNetworkManager::CANNetwork.update();
 	server.update();
 
-	// After working set master, server should now proactively request version from client
-	// Skip the automatic version request message
-	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
-	EXPECT_EQ(testFrame.identifier, 0x14CB8887);
-	EXPECT_EQ(0x00, testFrame.data[0]); // RequestVersion command
-	EXPECT_EQ(0xFF, testFrame.data[1]);
-	EXPECT_EQ(0xFF, testFrame.data[2]);
-	EXPECT_EQ(0xFF, testFrame.data[3]);
-	EXPECT_EQ(0xFF, testFrame.data[4]);
-	EXPECT_EQ(0xFF, testFrame.data[5]);
-	EXPECT_EQ(0xFF, testFrame.data[6]);
-	EXPECT_EQ(0xFF, testFrame.data[7]);
+	// No Request Version until the client asks for ours
+	EXPECT_FALSE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 
 	// Request structure label
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(5,
@@ -535,6 +534,12 @@ TEST_F(TaskControllerServerTest, MessageEncoding)
 	                                                                                                   }));
 	CANNetworkManager::CANNetwork.update();
 	server.update();
+
+	// The client never asked, so the server asks once
+	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
+	EXPECT_EQ(testFrame.identifier, 0x14CB8887);
+	EXPECT_EQ(0x00, testFrame.data[0]);
+
 	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
 	EXPECT_EQ(testFrame.identifier, 0x14CB8887); // Priority 5, source 0x88, destination 0x87
 	EXPECT_EQ(8, testFrame.dataLength);
@@ -1210,6 +1215,89 @@ TEST_F(TaskControllerServerTest, MessageEncoding)
 	CANHardwareInterface::stop();
 }
 
+TEST_F(TaskControllerServerTest, WorkingSetMasterFromUnknownSource)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0xA5, 0, time_source);
+
+	DerivedTcServer server(internalECU,
+	                       4,
+	                       255,
+	                       16,
+	                       TaskControllerOptions()
+	                         .with_documentation()
+	                         .with_implement_section_control());
+	server.initialize();
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_raw(0x18FE0DA6, { 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_raw(0x18FE0DA6, { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+
+	EXPECT_EQ(0xFF, server.get_client_version(nullptr));
+
+	CANHardwareInterface::stop();
+}
+
+TEST_F(TaskControllerServerTest, ShortProcessDataIsIgnored)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0xA6, 0, time_source);
+	auto partnerClient = test_helpers::force_claim_partnered_control_function(0xA7, 0);
+
+	DerivedTcServer server(internalECU,
+	                       4,
+	                       255,
+	                       16,
+	                       TaskControllerOptions()
+	                         .with_documentation()
+	                         .with_implement_section_control());
+	server.initialize();
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(6, 0xFE0D, partnerClient, { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+	testPlugin.clear_queue();
+
+	const std::vector<std::vector<std::uint8_t>> shortPayloads = {
+		{},
+		{ static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::Value) },
+		{ static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::SetValueAndAcknowledge), 0x00, 0x01, 0x00 },
+		{ static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::Acknowledge), 0x00, 0x01, 0x00, 0x00, 0x00, 0x00 },
+	};
+
+	CANMessageFrame testFrame = {};
+	for (const auto &payload : shortPayloads)
+	{
+		CANMessage message(CANMessage::Type::Receive, CANIdentifier(test_helpers::create_ext_can_id(5, 0xCB00, internalECU, partnerClient)), payload, partnerClient, internalECU, 0);
+		server.test_receive_message(message, &server);
+		EXPECT_NO_THROW(server.update());
+		CANNetworkManager::CANNetwork.update();
+		EXPECT_FALSE(readFrameFilterStatus(testPlugin, testFrame, time_source));
+	}
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(5, 0xCB00, internalECU, partnerClient, { 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+	time_source.update_for_ms(1000);
+	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
+	EXPECT_EQ(0x10, testFrame.data[0]);
+
+	CANHardwareInterface::stop();
+}
+
 TEST_F(TaskControllerServerTest, ClientVersionTracking)
 {
 	VirtualCANPlugin testPlugin;
@@ -1251,11 +1339,6 @@ TEST_F(TaskControllerServerTest, ClientVersionTracking)
 	                                                                                                             }));
 	CANNetworkManager::CANNetwork.update();
 	server.update();
-
-	// Skip the automatic version request that gets sent
-	time_source.update_for_ms(5);
-	CANMessageFrame testFrame = {};
-	testPlugin.read_frame(testFrame);
 
 	// Initially, client version should be 0 (default before receiving version info)
 	EXPECT_EQ(0x00, server.get_client_version(partnerClient));
@@ -1314,6 +1397,96 @@ TEST_F(TaskControllerServerTest, ClientVersionTracking)
 	EXPECT_TRUE(server.lastClientVersionReceived);
 	EXPECT_EQ(0x03, server.lastClientVersion);
 	EXPECT_EQ(0x03, server.get_client_version(partnerClient));
+
+	CANHardwareInterface::stop();
+}
+
+TEST_F(TaskControllerServerTest, ClientVersionRequestedOnlyAfterClientAsks)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x96, 0, time_source);
+	auto partnerClient = test_helpers::force_claim_partnered_control_function(0x97, 0);
+
+	DerivedTcServer server(internalECU,
+	                       4,
+	                       255,
+	                       16,
+	                       TaskControllerOptions()
+	                         .with_documentation()
+	                         .with_implement_section_control());
+	server.initialize();
+
+	testPlugin.clear_queue();
+	CANMessageFrame testFrame = {};
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(6, 0xFE0D, partnerClient, { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+	EXPECT_FALSE(readFrameFilterStatus(testPlugin, testFrame, time_source));
+
+	// The server answers (0x10), then asks back (0x00)
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(5, 0xCB00, internalECU, partnerClient, { 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
+	EXPECT_EQ(0x14CB9796, testFrame.identifier);
+	EXPECT_EQ(0x10, testFrame.data[0]);
+	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
+	EXPECT_EQ(0x14CB9796, testFrame.identifier);
+	EXPECT_EQ(0x00, testFrame.data[0]);
+
+	// No second Request Version
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(5, 0xCB00, internalECU, partnerClient, { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
+	EXPECT_EQ(0x14CB9796, testFrame.identifier);
+	EXPECT_EQ(0x11, testFrame.data[0]);
+	EXPECT_FALSE(readFrameFilterStatus(testPlugin, testFrame, time_source));
+
+	CANHardwareInterface::stop();
+}
+
+TEST_F(TaskControllerServerTest, ClientVersionNotRequestedForAnotherServer)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0xA2, 0, time_source);
+	auto otherServerECU = test_helpers::claim_internal_control_function(0xA3, 0, time_source);
+	auto partnerClient = test_helpers::force_claim_partnered_control_function(0xA4, 0);
+
+	DerivedTcServer server(internalECU,
+	                       4,
+	                       255,
+	                       16,
+	                       TaskControllerOptions()
+	                         .with_documentation()
+	                         .with_implement_section_control());
+	server.initialize();
+
+	testPlugin.clear_queue();
+	CANMessageFrame testFrame = {};
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(6, 0xFE0D, partnerClient, { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(5, 0xCB00, otherServerECU, partnerClient, { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+
+	while (readFrameFilterStatus(testPlugin, testFrame, time_source))
+	{
+		EXPECT_FALSE((0x14CBA4A2 == testFrame.identifier) && (0x00 == testFrame.data[0]));
+	}
 
 	CANHardwareInterface::stop();
 }
@@ -1513,6 +1686,255 @@ TEST_F(TaskControllerServerTest, DDOPHelper_NoFunctions)
 	EXPECT_EQ(2000, implement.booms.at(0).sections.at(0).xOffset_mm.get());
 	EXPECT_EQ(3000, implement.booms.at(0).sections.at(0).yOffset_mm.get());
 	EXPECT_EQ(4000, implement.booms.at(0).sections.at(0).zOffset_mm.get());
+}
+
+TEST_F(TaskControllerServerTest, DDOPHelper_SectionWidthPriority)
+{
+	// Test that Section uses the working width priority: Actual > Maximum > Default
+	// regardless of the order in which the properties are referenced
+
+	DeviceDescriptorObjectPool ddop(3);
+	ddop.add_device("TEST", "123", "123", "1234567", { 1, 2, 3, 4, 5, 6, 7 }, {}, 0);
+	ddop.add_device_element("Device", 0, 0, isobus::task_controller_object::DeviceElementObject::Type::Device, 1);
+	ddop.add_device_element("MainBoom", 0, 1, isobus::task_controller_object::DeviceElementObject::Type::Function, 11);
+	ddop.add_device_element("Section1", 0, 11, isobus::task_controller_object::DeviceElementObject::Type::Section, 2);
+	ddop.add_device_element("Section2", 0, 11, isobus::task_controller_object::DeviceElementObject::Type::Section, 3);
+	ddop.add_device_element("Section3", 0, 11, isobus::task_controller_object::DeviceElementObject::Type::Section, 4);
+	ddop.add_device_element("Section4", 0, 11, isobus::task_controller_object::DeviceElementObject::Type::Section, 5);
+
+	ddop.add_device_property("S1_DefaultWidth", 3000, static_cast<std::uint16_t>(DataDescriptionIndex::DefaultWorkingWidth), 0xFFFF, 20);
+	ddop.add_device_property("S1_MaxWidth", 2000, static_cast<std::uint16_t>(DataDescriptionIndex::MaximumWorkingWidth), 0xFFFF, 21);
+	ddop.add_device_property("S1_ActualWidth", 1000, static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkingWidth), 0xFFFF, 22);
+	ddop.add_device_property("S2_DefaultWidth", 5000, static_cast<std::uint16_t>(DataDescriptionIndex::DefaultWorkingWidth), 0xFFFF, 30);
+	ddop.add_device_property("S2_MaxWidth", 4000, static_cast<std::uint16_t>(DataDescriptionIndex::MaximumWorkingWidth), 0xFFFF, 31);
+	ddop.add_device_property("S3_DefaultWidth", 6000, static_cast<std::uint16_t>(DataDescriptionIndex::DefaultWorkingWidth), 0xFFFF, 40);
+	ddop.add_device_property("S4_ActualWidth", 0, static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkingWidth), 0xFFFF, 50);
+	ddop.add_device_property("S4_DefaultWidth", 7000, static_cast<std::uint16_t>(DataDescriptionIndex::DefaultWorkingWidth), 0xFFFF, 51);
+
+	auto section1 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(2));
+	auto section2 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(3));
+	auto section3 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(4));
+	auto section4 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(5));
+
+	ASSERT_NE(nullptr, section1);
+	ASSERT_NE(nullptr, section2);
+	ASSERT_NE(nullptr, section3);
+	ASSERT_NE(nullptr, section4);
+
+	section1->add_reference_to_child_object(20);
+	section1->add_reference_to_child_object(21);
+	section1->add_reference_to_child_object(22);
+	section2->add_reference_to_child_object(30);
+	section2->add_reference_to_child_object(31);
+	section3->add_reference_to_child_object(40);
+	section4->add_reference_to_child_object(50);
+	section4->add_reference_to_child_object(51);
+
+	auto implement = DeviceDescriptorObjectPoolHelper::get_implement_geometry(ddop);
+
+	ASSERT_EQ(1, implement.booms.size());
+	ASSERT_EQ(4, implement.booms.at(0).sections.size());
+
+	// Actual wins even though Default and Maximum are referenced first
+	EXPECT_EQ(1000, implement.booms.at(0).sections.at(0).width_mm.get());
+	// Maximum wins over Default
+	EXPECT_EQ(4000, implement.booms.at(0).sections.at(1).width_mm.get());
+	// Only Default is available
+	EXPECT_EQ(6000, implement.booms.at(0).sections.at(2).width_mm.get());
+	// A zero Actual width is skipped
+	EXPECT_TRUE(implement.booms.at(0).sections.at(3).actualWorkingWidth_mm);
+	EXPECT_EQ(7000, implement.booms.at(0).sections.at(3).width_mm.get());
+}
+
+TEST_F(TaskControllerServerTest, DDOPHelper_SubBoomWidthPriority)
+{
+	// Test that SubBoom applies the same width priority logic as Section:
+	// Actual > Maximum > Default
+
+	DeviceDescriptorObjectPool ddop(3);
+	ddop.add_device("TEST", "123", "123", "1234567", { 1, 2, 3, 4, 5, 6, 7 }, {}, 0);
+	ddop.add_device_element("Device", 0, 0, isobus::task_controller_object::DeviceElementObject::Type::Device, 1);
+	ddop.add_device_element("MainBoom", 0, 1, isobus::task_controller_object::DeviceElementObject::Type::Function, 11);
+	ddop.add_device_element("SubBoom1", 0, 11, isobus::task_controller_object::DeviceElementObject::Type::Function, 2);
+	ddop.add_device_element("SubBoom2", 0, 11, isobus::task_controller_object::DeviceElementObject::Type::Function, 3);
+	ddop.add_device_element("SubBoom3", 0, 11, isobus::task_controller_object::DeviceElementObject::Type::Function, 4);
+	ddop.add_device_element("Section1", 0, 2, isobus::task_controller_object::DeviceElementObject::Type::Section, 10);
+
+	// SubBoom1: Has all three width types - should use Actual (highest priority)
+	ddop.add_device_property("SB1_ActualWidth", 1000, static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkingWidth), 0xFFFF, 20);
+	ddop.add_device_property("SB1_MaxWidth", 2000, static_cast<std::uint16_t>(DataDescriptionIndex::MaximumWorkingWidth), 0xFFFF, 21);
+	ddop.add_device_property("SB1_DefaultWidth", 3000, static_cast<std::uint16_t>(DataDescriptionIndex::DefaultWorkingWidth), 0xFFFF, 22);
+
+	// SubBoom2: Has only Maximum and Default - should use Maximum
+	ddop.add_device_property("SB2_MaxWidth", 4000, static_cast<std::uint16_t>(DataDescriptionIndex::MaximumWorkingWidth), 0xFFFF, 30);
+	ddop.add_device_property("SB2_DefaultWidth", 5000, static_cast<std::uint16_t>(DataDescriptionIndex::DefaultWorkingWidth), 0xFFFF, 31);
+
+	// SubBoom3: Has only Default - should use Default
+	ddop.add_device_property("SB3_DefaultWidth", 6000, static_cast<std::uint16_t>(DataDescriptionIndex::DefaultWorkingWidth), 0xFFFF, 40);
+
+	// Add references
+	auto subBoom1 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(2));
+	auto subBoom2 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(3));
+	auto subBoom3 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(4));
+	auto section1 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(10));
+
+	ASSERT_NE(nullptr, subBoom1);
+	ASSERT_NE(nullptr, subBoom2);
+	ASSERT_NE(nullptr, subBoom3);
+	ASSERT_NE(nullptr, section1);
+
+	subBoom1->add_reference_to_child_object(20);
+	subBoom1->add_reference_to_child_object(21);
+	subBoom1->add_reference_to_child_object(22);
+
+	subBoom2->add_reference_to_child_object(30);
+	subBoom2->add_reference_to_child_object(31);
+
+	subBoom3->add_reference_to_child_object(40);
+
+	// Add a section to SubBoom1
+	ddop.add_device_property("Sec1_Width", 7000, static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkingWidth), 0xFFFF, 50);
+	section1->add_reference_to_child_object(50);
+
+	// Parse the DDOP
+	auto implement = DeviceDescriptorObjectPoolHelper::get_implement_geometry(ddop);
+
+	// Validate structure
+	ASSERT_EQ(1, implement.booms.size());
+	ASSERT_EQ(3, implement.booms.at(0).subBooms.size());
+	ASSERT_EQ(1, implement.booms.at(0).subBooms.at(0).sections.size());
+
+	// Test SubBoom1: Should use ActualWorkingWidth (1000) - highest priority
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).actualWorkingWidth_mm);
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).maximumWorkingWidth_mm);
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).defaultWorkingWidth_mm);
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).width_mm);
+	EXPECT_EQ(1000, implement.booms.at(0).subBooms.at(0).actualWorkingWidth_mm.get());
+	EXPECT_EQ(2000, implement.booms.at(0).subBooms.at(0).maximumWorkingWidth_mm.get());
+	EXPECT_EQ(3000, implement.booms.at(0).subBooms.at(0).defaultWorkingWidth_mm.get());
+	EXPECT_EQ(1000, implement.booms.at(0).subBooms.at(0).width_mm.get()); // Should be Actual
+
+	// Test SubBoom2: Should use MaximumWorkingWidth (4000) - second priority
+	EXPECT_FALSE(implement.booms.at(0).subBooms.at(1).actualWorkingWidth_mm);
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(1).maximumWorkingWidth_mm);
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(1).defaultWorkingWidth_mm);
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(1).width_mm);
+	EXPECT_EQ(4000, implement.booms.at(0).subBooms.at(1).maximumWorkingWidth_mm.get());
+	EXPECT_EQ(5000, implement.booms.at(0).subBooms.at(1).defaultWorkingWidth_mm.get());
+	EXPECT_EQ(4000, implement.booms.at(0).subBooms.at(1).width_mm.get()); // Should be Maximum
+
+	// Test SubBoom3: Should use DefaultWorkingWidth (6000) - third priority
+	EXPECT_FALSE(implement.booms.at(0).subBooms.at(2).actualWorkingWidth_mm);
+	EXPECT_FALSE(implement.booms.at(0).subBooms.at(2).maximumWorkingWidth_mm);
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(2).defaultWorkingWidth_mm);
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(2).width_mm);
+	EXPECT_EQ(6000, implement.booms.at(0).subBooms.at(2).defaultWorkingWidth_mm.get());
+	EXPECT_EQ(6000, implement.booms.at(0).subBooms.at(2).width_mm.get()); // Should be Default
+
+	// Test Section width priority still works
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).sections.at(0).width_mm);
+	EXPECT_EQ(7000, implement.booms.at(0).subBooms.at(0).sections.at(0).width_mm.get());
+}
+
+TEST_F(TaskControllerServerTest, DDOPHelper_SubBoomWidthPriorityWithProcessData)
+{
+	// Test that SubBoom width priority works with DeviceProcessData (settable values)
+	// When both DeviceProperty and DeviceProcessData are present, the value comes from
+	// DeviceProperty and the settable flag comes from DeviceProcessData
+
+	DeviceDescriptorObjectPool ddop(3);
+	ddop.add_device("TEST", "123", "123", "1234567", { 1, 2, 3, 4, 5, 6, 7 }, {}, 0);
+	ddop.add_device_element("Device", 0, 0, isobus::task_controller_object::DeviceElementObject::Type::Device, 1);
+	ddop.add_device_element("MainBoom", 0, 1, isobus::task_controller_object::DeviceElementObject::Type::Function, 11);
+	ddop.add_device_element("SubBoom", 0, 11, isobus::task_controller_object::DeviceElementObject::Type::Function, 2);
+	ddop.add_device_element("Section1", 0, 2, isobus::task_controller_object::DeviceElementObject::Type::Section, 10);
+
+	// Add width as DeviceProperty (provides the value)
+	ddop.add_device_property("SB_ActualWidth", 1000, static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkingWidth), 0xFFFF, 20);
+	ddop.add_device_property("SB_MaxWidth", 2000, static_cast<std::uint16_t>(DataDescriptionIndex::MaximumWorkingWidth), 0xFFFF, 21);
+	ddop.add_device_property("SB_DefaultWidth", 3000, static_cast<std::uint16_t>(DataDescriptionIndex::DefaultWorkingWidth), 0xFFFF, 22);
+
+	// Add width as DeviceProcessData (marks as settable)
+	ddop.add_device_process_data("SB_ActualWidthPD", static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkingWidth), 0xFFFF, 0, 0, 30);
+	ddop.add_device_process_data("SB_MaxWidthPD", static_cast<std::uint16_t>(DataDescriptionIndex::MaximumWorkingWidth), 0xFFFF, static_cast<std::uint8_t>(task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), 0, 31);
+	ddop.add_device_process_data("SB_DefaultWidthPD", static_cast<std::uint16_t>(DataDescriptionIndex::DefaultWorkingWidth), 0xFFFF, static_cast<std::uint8_t>(task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), 0, 32);
+
+	auto subBoom = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(2));
+	ASSERT_NE(nullptr, subBoom);
+
+	// Add references to both properties and process data
+	subBoom->add_reference_to_child_object(20);
+	subBoom->add_reference_to_child_object(21);
+	subBoom->add_reference_to_child_object(22);
+	subBoom->add_reference_to_child_object(30);
+	subBoom->add_reference_to_child_object(31);
+	subBoom->add_reference_to_child_object(32);
+
+	auto implement = DeviceDescriptorObjectPoolHelper::get_implement_geometry(ddop);
+
+	ASSERT_EQ(1, implement.booms.size());
+	ASSERT_EQ(1, implement.booms.at(0).subBooms.size());
+
+	// All three width types should be present with values from DeviceProperty
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).actualWorkingWidth_mm.exists());
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).maximumWorkingWidth_mm.exists());
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).defaultWorkingWidth_mm.exists());
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).width_mm.exists());
+
+	// Values should come from DeviceProperty
+	EXPECT_EQ(1000, implement.booms.at(0).subBooms.at(0).actualWorkingWidth_mm.get());
+	EXPECT_EQ(2000, implement.booms.at(0).subBooms.at(0).maximumWorkingWidth_mm.get());
+	EXPECT_EQ(3000, implement.booms.at(0).subBooms.at(0).defaultWorkingWidth_mm.get());
+
+	// Width should use Actual (highest priority)
+	EXPECT_EQ(1000, implement.booms.at(0).subBooms.at(0).width_mm.get());
+
+	// Check editable flags from DeviceProcessData
+	EXPECT_FALSE(implement.booms.at(0).subBooms.at(0).actualWorkingWidth_mm.editable()); // Not settable in DPD
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).maximumWorkingWidth_mm.editable()); // Settable in DPD
+	EXPECT_TRUE(implement.booms.at(0).subBooms.at(0).defaultWorkingWidth_mm.editable()); // Settable in DPD
+}
+
+TEST_F(TaskControllerServerTest, DDOPHelper_WidthEditableFollowsActualWorkingWidth)
+{
+	DeviceDescriptorObjectPool ddop(3);
+	ddop.add_device("TEST", "123", "123", "1234567", { 1, 2, 3, 4, 5, 6, 7 }, {}, 0);
+	ddop.add_device_element("Device", 0, 0, isobus::task_controller_object::DeviceElementObject::Type::Device, 1);
+	ddop.add_device_element("MainBoom", 0, 1, isobus::task_controller_object::DeviceElementObject::Type::Function, 11);
+	ddop.add_device_element("Section1", 0, 11, isobus::task_controller_object::DeviceElementObject::Type::Section, 2);
+	ddop.add_device_element("Section2", 0, 11, isobus::task_controller_object::DeviceElementObject::Type::Section, 3);
+	ddop.add_device_element("Section3", 0, 11, isobus::task_controller_object::DeviceElementObject::Type::Section, 4);
+
+	ddop.add_device_process_data("S1_ActualWidthPD", static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkingWidth), 0xFFFF, static_cast<std::uint8_t>(task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), 0, 20);
+	ddop.add_device_process_data("S2_ActualWidthPD", static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkingWidth), 0xFFFF, static_cast<std::uint8_t>(task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), 0, 21);
+	ddop.add_device_property("S2_MaxWidth", 3000, static_cast<std::uint16_t>(DataDescriptionIndex::MaximumWorkingWidth), 0xFFFF, 22);
+	ddop.add_device_process_data("S3_ActualWidthPD", static_cast<std::uint16_t>(DataDescriptionIndex::ActualWorkingWidth), 0xFFFF, 0, 0, 23);
+	ddop.add_device_process_data("S3_MaxWidthPD", static_cast<std::uint16_t>(DataDescriptionIndex::MaximumWorkingWidth), 0xFFFF, static_cast<std::uint8_t>(task_controller_object::DeviceProcessDataObject::PropertiesBit::Settable), 0, 24);
+
+	auto section1 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(2));
+	auto section2 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(3));
+	auto section3 = std::static_pointer_cast<isobus::task_controller_object::DeviceElementObject>(ddop.get_object_by_id(4));
+	ASSERT_NE(nullptr, section1);
+	ASSERT_NE(nullptr, section2);
+	ASSERT_NE(nullptr, section3);
+	section1->add_reference_to_child_object(20);
+	section2->add_reference_to_child_object(21);
+	section2->add_reference_to_child_object(22);
+	section3->add_reference_to_child_object(23);
+	section3->add_reference_to_child_object(24);
+
+	auto implement = DeviceDescriptorObjectPoolHelper::get_implement_geometry(ddop);
+
+	ASSERT_EQ(1, implement.booms.size());
+	ASSERT_EQ(3, implement.booms.at(0).sections.size());
+
+	EXPECT_FALSE(implement.booms.at(0).sections.at(0).width_mm.exists());
+	EXPECT_TRUE(implement.booms.at(0).sections.at(0).width_mm.editable());
+
+	EXPECT_EQ(3000, implement.booms.at(0).sections.at(1).width_mm.get());
+	EXPECT_TRUE(implement.booms.at(0).sections.at(1).width_mm.editable());
+
+	EXPECT_FALSE(implement.booms.at(0).sections.at(2).width_mm.editable());
 }
 
 TEST_F(TaskControllerServerTest, B6CommandBusyStateTracking)
@@ -1717,6 +2139,98 @@ TEST_F(TaskControllerServerTest, B6CommandBusyState_ObjectPoolActivateDeactivate
 	EXPECT_EQ(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit should be clear after completion
 	EXPECT_EQ(0x00, testFrame.data[5]); // Cleared
 	EXPECT_EQ(0x00, testFrame.data[6]); // Cleared
+
+	CANHardwareInterface::stop();
+}
+
+class QueueingTcServer : public DerivedTcServer
+{
+public:
+	using DerivedTcServer::DerivedTcServer;
+
+	void on_client_version_received(std::shared_ptr<ControlFunction> clientControlFunction, std::uint8_t version) override
+	{
+		DerivedTcServer::on_client_version_received(clientControlFunction, version);
+		// Queues a message from another thread while this virtual runs, as the network manager's thread would
+		queuedFromOtherThread = std::async(std::launch::async, [this, clientControlFunction]() {
+			test_receive_message(test_helpers::create_message_broadcast(6, 0xFE0D, clientControlFunction, { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }), this);
+		});
+		queuedWhileVirtualRan = (std::future_status::ready == queuedFromOtherThread.wait_for(std::chrono::seconds(1)));
+	}
+
+	std::future<void> queuedFromOtherThread;
+	bool queuedWhileVirtualRan = false;
+};
+
+TEST_F(TaskControllerServerTest, MessageCanBeQueuedWhileAVirtualRuns)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x98, 0, time_source);
+	auto partnerClient = test_helpers::force_claim_partnered_control_function(0x99, 0);
+
+	QueueingTcServer server(internalECU, 4, 255, 16, TaskControllerOptions());
+	server.initialize();
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(6, 0xFE0D, partnerClient, { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(5, 0xCB00, internalECU, partnerClient, { 0x10, 0x04, 0xFF, 0x1F, 0x00, 0x01, 0x20, 0x10 }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+
+	ASSERT_TRUE(server.lastClientVersionReceived);
+	server.queuedFromOtherThread.wait();
+	EXPECT_TRUE(server.queuedWhileVirtualRan);
+
+	server.terminate();
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.deactivate_control_function(partnerClient);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+class DiscardingLogger : public CANStackLogger
+{
+public:
+	void sink_CAN_stack_log(CANStackLogger::LoggingLevel, const std::string &) override
+	{
+	}
+};
+
+TEST_F(TaskControllerServerTest, IgnoresMessagesWithoutSourceControlFunction)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x9D, 0, time_source);
+
+	DerivedTcServer server(internalECU,
+	                       4,
+	                       255,
+	                       16,
+	                       TaskControllerOptions()
+	                         .with_documentation()
+	                         .with_implement_section_control()
+	                         .with_tc_geo_with_position_based_control());
+	server.initialize();
+
+	// Source control functions are null, as for a client that was pruned while still sending
+	const std::vector<std::uint8_t> workingSetMaster = { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+	CANMessage workingSetMasterMessage(CANMessage::Type::Receive, CANIdentifier(0x18FE0D9E), workingSetMaster, nullptr, nullptr, 0);
+	server.test_receive_message(workingSetMasterMessage, &server);
+
+	// Not checked against the active clients
+	const std::vector<std::uint8_t> measurementCommand = { 0x44, 0x00, 0x8D, 0x00, 0xE8, 0x03, 0x00, 0x00 };
+	CANMessage measurementMessage(CANMessage::Type::Receive, CANIdentifier(0x14CB9D9E), measurementCommand, nullptr, internalECU, 0);
+	server.test_receive_message(measurementMessage, &server);
+
+	// With a sink set, the handlers' log arguments are evaluated, as in an application that logs
+	DiscardingLogger logger;
+	CANStackLogger::set_can_stack_logger_sink(&logger);
+	server.update();
+	CANStackLogger::set_can_stack_logger_sink(nullptr);
+	EXPECT_EQ(0u, server.get_number_of_active_clients());
 
 	CANHardwareInterface::stop();
 }

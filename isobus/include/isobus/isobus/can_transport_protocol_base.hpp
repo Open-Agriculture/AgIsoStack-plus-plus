@@ -14,6 +14,8 @@
 #include "isobus/isobus/can_message.hpp"
 #include "isobus/isobus/can_message_data.hpp"
 
+#include <atomic>
+
 namespace isobus
 {
 	/// @brief An object to keep track of session information internally
@@ -121,7 +123,7 @@ namespace isobus
 		std::unique_ptr<CANMessageData> data; ///< The data buffer for the message
 		std::shared_ptr<ControlFunction> source; ///< The source control function
 		std::shared_ptr<ControlFunction> destination; ///< The destination control function
-		std::uint32_t timestamp_ms = 0; ///< A timestamp used to track session timeouts
+		std::atomic<std::uint32_t> timestamp_ms{ 0 }; ///< A timestamp used to track session timeouts
 
 		std::uint32_t totalMessageSize; ///< The total size of the message in bytes (the maximum size of a message is from ETP and can fit in an uint32_t)
 

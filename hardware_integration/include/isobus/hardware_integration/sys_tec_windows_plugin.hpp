@@ -55,6 +55,10 @@ namespace isobus
 		/// @brief Connects to the hardware you specified in the constructor's channel argument
 		void open() override;
 
+		/// @brief Returns why the last call to open() failed
+		/// @returns A description of the failure, or an empty string if the last open() succeeded
+		std::string get_last_error() const override;
+
 		/// @brief Returns a frame from the hardware (synchronous), or `false` if no frame can be read.
 		/// @param[in, out] canFrame The CAN frame that was read
 		/// @returns `true` if a CAN frame was read, otherwise `false`
@@ -71,6 +75,7 @@ namespace isobus
 		std::uint8_t channelIndex = 0; ///< The channel for the device, used if you have a multi-channel device
 		std::uint8_t handle = USBCAN_INVALID_HANDLE; ///< The handle for the device, used to interact with the DLL
 		bool openResult = false; ///< Stores the result of the call to begin CAN communication. Used for is_valid check later.
+		std::string lastError; ///< Why the last open() failed
 	};
 }
 #endif // SYS_TEC_WINDOWS_PLUGIN_HPP

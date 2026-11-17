@@ -10,9 +10,11 @@
 #define ISOBUS_VIRTUAL_TERMINAL_MANAGED_WORKING_SET_HPP
 
 #include <array>
+#include <atomic>
 #include <map>
 #include <mutex>
 #include <thread>
+#include <vector>
 
 #include "isobus/isobus/can_badge.hpp"
 #include "isobus/isobus/can_control_function.hpp"
@@ -33,7 +35,7 @@ namespace isobus
 		/// @brief Enumerates the states of the processing thread for the object pool
 		enum class ObjectPoolProcessingThreadState
 		{
-			None, ///< Thread has never been started for this working set
+			None, ///< No object pool has been parsed for this working set, or it was deleted
 			Running, ///< We are currently parsing the object pool
 			Success, ///< We have finished parsing the pool successfully and need to respond to the working set
 			Fail, ///< The object pool is bad and we need to respond to the working set
@@ -47,8 +49,8 @@ namespace isobus
 		/// @param[in] associatedControlFunction The control function to associate with this working set
 		VirtualTerminalServerManagedWorkingSet(std::shared_ptr<ControlFunction> associatedControlFunction);
 
-		/// @brief Destructor
-		~VirtualTerminalServerManagedWorkingSet() = default;
+		/// @brief Destructor, joins the parsing thread if it is still running
+		~VirtualTerminalServerManagedWorkingSet();
 
 		/// @brief Starts a thread to parse the received object pool files
 		void start_parsing_thread();
@@ -86,13 +88,21 @@ namespace isobus
 		/// which is useful if you want to stop drawing this working set
 		void clear_callback_handles();
 
-		/// @brief Tells the server where this pool originated from.
-		/// @returns True if this pool was loaded via a Load Version Command, otherwise false (transferred normally)
+		/// @brief Tells the server whether the pool being parsed must be answered with a Load Version response
+		/// @returns True from a Load Version Command until the server has sent its Load Version response
 		bool get_was_object_pool_loaded_from_non_volatile_memory() const;
 
-		/// @brief Tells the server where this pool originated from.
-		/// @param[in] value True if this pool was loaded via a Load Version Command, otherwise false (transferred normally)
-		void set_was_object_pool_loaded_from_non_volatile_memory(bool value, CANLibBadge<VirtualTerminalServer>);
+		/// @brief Tells the server whether a restored pool must be answered with an Extended Load Version response
+		/// @returns True if the restoring command was an Extended Load Version Command
+		bool get_was_object_pool_loaded_with_extended_version_label() const;
+
+		/// @brief Tells the server whether the pool being parsed must be answered with a Load Version response
+		/// @param[in] value True when a Load Version Command restored the pool, false once its Load Version response has been sent
+		/// @param[in] extendedVersionLabel True when the restoring command was an Extended Load Version Command
+		void set_was_object_pool_loaded_from_non_volatile_memory(bool value, bool extendedVersionLabel, CANLibBadge<VirtualTerminalServer>);
+
+		/// @brief Discards the object pool so that a loaded version can overwrite it or the client can transfer a new one, keeping the callback handles
+		void clear_object_pool_data(CANLibBadge<VirtualTerminalServer>);
 
 		/// @brief Sets the object ID of the currently focused object
 		/// @param[in] objectID The object ID to set as the focused object
@@ -101,6 +111,21 @@ namespace isobus
 		/// @brief Returns the object ID of the currently focused object
 		/// @returns The object ID of the currently focused object
 		std::uint16_t get_object_focus() const;
+
+		/// @brief Sets the input object the operator is currently editing.
+		/// The application calls this when it opens or closes an input object for editing.
+		/// @param[in] objectID The object ID of the input object open for editing, or NULL_OBJECT_ID when none
+		void set_object_open_for_input(std::uint16_t objectID);
+
+		/// @brief Returns the input object the operator is currently editing
+		/// @returns The object ID of the input object open for editing, or NULL_OBJECT_ID when none
+		std::uint16_t get_object_open_for_input() const;
+
+		/// @brief Returns whether the last object pool parse replaced an object that already existed.
+		/// Only valid once object_pool_parse_finished() has been called for that parse.
+		/// @param[in] objectID The object ID to check
+		/// @returns true if the last parse replaced the object with this ID
+		bool was_object_replaced(std::uint16_t objectID) const;
 
 		/// @brief Sets the timestamp for when we received the last auxiliary input maintenance message
 		/// from the client.
@@ -147,8 +172,11 @@ namespace isobus
 		ObjectPoolProcessingThreadState processingState = ObjectPoolProcessingThreadState::None; ///< Stores the state of processing the object pool
 		std::uint32_t workingSetMaintenanceMessageTimestamp_ms = 0; ///< A timestamp (in ms) to track sending of the maintenance message
 		std::uint32_t auxiliaryInputMaintenanceMessageTimestamp_ms = 0; ///< A timestamp (in ms) to track if/when the working set sent an auxiliary input maintenance message
-		std::uint16_t focusedObject = NULL_OBJECT_ID; ///< Stores the object ID of the currently focused object
+		std::atomic<std::uint16_t> focusedObject = { NULL_OBJECT_ID }; ///< Stores the object ID of the currently focused object
+		std::atomic<std::uint16_t> openForInputObject = { NULL_OBJECT_ID }; ///< Stores the object ID of the input object currently open for editing
+		std::vector<std::uint16_t> replacedObjects; ///< Sorted IDs of the objects the last parse replaced, written by the parsing thread before it reports its result
 		bool wasLoadedFromNonVolatileMemory = false; ///< Used to tell the server how this object pool was obtained
+		bool wasLoadedWithExtendedVersionLabel = false; ///< Used to tell the server which load version command restored this object pool
 		bool workingSetDeletionRequested = false; ///< Used to tell the server to delete this working set
 	};
 } // namespace isobus

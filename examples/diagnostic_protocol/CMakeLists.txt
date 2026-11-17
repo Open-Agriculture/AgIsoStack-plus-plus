@@ -6,7 +6,8 @@ if(NOT BUILD_EXAMPLES)
 endif()
 find_package(Threads REQUIRED)
 
-add_executable(DiagnosticProtocolExample main.cpp)
+add_executable(DiagnosticProtocolExample main.cpp
+                                         ../common/create_can_driver.cpp)
 
 target_compile_features(DiagnosticProtocolExample PUBLIC cxx_std_11)
 set_target_properties(DiagnosticProtocolExample PROPERTIES CXX_EXTENSIONS OFF)

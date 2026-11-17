@@ -1,4 +1,5 @@
-#include "isobus/hardware_integration/available_can_drivers.hpp"
+#include "../../common/can_arguments_parser.hpp"
+#include "../../common/create_can_driver.hpp"
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
@@ -138,29 +139,14 @@ int main(int argc, char **argv)
 	if (argc < 2)
 	{
 		std::cout << "Least one argument needs to be passed!" << std::endl;
-		std::cout << "Usage: iop_loader <iop file name> [CAN interface name]" << std::endl;
+		std::cout << "Usage: iop_loader <iop file name> [--interface <CAN interface name>]" << std::endl;
 		return -1;
 	}
 
-	std::string interfaceName = argc <= 2 ? "vcan0" : argv[2];
-	std::shared_ptr<isobus::CANHardwarePlugin> canDriver = nullptr;
-#if defined(ISOBUS_SOCKETCAN_AVAILABLE)
-	canDriver = std::make_shared<isobus::SocketCANInterface>(interfaceName);
-#elif defined(ISOBUS_WINDOWSINNOMAKERUSB2CAN_AVAILABLE)
-	int channel = interfaceName.empty() ? 0 : std::stoi(interfaceName);
-	canDriver = std::make_shared<isobus::InnoMakerUSB2CANWindowsPlugin>(channel);
-#elif (defined(ISOBUS_MACCANPCAN_AVAILABLE) || defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE))
-	int channel = interfaceName.empty() ? PCAN_USBBUS1 : (std::stoi(interfaceName) - 1 + PCAN_USBBUS1);
-#if defined(ISOBUS_MACCANPCAN_AVAILABLE)
-	canDriver = std::make_shared<isobus::MacCANPCANPlugin>(channel);
-#elif defined(ISOBUS_WINDOWSPCANBASIC_AVAILABLE)
-	canDriver = std::make_shared<isobus::PCANBasicWindowsPlugin>(channel);
-#endif
-#endif
+	const auto canParameters = CanParametersParser(argc, argv).parameters();
+	auto canDriver = CANDriverFactory::create(canParameters.interface, canParameters.driver);
 	if (nullptr == canDriver)
 	{
-		std::cout << "Unable to find a CAN driver. Please make sure you have one of the above drivers installed with the library." << std::endl;
-		std::cout << "If you want to use a different driver, please add it to the list above." << std::endl;
 		return -1;
 	}
 

@@ -1,0 +1,13 @@
+# ESP-IDF settings AgIsoStack++ needs, see the ESP32 PlatformIO tutorial.
+# ESP-IDF applies these whenever it generates the sdkconfig for an environment,
+# so they also apply when you switch to another board. If you already built this
+# example before, delete the generated sdkconfig.<environment> file to apply them.
+
+# AgIsoStack++ runs its CAN and VT client work on std::threads, which ESP-IDF
+# backs with pthreads. The 3072 byte default pthread stack overflows, which makes
+# the ESP32 crash and reboot over and over at runtime.
+CONFIG_PTHREAD_TASK_STACK_SIZE_DEFAULT=8192
+
+# Match the FreeRTOS tick to the CAN stack's default 4 ms update period. The
+# default 100 Hz tick (10 ms) is too coarse for it.
+CONFIG_FREERTOS_HZ=250
