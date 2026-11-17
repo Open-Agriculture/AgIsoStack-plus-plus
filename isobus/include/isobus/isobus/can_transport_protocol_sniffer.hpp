@@ -88,12 +88,12 @@ namespace isobus
 		                  std::uint16_t totalMessageSize,
 		                  std::uint8_t totalNumberOfPackets);
 
-		/// @brief Finds the observed session for the given source and destination combination
-		/// @param[in] source The source control function for the session
-		/// @param[in] destination The destination control function for the session
+		/// @brief Finds the observed session from the given originator to the given receiver
+		/// @param[in] originator The control function that sent the request to send
+		/// @param[in] receiver The control function that sends clear to send
 		/// @returns An iterator to the matching session, or the end iterator if there is no match
-		std::list<SnifferSession>::iterator get_session(const std::shared_ptr<ControlFunction> &source,
-		                                                const std::shared_ptr<ControlFunction> &destination);
+		std::list<SnifferSession>::iterator get_session(const std::shared_ptr<ControlFunction> &originator,
+		                                                const std::shared_ptr<ControlFunction> &receiver);
 
 		std::list<SnifferSession> sessions; ///< Every connection we are currently following
 		const ParameterGroupNumberFilter parameterGroupNumberFilter; ///< Tells us which PGNs are worth reassembling

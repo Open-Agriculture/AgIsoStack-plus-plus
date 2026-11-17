@@ -286,11 +286,11 @@ namespace isobus
 		}
 	}
 
-	std::list<TransportProtocolSniffer::SnifferSession>::iterator TransportProtocolSniffer::get_session(const std::shared_ptr<ControlFunction> &source,
-	                                                                                                    const std::shared_ptr<ControlFunction> &destination)
+	std::list<TransportProtocolSniffer::SnifferSession>::iterator TransportProtocolSniffer::get_session(const std::shared_ptr<ControlFunction> &originator,
+	                                                                                                    const std::shared_ptr<ControlFunction> &receiver)
 	{
-		return std::find_if(sessions.begin(), sessions.end(), [&source, &destination](const SnifferSession &session) {
-			return (session.source == source) && (session.destination == destination);
+		return std::find_if(sessions.begin(), sessions.end(), [&originator, &receiver](const SnifferSession &session) {
+			return (session.source == originator) && (session.destination == receiver);
 		});
 	}
 } // namespace isobus
