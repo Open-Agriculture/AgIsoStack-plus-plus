@@ -11,6 +11,8 @@
 
 #include <gtest/gtest.h>
 
+#include "isobus/hardware_integration/can_hardware_interface.hpp"
+#include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
 #include "test_time_source.hpp"
@@ -31,6 +33,20 @@ public:
 
 	void TearDown() override
 	{
+		// A test that stops early on a failed ASSERT leaves the interface running, and the next test could not set it up
+		isobus::CANHardwareInterface::stop();
+
+		// Deactivate the internal and partnered control functions, so that a later test in the same process can claim their addresses.
+		// A partner that still has a valid address is replaced by an external control function, which keeps its address claimed.
+		for (const auto &partner : isobus::CANNetworkManager::CANNetwork.get_partnered_control_functions())
+		{
+			isobus::CANNetworkManager::CANNetwork.deactivate_control_function(partner);
+		}
+		for (const auto &internal : isobus::CANNetworkManager::CANNetwork.get_internal_control_functions())
+		{
+			isobus::CANNetworkManager::CANNetwork.deactivate_control_function(internal);
+		}
+
 		isobus::SystemTiming::override_time_source(nullptr);
 		isobus::CANStackLogger::set_log_level(isobus::CANStackLogger::LoggingLevel::Info);
 		isobus::CANStackLogger::set_can_stack_logger_sink(nullptr);

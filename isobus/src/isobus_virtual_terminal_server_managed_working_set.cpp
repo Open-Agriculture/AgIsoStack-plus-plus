@@ -13,7 +13,9 @@
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/to_string.hpp"
 
+#include <algorithm>
 #include <cstring>
+#include <map>
 
 namespace isobus
 {
@@ -117,19 +119,35 @@ namespace isobus
 		iopFilesRawData.clear();
 		transferredIopSize = 0;
 		workingSetID = NULL_OBJECT_ID;
-		focusedObject = NULL_OBJECT_ID;
+		focusedObject.store(NULL_OBJECT_ID);
+		openForInputObject.store(NULL_OBJECT_ID);
 		set_object_pool_faulting_object_id(NULL_OBJECT_ID);
 		set_object_pool_processing_state(ObjectPoolProcessingThreadState::None);
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::set_object_focus(std::uint16_t objectID)
 	{
-		focusedObject = objectID;
+		focusedObject.store(objectID);
 	}
 
 	std::uint16_t VirtualTerminalServerManagedWorkingSet::get_object_focus() const
 	{
-		return focusedObject;
+		return focusedObject.load();
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::set_object_open_for_input(std::uint16_t objectID)
+	{
+		openForInputObject.store(objectID);
+	}
+
+	std::uint16_t VirtualTerminalServerManagedWorkingSet::get_object_open_for_input() const
+	{
+		return openForInputObject.load();
+	}
+
+	bool VirtualTerminalServerManagedWorkingSet::was_object_replaced(std::uint16_t objectID) const
+	{
+		return std::binary_search(replacedObjects.begin(), replacedObjects.end(), objectID);
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::set_auxiliary_input_maintenance_timestamp_ms(std::uint32_t value)
@@ -202,6 +220,7 @@ namespace isobus
 		if (!iopFilesRawData.empty())
 		{
 			bool lSuccess = true;
+			const std::map<std::uint16_t, std::shared_ptr<VTObject>> objectsBeforeParse = get_object_tree();
 
 			LOG_INFO("[WS]: Beginning parsing of object pool. This pool has " +
 			         isobus::to_string(static_cast<int>(iopFilesRawData.size())) +
@@ -224,6 +243,15 @@ namespace isobus
 					// Load Version parses the stored transfers joined together, where this padding would read as objects
 					iopFilesRawData[i].data.resize(objectsLength);
 					iopFilesRawData[i].processed = true;
+				}
+			}
+
+			replacedObjects.clear();
+			for (const auto &object : objectsBeforeParse)
+			{
+				if (object.second != get_object_by_id(object.first))
+				{
+					replacedObjects.push_back(object.first);
 				}
 			}
 
