@@ -60,6 +60,12 @@ namespace isobus
 		/// @returns Pointer to the currently active working set, or nullptr if none is active
 		std::shared_ptr<VirtualTerminalServerManagedWorkingSet> get_active_working_set() const;
 
+		/// @brief Checks if an object is shown on the active mask of a working set
+		/// @param[in] workingSet The working set that owns the object
+		/// @param[in] objectID The object to look for
+		/// @returns true if the object is drawn on the working set's active mask or its soft key mask, following object pointers and skipping hidden containers, otherwise false
+		static bool is_shown_on_active_mask(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, std::uint16_t objectID);
+
 		/// @brief The Button Activation message allows the VT to transmit operator selection of a Button object to the Working
 		/// Set Master
 		/// @param[in] activationCode 0 for released, 1 for "pressed", 2 for "still held", or 3 for "aborted"
@@ -96,6 +102,19 @@ namespace isobus
 		/// @param[in] destination The control function to send the message to
 		/// @returns True if the message was sent, otherwise false
 		bool send_esc_message(std::uint16_t objectId, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
+
+		/// @brief Sends the Pointing Event message, when the operator touches a Data Mask outside its Buttons and input fields
+		/// @details The touch state is sent from VT version 4 on, and the parent mask and a transaction number from
+		/// VT version 6 on, see ISO 11783-6 H.6. The transaction number goes up with each message.
+		/// Before VT version 4 the message always means a press, so only a press is sent: a release or a held touch
+		/// sends nothing and returns false.
+		/// @param[in] touchState Released, pressed or still held
+		/// @param[in] xPosition X position in pixels, relative to the top left corner of the Data Mask area
+		/// @param[in] yPosition Y position in pixels, relative to the top left corner of the Data Mask area
+		/// @param[in] parentMaskObjectId Object ID of the touched Data Mask
+		/// @param[in] destination The VT client to send the message to
+		/// @returns True if the message was sent, otherwise false, also for a release or a held touch before VT version 4
+		bool send_pointing_event_message(KeyActivationCode touchState, std::uint16_t xPosition, std::uint16_t yPosition, std::uint16_t parentMaskObjectId, std::shared_ptr<ControlFunction> destination);
 
 		/// @brief The Button Activation message allows the VT to transmit operator selection of a key object to the Working
 		/// Set Master
@@ -270,8 +289,10 @@ namespace isobus
 		/// @param[in] reason How the unexpected shutdown was detected
 		virtual void handle_unexpected_working_set_shutdown(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, UnexpectedShutdownReason reason) = 0;
 
-		/// @brief Called when a working set sends an ESC command. Close its open input, if any, before returning, and send
-		/// VT Select Input Object as on Cancel, but not the VT ESC message. Can be called from the CAN thread.
+		/// @brief Called when a working set sends an ESC command, or when a command removes, hides or replaces the object open
+		/// for input. Close the open input, if any, before returning, clear it with set_object_open_for_input(NULL_OBJECT_ID),
+		/// and send VT Select Input Object with the object deselected, but not the VT ESC message. If no input is open, send nothing and
+		/// return NULL_OBJECT_ID, the server then deselects the focused object itself. Can be called from the CAN thread.
 		/// @param[in] workingSet The working set that sent the ESC command
 		/// @returns The object ID of the object whose input was aborted, or NULL_OBJECT_ID if no object was open for input
 		virtual std::uint16_t abort_input(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet) = 0;
@@ -296,6 +317,11 @@ namespace isobus
 		/// If you want to override this, you can override this function.
 		/// @returns The bitfield of supported large fonts
 		virtual std::uint8_t get_supported_large_fonts_bitfield() const;
+
+		/// @brief By default, the VT server will report that it supports normal, bold, italic, proportional
+		/// If you want to override this, you can override this function.
+		/// @returns The bitfield of supported font styles
+		virtual std::uint8_t get_supported_font_styles_bitfield() const;
 
 		/// @brief This function is called when the Identify VT version message is received
 		virtual void identify_vt();
@@ -375,6 +401,8 @@ namespace isobus
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t> &get_on_change_active_softkey_mask_event_dispatcher();
 
 		/// @brief Returns the event dispatcher for when an object is focused
+		/// When the bool is true the working set asked to open the object for input. If you open it, call
+		/// set_object_open_for_input() on the working set, otherwise the server does not know an input is open.
 		/// @returns The event dispatcher for when an object is focused
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, bool> &get_on_focus_object_event_dispatcher();
 
@@ -410,6 +438,14 @@ namespace isobus
 			AnyOtherError = 4
 		};
 
+		/// @brief Enumerates the bit indices of the error fields that can be set in a change end point response
+		enum class ChangeEndPointErrorBit : std::uint8_t
+		{
+			InvalidObjectID = 0,
+			InvalidLineDirection = 1,
+			AnyOtherError = 4
+		};
+
 		/// @brief Enumerates the bit indices of the error fields that can be set in a change fill attributes response
 		enum class ChangeFillAttributesErrorBit : std::uint8_t
 		{
@@ -437,7 +473,7 @@ namespace isobus
 			InvalidObjectID = 0,
 			InvalidListIndex = 1,
 			InvalidNewListItemObjectID = 2,
-			Reserved = 3, ///< Set to zero
+			ValueInUse = 3, ///< Such as: open for input (VT version 4 and 5 only)
 			AnyOtherError = 4
 		};
 
@@ -483,7 +519,7 @@ namespace isobus
 			InvalidObjectID = 1,
 			StringTooLong = 2,
 			AnyOtherError = 3,
-			Reserved = 4 ///< In VT version 4 and 5 this bit was "value in use" but that is now deprecated
+			ValueInUse = 4 ///< Value in use (VT version 4 and 5 only), deprecated from VT version 6 on
 		};
 
 		/// @brief Enumerates the bit indices of the error fields that can be set in a enable/disable object response
@@ -546,6 +582,13 @@ namespace isobus
 			InvalidObjectID = 0,
 			InvalidPointIndex = 1,
 			AnyOtherError = 2
+		};
+
+		/// @brief Enumerates the bit indices of the error fields that can be set in a change polygon scale response
+		enum class ChangePolygonScaleErrorBit : std::uint8_t
+		{
+			InvalidObjectID = 0,
+			AnyOtherError = 4
 		};
 
 		/// @brief Enumerates the bit indices of the error fields that can be set in a delete object pool response
@@ -648,6 +691,13 @@ namespace isobus
 		/// @returns true if the macro was executed, otherwise false
 		bool execute_macro(std::uint16_t objectIDOfMacro, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
 
+		/// @brief Returns the Soft Key Mask of a Data or Alarm Mask
+		/// @details A Soft Key Mask is shown and hidden together with the mask it belongs to (ISO 11783-6:2018, 4.6.18).
+		/// @param[in] mask The Data or Alarm Mask
+		/// @param[in] workingSet The working set that owns the mask
+		/// @returns The Soft Key Mask, or nullptr if the object is no Data or Alarm Mask or has no Soft Key Mask
+		static std::shared_ptr<VTObject> get_soft_key_mask_of(const std::shared_ptr<VTObject> &mask, const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet);
+
 		/// @brief Returns the priority to use, depending on the VT version
 		/// @returns The priority to use, depending on the VT version
 		CANIdentifier::CANPriority get_priority() const;
@@ -712,6 +762,13 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_child_location_response(std::uint16_t parentObjectID, std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
+		/// @brief Sends a response to a change end point command
+		/// @param[in] objectID The object ID of the output line
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent, otherwise false
+		bool send_change_end_point_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
+
 		/// @brief Sends a response to a change child position command
 		/// @param[in] parentObjectID The object ID for the parent of the object to move
 		/// @param[in] objectID The object ID for the object to move
@@ -764,6 +821,15 @@ namespace isobus
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_polygon_point_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
+
+		/// @brief Sends a response to a change polygon scale command
+		/// @param[in] objectID The object ID of the output polygon
+		/// @param[in] width The new width attribute from the command
+		/// @param[in] height The new height attribute from the command
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent, otherwise false
+		bool send_change_polygon_scale_response(std::uint16_t objectID, std::uint16_t width, std::uint16_t height, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to a change size command
 		/// @param[in] objectID The object ID for the object whose size was meant to be changed
@@ -931,6 +997,7 @@ namespace isobus
 		std::uint8_t activeWorkingSetMasterAddress = NULL_CAN_ADDRESS; ///< The address of the active working set's master
 		std::uint8_t busyCodesBitfield = 0; ///< The busy codes bitfield
 		std::uint8_t currentCommandFunctionCode = 0; ///< The current command function code being processed
+		std::uint8_t pointingEventTransactionNumber = 0; ///< The TAN of the next Pointing Event message, VT version 6 and later
 		bool initialized = false; ///< True if the server has been initialized, otherwise false
 
 	private:
@@ -959,6 +1026,24 @@ namespace isobus
 			InsufficientMemory = 2,
 			AnyOtherError = 3
 		};
+
+		/// @brief Checks whether a change to an object has to be refused because the operator is editing it (VT version 4 and 5 only)
+		/// @param[in] workingSet The working set that sent the command
+		/// @param[in] objectId The object the command changes
+		/// @param[in] includeReferencedVariable True to also refuse a change to the variable object that the open input references
+		/// @returns true if the change must be answered with the "value in use" error, otherwise false
+		bool is_value_in_use_by_open_input(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, std::uint16_t objectId, bool includeReferencedVariable) const;
+
+		/// @brief Tells the working set that the object open for input or focused was removed from the display
+		/// @details The open input is closed through abort_input() and a VT ESC message is sent for the object it returns, otherwise a focused object is deselected.
+		/// @param[in] workingSet The working set that lost its focus
+		void notify_focus_lost(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
+
+		/// @brief Calls notify_focus_lost() if the object open for input, or else the focused object, is gone, no longer shown on the active mask,
+		/// or replaced by the pool parse that just finished
+		/// @param[in] workingSet The working set to check
+		/// @param[in] poolWasParsed True right after a pool parse, so that an object the parse replaced counts as removed
+		void notify_focus_lost_if_removed(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, bool poolWasParsed = false);
 
 		static constexpr std::uint8_t EXTENDED_VERSION_LABEL_LENGTH = 32; ///< The length of an extended object pool version label (VT version 5 and later)
 

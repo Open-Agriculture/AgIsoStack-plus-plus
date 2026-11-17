@@ -18,6 +18,8 @@
 namespace isobus
 {
 	/// @brief Logs to Vector .asc file
+	/// @note The logger listens to CANHardwareInterface's frame events, and CANHardwareInterface::stop() removes those
+	/// listeners. After a stop() and a later start(), create a new logger to keep logging.
 	class VectorASCLogger
 	{
 	public:
