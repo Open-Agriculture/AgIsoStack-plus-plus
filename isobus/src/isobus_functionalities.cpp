@@ -167,7 +167,10 @@ namespace isobus
 
 	bool ControlFunctionFunctionalities::get_aux_N_inputs_option_state(AuxNOptions option)
 	{
-		return get_functionality_byte_option(Functionalities::AuxNInputs, 0, static_cast<std::uint8_t>(option));
+		// Read from the byte and bit that set_aux_N_inputs_option_state() writes to
+		return get_functionality_byte_option(Functionalities::AuxNInputs,
+		                                     option > AuxNOptions::SupportsType7Function ? 1 : 0,
+		                                     option > AuxNOptions::SupportsType7Function ? static_cast<std::uint8_t>(static_cast<std::uint16_t>(option) >> 8) : static_cast<std::uint8_t>(option));
 	}
 
 	void ControlFunctionFunctionalities::set_aux_N_functions_option_state(AuxNOptions option, bool optionState)
@@ -187,7 +190,10 @@ namespace isobus
 
 	bool ControlFunctionFunctionalities::get_aux_N_functions_option_state(AuxNOptions option)
 	{
-		return get_functionality_byte_option(Functionalities::AuxNFunctions, 0, static_cast<std::uint8_t>(option));
+		// Read from the byte and bit that set_aux_N_functions_option_state() writes to
+		return get_functionality_byte_option(Functionalities::AuxNFunctions,
+		                                     option > AuxNOptions::SupportsType7Function ? 1 : 0,
+		                                     option > AuxNOptions::SupportsType7Function ? static_cast<std::uint8_t>(static_cast<std::uint16_t>(option) >> 8) : static_cast<std::uint8_t>(option));
 	}
 
 	void ControlFunctionFunctionalities::set_task_controller_geo_server_option_state(TaskControllerGeoServerOptions option, bool optionState)

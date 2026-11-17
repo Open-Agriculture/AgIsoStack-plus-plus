@@ -3854,21 +3854,22 @@ namespace isobus
 		/// @returns true if the command was added to the macro, otherwise false (maybe the max number of commands has been hit)
 		bool add_command_packet(const std::vector<std::uint8_t> &command);
 
-		/// @brief Returns the number of stored command packets inside this macro (max 255)
+		/// @brief Returns the number of stored command packets inside this macro
+		/// @details A macro holds at most 65535 bytes of commands (ISO 11783-6:2018 Table B.56), so the count fits 16 bits.
 		/// @returns The number of stored command packets inside this macro
-		std::uint8_t get_number_of_commands() const;
+		std::uint16_t get_number_of_commands() const;
 
 		/// @brief Returns a command packet by index
 		/// @param[in] index The index of the packet to retrieve
 		/// @param[out] command The returned command packet if the return value is true, otherwise the returned
 		/// command packet content is undefined.
 		/// @returns true if a valid command packet was returned, otherwise false (index out of range)
-		bool get_command_packet(std::uint8_t index, std::vector<std::uint8_t> &command);
+		bool get_command_packet(std::uint16_t index, std::vector<std::uint8_t> &command);
 
 		/// @brief Deletes a command packet from the macro by index
 		/// @param[in] index The index of the packet to delete
 		/// @returns true if the specified command packet was removed, otherwise false (index out of range)
-		bool remove_command_packet(std::uint8_t index);
+		bool remove_command_packet(std::uint16_t index);
 
 		/// @brief Returns if the command packets in this macro are valid
 		/// @returns true if the command packets in this macro are valid, otherwise false
