@@ -297,12 +297,7 @@ namespace isobus
 		void update_address_table(const CANMessage &message);
 
 		/// @brief Updates the internal address table based on updates to internal cfs addresses
-		/// @details Then calls the address claimed event of each internal control function that claimed a new address, without the lock
 		void update_internal_cfs();
-
-		/// @brief Runs the address claiming of the internal cfs and updates the address table. Call with controlFunctionsMutex held.
-		/// @param[out] newAddressClaims The internal cfs that claimed a new address, with that address
-		void update_internal_cfs_address_claiming(std::vector<std::pair<std::shared_ptr<InternalControlFunction>, std::uint8_t>> &newAddressClaims);
 
 		/// @brief Processes a message for each internal control function for address claiming
 		/// @param[in] message The message to process
@@ -374,6 +369,13 @@ namespace isobus
 		/// @brief Checks to see if any control function didn't claim during a round of
 		/// address claiming and removes it if needed.
 		void prune_inactive_control_functions();
+
+		/// @brief Lets an offline partner take over an online external CF that matches its NAME filters
+		/// @note Call with controlFunctionsMutex held. The caller makes the partner's Online callback.
+		/// @param[in] partner The partner that just went offline
+		/// @param[in] channelIndex The CAN channel to look on
+		/// @returns true if the partner took over a CF and is online again
+		bool take_over_online_external_control_function(std::shared_ptr<PartneredControlFunction> partner, std::uint8_t channelIndex);
 
 		/// @brief Sends a CAN message using raw addresses. Used only by the stack.
 		/// @param[in] portIndex The CAN channel index to send the message from
