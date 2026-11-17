@@ -697,7 +697,7 @@ TEST_F(VirtualTerminalServerBusTest, DroppedObjectPoolTransferFailsEndOfObjectPo
 
 	CANMessageFrame response = {};
 	ASSERT_TRUE(poll_for_response(*server, testPlugin, 0x12, response));
-	EXPECT_EQ(0x03, response.data[1]); // Error in object pool, VT ran out of memory
+	EXPECT_EQ(0x02, response.data[1]); // VT ran out of memory during transfer
 	EXPECT_EQ(0x08, response.data[6]); // Object pool was deleted from volatile memory
 	EXPECT_EQ(1U, server->deletedObjectPools.size());
 	EXPECT_TRUE(server->parsedWorkingSets.empty());
@@ -736,7 +736,7 @@ TEST_F(VirtualTerminalServerBusTest, DeleteObjectPoolAfterADroppedTransferAllows
 	EXPECT_EQ(0x00, response.data[1]);
 }
 
-TEST_F(VirtualTerminalServerBusTest, MessagesAfterADroppedTransferAreDroppedUntilTheDrain)
+TEST_F(VirtualTerminalServerBusTest, AClientsMessagesAfterItsDroppedTransferAreDroppedUntilTheDrain)
 {
 	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
 	server->set_max_rx_queue_size(1);
@@ -752,6 +752,23 @@ TEST_F(VirtualTerminalServerBusTest, MessagesAfterADroppedTransferAreDroppedUnti
 
 	CANMessageFrame response = {};
 	EXPECT_FALSE(poll_for_response(*server, testPlugin, 0xB2, response));
+}
+
+TEST_F(VirtualTerminalServerBusTest, OtherClientsMessagesAreQueuedAfterADroppedTransfer)
+{
+	auto otherClient = test_helpers::force_claim_partnered_control_function(0x82, 0);
+	receive_from_client(internalECU, otherClient, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	server->set_max_rx_queue_size(1);
+	receive_from_client_without_processing(internalECU, client, { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF });
+	receive_tp_from_client_without_processing(internalECU, client, SELECTABLE_OBJECT_POOL);
+	server->set_max_rx_queue_size(DerivedTestVTServer::DEFAULT_MAX_RX_QUEUE_SIZE_BYTES);
+	receive_from_client_without_processing(internalECU, otherClient, { 0xB2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	server->process_rx_messages();
+
+	CANMessageFrame response = {};
+	EXPECT_TRUE(poll_for_response(*server, testPlugin, 0xB2, response));
 }
 
 TEST_F(VirtualTerminalServerBusTest, DroppedObjectPoolTransferFromAnUnmanagedSourceChangesNothing)

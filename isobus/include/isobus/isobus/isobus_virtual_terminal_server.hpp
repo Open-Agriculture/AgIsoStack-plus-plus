@@ -63,7 +63,7 @@ namespace isobus
 		/// @details A message is dropped only when the queue already holds at least this many bytes, so a single
 		/// message larger than the limit (like a large object pool transfer) is still queued. A dropped message
 		/// gets no response, except a dropped Object Pool Transfer, which makes the following End of Object Pool
-		/// answer with an error. After a dropped Object Pool Transfer, every message is dropped until update() processes the queue.
+		/// answer with an error. After a dropped Object Pool Transfer, every message from that client is dropped until update() processes the queue.
 		/// The default is DEFAULT_MAX_RX_QUEUE_SIZE_BYTES, about 3 seconds of a fully loaded bus.
 		/// Lower it on targets with little free memory, raise it if update() can stall for longer or several clients upload at once.
 		/// A limit of 0 drops every message. The limit counts the queue only: while update() processes a batch, a new one can fill up,
@@ -380,7 +380,7 @@ namespace isobus
 
 		/// @brief This function is called from update() after the server deleted an object pool, because delete_object_pool() returned true
 		/// or because an Object Pool Transfer of it was dropped (see set_max_rx_queue_size())
-		/// @details This is the place to stop presenting the working set, delete_object_pool() is called before the pool is deleted.
+		/// @details This is the place to stop presenting the working set. For a Delete Object Pool command, delete_object_pool() is called before the pool is deleted.
 		/// The active working set is already cleared, and a new object pool from the same client is only answered after this call.
 		/// @param[in] workingSet The working set whose object pool was deleted
 		virtual void object_pool_deleted(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
@@ -912,7 +912,7 @@ namespace isobus
 		/// @param[in] faultingObjectID The faulty object's ID or the NULL_OBJECT_ID
 		/// @param[in] objectPoolErrorCodes A bitfield of ObjectPoolErrorBit describing the issues with the pool
 		/// @param[in] destination The control function to send the message to
-		/// @param[in] ranOutOfMemory Sets the error bit for "VT ran out of memory during transfer"
+		/// @param[in] ranOutOfMemory When true, only "VT ran out of memory during transfer" is reported, instead of errors in the object pool
 		/// @returns true if the message was sent, otherwise false
 		bool send_end_of_object_pool_response(bool success,
 		                                      std::uint16_t parentIDOfFaultingObject,

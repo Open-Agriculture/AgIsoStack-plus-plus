@@ -20,6 +20,7 @@
 #include <limits>
 #include <set>
 #include <sstream>
+#include <utility>
 #include <vector>
 
 namespace isobus
@@ -2605,31 +2606,34 @@ namespace isobus
 			auto server = static_cast<VirtualTerminalServer *>(parent);
 			const std::uint32_t timestamp_ms = SystemTiming::get_timestamp_ms();
 
+			// Copied before locking, so update() is not blocked while a large transfer is copied
+			QueuedMessage entry = { message, timestamp_ms };
 			bool notify = false;
 
 			{
 				Mutex &queueMutex = server->rxMessageQueueMutex;
 				LOCK_GUARD(Mutex, queueMutex);
-				// Once a transfer was dropped nothing is queued until the drain, so the drop is processed after everything that came before it
-				if ((server->droppedObjectPoolTransferSources.empty()) && (server->rxMessageQueueSize_bytes < server->maxRxMessageQueueSize_bytes))
+				auto &sources = server->droppedObjectPoolTransferSources;
+				// Once a client's transfer was dropped nothing more from it is queued until the drain, so its drop is processed after everything it sent before
+				const bool sourceDroppedATransfer = (sources.end() != std::find(sources.begin(), sources.end(), message.get_source_control_function()));
+
+				if ((!sourceDroppedATransfer) && (server->rxMessageQueueSize_bytes < server->maxRxMessageQueueSize_bytes))
 				{
 					notify = server->rxMessageQueue.empty();
-					server->rxMessageQueue.push_back({ message, timestamp_ms });
+					server->rxMessageQueue.push_back(std::move(entry));
 					server->rxMessageQueueSize_bytes += static_cast<std::uint32_t>(sizeof(QueuedMessage)) + message.get_data_length();
-				}
-				else if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == message.get_identifier().get_parameter_group_number()) &&
-				         (CAN_DATA_LENGTH <= message.get_data_length()) &&
-				         (static_cast<std::uint8_t>(Function::ObjectPoolTransferMessage) == message.get_data()[0]))
-				{
-					auto &sources = server->droppedObjectPoolTransferSources;
-					if (sources.end() == std::find(sources.begin(), sources.end(), message.get_source_control_function()))
-					{
-						sources.push_back(message.get_source_control_function());
-					}
 				}
 				else
 				{
 					server->droppedRxMessageCount++;
+
+					if ((!sourceDroppedATransfer) &&
+					    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == message.get_identifier().get_parameter_group_number()) &&
+					    (CAN_DATA_LENGTH <= message.get_data_length()) &&
+					    (static_cast<std::uint8_t>(Function::ObjectPoolTransferMessage) == message.get_data()[0]))
+					{
+						sources.push_back(message.get_source_control_function());
+					}
 				}
 			}
 
@@ -2671,7 +2675,7 @@ namespace isobus
 			process_rx_message(entry.message, this);
 		}
 
-		// After the batch, as nothing was queued after a dropped transfer
+		// After the batch, as nothing from these clients was queued after their dropped transfer
 		for (const auto &source : droppedTransferSources)
 		{
 			const auto workingSet = get_managed_working_set(source);
@@ -3542,7 +3546,17 @@ namespace isobus
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
 
 		buffer[0] = static_cast<std::uint8_t>(Function::EndOfObjectPoolMessage);
-		buffer[1] = static_cast<std::uint8_t>((success ? 0x00 : 0x01) | (ranOutOfMemory ? 0x02 : 0x00)); // Bit 0: errors in object pool, bit 1: VT ran out of memory during transfer
+		std::uint8_t errorCodes = 0x00; // Bit 0: errors in object pool, bit 1: VT ran out of memory during transfer
+
+		if (ranOutOfMemory)
+		{
+			errorCodes = 0x02;
+		}
+		else if (!success)
+		{
+			errorCodes = 0x01;
+		}
+		buffer[1] = errorCodes;
 		buffer[2] = get_low_byte(parentIDOfFaultingObject);
 		buffer[3] = get_high_byte(parentIDOfFaultingObject);
 		buffer[4] = get_low_byte(faultingObjectID);
