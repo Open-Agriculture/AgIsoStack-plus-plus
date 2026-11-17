@@ -125,6 +125,9 @@ namespace isobus
 		/// by destination, so it also reports traffic exchanged between two external control functions.
 		/// @note A transport protocol message between two other control functions is reported on its last data
 		/// packet, before the receiver acknowledges it, so the receiver may still abort it.
+		/// @note Such a message is only reassembled when we have seen the address claims of both control functions.
+		/// Each channel follows up to get_max_number_transport_protocol_sessions() of them at once, on top of our own
+		/// sessions, and each one buffers up to 1785 bytes.
 		/// @param[in] parameterGroupNumber The PGN you want to register for
 		/// @param[in] callback The callback that will be called when parameterGroupNumber is observed on the bus
 		/// @param[in] parent A generic context variable that helps identify what object the callback is destined for. Can be nullptr if you don't want to use it.

@@ -1302,8 +1302,8 @@ TEST_F(CoreTest, SniffedMessageCallbacksSeeAssembledConnectionModeMessages)
 	EXPECT_EQ(17, sniffedPayloadLength);
 	EXPECT_EQ(talker, sniffedMessageSource);
 	EXPECT_EQ(listener, sniffedMessageDestination);
-	ASSERT_EQ(17, sniffedPayload.size());
-	for (std::uint8_t i = 0; i < 17; i++)
+	EXPECT_EQ(17, sniffedPayload.size());
+	for (std::uint8_t i = 0; (i < 17) && (i < sniffedPayload.size()); i++)
 	{
 		EXPECT_EQ(i + 1, sniffedPayload[i]);
 	}
@@ -1393,6 +1393,55 @@ TEST_F(CoreTest, SniffedConnectionModeSessionIsDroppedWhenTheConnectionAborts)
 	send_sniffed_data_transfer(talker, listener, 2);
 	send_sniffed_data_transfer(talker, listener, 3);
 	EXPECT_EQ(0, sniffedMessageCount);
+
+	CANNetworkManager::CANNetwork.remove_sniffed_message_callback(0xFEEC, test_sniffed_payload_callback, nullptr);
+	CANNetworkManager::CANNetwork.deactivate_control_function(talker);
+	CANNetworkManager::CANNetwork.deactivate_control_function(listener);
+	CANHardwareInterface::stop();
+}
+
+// Both directions carry the same PGN, so the role of the sender says which of them the abort closes
+TEST_F(CoreTest, SniffedConnectionModeAbortClosesOnlyTheSessionOfTheSendersRole)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+	CANNetworkManager::CANNetwork.update();
+
+	auto talker = test_helpers::force_claim_partnered_control_function(0xA0, 0);
+	auto listener = test_helpers::force_claim_partnered_control_function(0xA1, 0);
+	CANNetworkManager::CANNetwork.update();
+
+	sniffedMessageCount = 0;
+	CANNetworkManager::CANNetwork.add_sniffed_message_callback(0xFEEC, test_sniffed_payload_callback, nullptr);
+
+	for (std::uint8_t round = 0; round < 2; round++)
+	{
+		send_sniffed_request_to_send(talker, listener, 0xFEEC);
+		send_sniffed_request_to_send(listener, talker, 0xFEEC);
+		send_sniffed_data_transfer(talker, listener, 1);
+		send_sniffed_data_transfer(listener, talker, 1);
+
+		// Round 0 is the receiver of talker to listener giving up, round 1 is its originator
+		const bool receiverAborts = (0 == round);
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(
+		  7,
+		  0xEC00,
+		  receiverAborts ? talker : listener,
+		  receiverAborts ? listener : talker,
+		  { 255, 3, static_cast<std::uint8_t>(receiverAborts ? 0x01 : 0x00), 0xFF, 0xFF, 0xEC, 0xFE, 0x00 }));
+		CANNetworkManager::CANNetwork.update();
+
+		send_sniffed_data_transfer(talker, listener, 2);
+		send_sniffed_data_transfer(talker, listener, 3);
+		EXPECT_EQ(round, sniffedMessageCount);
+
+		send_sniffed_data_transfer(listener, talker, 2);
+		send_sniffed_data_transfer(listener, talker, 3);
+		EXPECT_EQ(round + 1, sniffedMessageCount);
+		EXPECT_EQ(listener, sniffedMessageSource);
+		EXPECT_EQ(talker, sniffedMessageDestination);
+	}
 
 	CANNetworkManager::CANNetwork.remove_sniffed_message_callback(0xFEEC, test_sniffed_payload_callback, nullptr);
 	CANNetworkManager::CANNetwork.deactivate_control_function(talker);

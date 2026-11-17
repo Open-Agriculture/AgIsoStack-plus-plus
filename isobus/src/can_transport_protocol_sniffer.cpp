@@ -21,6 +21,10 @@
 
 namespace isobus
 {
+	constexpr std::uint8_t ROLE_OF_SENDER_MASK = 0x03; ///< Byte 3 bits 1 to 2 of a connection abort, ISO 11783-3:2026 5.9.4.5
+	constexpr std::uint8_t ROLE_OF_SENDER_ORIGINATOR = 0x00; ///< The abort was sent by the side that sent the request to send
+	constexpr std::uint8_t ROLE_OF_SENDER_RECEIVER = 0x01; ///< The abort was sent by the side that sends clear to send
+
 	TransportProtocolSniffer::TransportProtocolSniffer(const ParameterGroupNumberFilter &parameterGroupNumberFilter,
 	                                                   const CANMessageCallback &canMessageAssembledCallback,
 	                                                   const CANNetworkConfiguration *configuration) :
@@ -135,10 +139,17 @@ namespace isobus
 
 			case TransportProtocolManager::CONNECTION_ABORT_MULTIPLEXOR:
 			{
-				// Either end may abort
+				// Older devices send byte 3 as reserved 0xFF, which reads as "role not specified" and closes both
 				const auto parameterGroupNumber = message.get_uint24_at(5);
-				close_session(get_session(source, destination), parameterGroupNumber);
-				close_session(get_session(destination, source), parameterGroupNumber);
+				const std::uint8_t roleOfSender = message.get_uint8_at(2) & ROLE_OF_SENDER_MASK;
+				if (ROLE_OF_SENDER_RECEIVER != roleOfSender)
+				{
+					close_session(get_session(source, destination), parameterGroupNumber);
+				}
+				if (ROLE_OF_SENDER_ORIGINATOR != roleOfSender)
+				{
+					close_session(get_session(destination, source), parameterGroupNumber);
+				}
 			}
 			break;
 
