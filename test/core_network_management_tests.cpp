@@ -1429,7 +1429,7 @@ TEST_F(CoreTest, SniffedConnectionModeAbortClosesOnlyTheSessionOfTheSendersRole)
 		  0xEC00,
 		  receiverAborts ? talker : listener,
 		  receiverAborts ? listener : talker,
-		  { 255, 3, static_cast<std::uint8_t>(receiverAborts ? 0x01 : 0x00), 0xFF, 0xFF, 0xEC, 0xFE, 0x00 }));
+		  { 255, 3, static_cast<std::uint8_t>(receiverAborts ? 0xFD : 0xFC), 0xFF, 0xFF, 0xEC, 0xFE, 0x00 }));
 		CANNetworkManager::CANNetwork.update();
 
 		send_sniffed_data_transfer(talker, listener, 2);
