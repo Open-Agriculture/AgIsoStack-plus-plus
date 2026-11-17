@@ -1961,9 +1961,15 @@ TEST_F(VirtualTerminalServerBusTest, PointingEventMessageMatchesTheVTVersion)
 		return sent && testPlugin.read_frame(frame);
 	};
 
-	// VT version 3 only reports the position
+	// VT version 3 only reports presses, so a release or a held touch sends nothing (ISO 11783-6:2018 H.6)
 	server->version = VirtualTerminalBase::VTVersion::Version3;
-	ASSERT_TRUE(send_pointing_event(VirtualTerminalBase::KeyActivationCode::ButtonUnlatchedOrReleased));
+	EXPECT_FALSE(server->send_pointing_event_message(VirtualTerminalBase::KeyActivationCode::ButtonUnlatchedOrReleased, 0x0123, 0x0045, 0x1234, client));
+	EXPECT_FALSE(server->send_pointing_event_message(VirtualTerminalBase::KeyActivationCode::ButtonStillHeld, 0x0123, 0x0045, 0x1234, client));
+	time_source.update_for_ms(5);
+	EXPECT_FALSE(testPlugin.read_frame(frame));
+
+	// A press only reports the position
+	ASSERT_TRUE(send_pointing_event(VirtualTerminalBase::KeyActivationCode::ButtonPressedOrLatched));
 	EXPECT_EQ(0xE6, get_pdu_format(frame)); // VT to ECU
 	EXPECT_EQ(client->get_address(), static_cast<std::uint8_t>(frame.identifier >> 8));
 	EXPECT_EQ((std::vector<std::uint8_t>{ 0x02, 0x23, 0x01, 0x45, 0x00, 0xFF, 0xFF, 0xFF }), payload_of(frame));
