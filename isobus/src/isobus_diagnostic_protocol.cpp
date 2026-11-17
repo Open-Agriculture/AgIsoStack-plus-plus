@@ -225,12 +225,16 @@ namespace isobus
 		softwareIdentificationFields.clear();
 	}
 
-	void DiagnosticProtocol::set_ecu_id_field(ECUIdentificationFields field, const std::string &value)
+	bool DiagnosticProtocol::set_ecu_id_field(ECUIdentificationFields field, const std::string &value)
 	{
-		if (field <= ECUIdentificationFields::NumberOfFields)
+		bool retVal = false;
+
+		if ((field < ECUIdentificationFields::NumberOfFields) && is_valid_identification_field(value))
 		{
 			ecuIdentificationFields[static_cast<std::size_t>(field)] = value + "*";
+			retVal = true;
 		}
+		return retVal;
 	}
 
 	bool DiagnosticProtocol::set_diagnostic_trouble_code_active(const DiagnosticTroubleCode &dtc, bool active)
@@ -315,7 +319,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (value.size() < PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH)
+		if ((value.size() <= PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH) && is_valid_identification_field(value))
 		{
 			productIdentificationCode = value;
 			retVal = true;
@@ -327,7 +331,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (value.size() < PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH)
+		if ((value.size() <= PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH) && is_valid_identification_field(value))
 		{
 			productIdentificationBrand = value;
 			retVal = true;
@@ -339,7 +343,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (value.size() < PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH)
+		if ((value.size() <= PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH) && is_valid_identification_field(value))
 		{
 			productIdentificationModel = value;
 			retVal = true;
@@ -347,17 +351,37 @@ namespace isobus
 		return retVal;
 	}
 
-	void DiagnosticProtocol::set_software_id_field(std::uint32_t index, const std::string &value)
+	bool DiagnosticProtocol::set_software_id_field(std::uint32_t index, const std::string &value)
 	{
-		if (index >= softwareIdentificationFields.size())
+		// ISO 11783-12:2019 A.3: the number of fields has a data range of 0 to 250
+		constexpr std::uint32_t MAX_SOFTWARE_ID_FIELDS = 250;
+		bool retVal = false;
+
+		if ((index < MAX_SOFTWARE_ID_FIELDS) && is_valid_identification_field(value))
 		{
-			softwareIdentificationFields.resize(index + 1);
+			if (index < softwareIdentificationFields.size())
+			{
+				softwareIdentificationFields[index] = value;
+			}
+			else if (!value.empty())
+			{
+				softwareIdentificationFields.resize(index + 1);
+				softwareIdentificationFields[index] = value;
+			}
+
+			// Remove empty fields from the end so they aren't sent, keeping the indices of the fields before them
+			while ((!softwareIdentificationFields.empty()) && softwareIdentificationFields.back().empty())
+			{
+				softwareIdentificationFields.pop_back();
+			}
+			retVal = true;
 		}
-		else if (("" == value) && (index == softwareIdentificationFields.size()))
-		{
-			softwareIdentificationFields.pop_back();
-		}
-		softwareIdentificationFields[index] = value;
+		return retVal;
+	}
+
+	bool DiagnosticProtocol::is_valid_identification_field(const std::string &value)
+	{
+		return std::string::npos == value.find('*');
 	}
 
 	bool DiagnosticProtocol::suspend_broadcasts(std::uint16_t suspendTime_seconds)
@@ -855,6 +879,9 @@ namespace isobus
 		}
 
 		std::vector<std::uint8_t> buffer(ecuIdString.begin(), ecuIdString.end());
+		// ISO 11783-3 5.2.8.2: a multi-packet capable PG with eight or fewer bytes is sent in one frame
+		// with a DLC of eight, and its unused bytes "not available"
+		buffer.resize(std::max<std::size_t>(buffer.size(), CAN_DATA_LENGTH), 0xFF);
 
 		auto it = pendingRequests.find(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUIdentificationInformation));
 		auto request = (((it != pendingRequests.end()) && (buffer.size() > CAN_DATA_LENGTH)) ? it->second : nullptr);
@@ -874,6 +901,8 @@ namespace isobus
 		bool retVal = false;
 		std::string productIdString = productIdentificationCode + "*" + productIdentificationBrand + "*" + productIdentificationModel + "*";
 		std::vector<std::uint8_t> buffer(productIdString.begin(), productIdString.end());
+		// Pad to a DLC of eight, see send_ecu_identification()
+		buffer.resize(std::max<std::size_t>(buffer.size(), CAN_DATA_LENGTH), 0xFF);
 
 		auto it = pendingRequests.find(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProductIdentification));
 		auto request = (((it != pendingRequests.end()) && (buffer.size() > CAN_DATA_LENGTH)) ? it->second : nullptr);
@@ -906,6 +935,8 @@ namespace isobus
 
 			softIDString = char(softwareIdentificationFields.size()) + softIDString;
 			std::vector<std::uint8_t> buffer(softIDString.begin(), softIDString.end());
+			// Pad to a DLC of eight, see send_ecu_identification()
+			buffer.resize(std::max<std::size_t>(buffer.size(), CAN_DATA_LENGTH), 0xFF);
 
 			auto it = pendingRequests.find(static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification));
 			auto request = (((it != pendingRequests.end()) && (buffer.size() > CAN_DATA_LENGTH)) ? it->second : nullptr);
