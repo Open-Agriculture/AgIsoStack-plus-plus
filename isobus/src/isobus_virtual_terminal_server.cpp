@@ -972,29 +972,7 @@ namespace isobus
 
 				if ((!versionLabel.empty()) && managedWorkingSet->get_any_object_pools())
 				{
-					std::ostringstream nameString;
-					nameString << std::hex << std::setfill('0') << std::setw(16) << managedWorkingSet->get_control_function()->get_NAME().get_full_name();
-					bool allPoolsSaved = true;
-
-					// A Store replaces the version with the same label, and save_version() appends, so the label is emptied first.
-					// The result is not checked, as nothing may be stored under the label yet
-					delete_version(versionLabel, message.get_source_control_function()->get_NAME());
-
-					for (std::size_t i = 0; i < managedWorkingSet->get_number_iop_files(); i++)
-					{
-						bool didSave = save_version(managedWorkingSet->get_iop_raw_data(i), versionLabel, message.get_source_control_function()->get_NAME());
-
-						if (didSave)
-						{
-							LOG_INFO("[VT Server]: Object pool " + isobus::to_string(i) + " for NAME " + nameString.str() + " was stored.");
-						}
-						else
-						{
-							LOG_ERROR("[VT Server]: Object pool " + isobus::to_string(i) + " for NAME " + nameString.str() + " could not be stored.");
-							allPoolsSaved = false;
-							break;
-						}
-					}
+					const bool allPoolsSaved = store_object_pool(*managedWorkingSet, versionLabel, message.get_source_control_function()->get_NAME());
 
 					std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
 					buffer[0] = static_cast<std::uint8_t>(function);
@@ -3431,6 +3409,34 @@ namespace isobus
 			                                                        get_priority());
 		}
 		return retVal;
+	}
+
+	bool VirtualTerminalServer::store_object_pool(VirtualTerminalServerManagedWorkingSet &workingSet, const std::vector<std::uint8_t> &versionLabel, NAME clientNAME)
+	{
+		std::ostringstream nameString;
+		nameString << std::hex << std::setfill('0') << std::setw(16) << clientNAME.get_full_name();
+
+		// The transfers are only complete once the parsing thread has been joined, which trims their padding
+		if (is_object_pool_parse_unanswered(workingSet))
+		{
+			LOG_WARNING("[VT Server]: Object pool for NAME " + nameString.str() + " can not be stored while it is being parsed.");
+			return false;
+		}
+
+		// A Store replaces the version with the same label, and save_version() appends, so the label is emptied first.
+		// The result is not checked, as nothing may be stored under the label yet
+		delete_version(versionLabel, clientNAME);
+
+		for (std::size_t i = 0; i < workingSet.get_number_iop_files(); i++)
+		{
+			if (!save_version(workingSet.get_iop_raw_data(i), versionLabel, clientNAME))
+			{
+				LOG_ERROR("[VT Server]: Object pool " + isobus::to_string(i) + " for NAME " + nameString.str() + " could not be stored.");
+				return false;
+			}
+			LOG_INFO("[VT Server]: Object pool " + isobus::to_string(i) + " for NAME " + nameString.str() + " was stored.");
+		}
+		return true;
 	}
 
 	bool VirtualTerminalServer::send_end_of_object_pool_response(bool success,

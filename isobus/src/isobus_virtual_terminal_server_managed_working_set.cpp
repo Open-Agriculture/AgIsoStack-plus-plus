@@ -16,9 +16,74 @@
 #include <algorithm>
 #include <cstring>
 #include <map>
+#include <utility>
+#include <vector>
 
 namespace isobus
 {
+	/// @brief Parses an object pool into an object tree of its own, which holds only the objects of this run
+	class VirtualTerminalServerManagedWorkingSet::ObjectPoolParser : public VirtualTerminalWorkingSetBase
+	{
+	public:
+		/// @brief Constructs the parser
+		/// @param[in] existingObjects The objects of the current object tree that parsing needs to check against,
+		/// which are the working set object and any Working Set Special Controls object
+		/// @param[in] existingWorkingSetID The object ID of the working set object in the current object tree
+		ObjectPoolParser(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &existingObjects, std::uint16_t existingWorkingSetID) :
+		  existingObjects(existingObjects)
+		{
+			vtObjectTree = existingObjects;
+			workingSetID = existingWorkingSetID;
+		}
+
+		/// @brief Checks if an object is one that parsing replaced or added, not one copied from the current object tree
+		/// @param[in] objectID The object ID to check
+		/// @param[in] object The object in the parser's object tree
+		/// @returns true if parsing replaced or added the object
+		bool is_parsed_object(std::uint16_t objectID, const std::shared_ptr<VTObject> &object) const
+		{
+			const auto existing = existingObjects.find(objectID);
+			return (existingObjects.end() == existing) || (existing->second != object);
+		}
+
+		/// @brief Returns the object ID of the working set object, after parsing
+		/// @returns The object ID of the working set object, or NULL_OBJECT_ID
+		std::uint16_t get_working_set_id() const
+		{
+			return workingSetID;
+		}
+
+		const std::map<std::uint16_t, std::shared_ptr<VTObject>> existingObjects; ///< The objects copied from the current object tree
+		std::vector<std::pair<std::size_t, std::uint32_t>> parsedTransfers; ///< The index of each transfer parsed by this run, and the length of its objects without the padding after the last one
+	};
+
+	/// @brief Finds the lowest object ID among the objects that list an object as a child
+	/// @param[in] objectTree The objects to search
+	/// @param[in] childID The object ID of the child
+	/// @param[in] skip Objects whose ID is in this tree are not searched, or nullptr to search all
+	/// @returns The object ID of the parent, or NULL_OBJECT_ID
+	static std::uint16_t find_parent_object_id(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &objectTree,
+	                                           std::uint16_t childID,
+	                                           const std::map<std::uint16_t, std::shared_ptr<VTObject>> *skip)
+	{
+		for (const auto &object : objectTree)
+		{
+			if ((nullptr == object.second) || ((nullptr != skip) && (skip->end() != skip->find(object.first))))
+			{
+				continue;
+			}
+
+			for (std::uint16_t i = 0; i < object.second->get_number_children(); i++)
+			{
+				if (childID == object.second->get_child_id(i))
+				{
+					return object.first;
+				}
+			}
+		}
+		return NULL_OBJECT_ID;
+	}
+
 	VirtualTerminalServerManagedWorkingSet::VirtualTerminalServerManagedWorkingSet()
 	{
 		LOG_INFO("[WS]: New VT Server Object Created with no associated control function");
@@ -39,13 +104,33 @@ namespace isobus
 
 	VirtualTerminalServerManagedWorkingSet::~VirtualTerminalServerManagedWorkingSet()
 	{
-		join_parsing_thread();
+		try
+		{
+			join_parsing_thread();
+		}
+		catch (...)
+		{
+			// A destructor must not throw, and joining can fail with a system error
+			LOG_ERROR("[WS]: The object pool parsing thread could not be joined.");
+		}
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::start_parsing_thread()
 	{
 		if (nullptr == objectPoolProcessingThread)
 		{
+			// Parsing checks a later Working Set object against the current one, and allows only one Working Set Special Controls object
+			std::map<std::uint16_t, std::shared_ptr<VTObject>> existingObjects;
+			for (const auto &object : vtObjectTree)
+			{
+				if ((nullptr != object.second) &&
+				    ((workingSetID == object.first) || (VirtualTerminalObjectType::WorkingSetSpecialControls == object.second->get_object_type())))
+				{
+					existingObjects.insert(object);
+				}
+			}
+
+			objectPoolParser.reset(new ObjectPoolParser(existingObjects, workingSetID));
 			set_object_pool_processing_state(ObjectPoolProcessingThreadState::Running);
 			objectPoolProcessingThread.reset(new std::thread([this]() { worker_thread_function(); }));
 		}
@@ -57,8 +142,62 @@ namespace isobus
 		{
 			objectPoolProcessingThread->join();
 			objectPoolProcessingThread = nullptr;
+
+			if ((nullptr != objectPoolParser) && (ObjectPoolProcessingThreadState::Success == get_object_pool_processing_state()))
+			{
+				take_over_parsed_objects();
+			}
+			else if (nullptr != objectPoolParser)
+			{
+				set_fault_from_parser();
+			}
+			objectPoolParser.reset();
 			set_object_pool_processing_state(ObjectPoolProcessingThreadState::Joined);
 		}
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::take_over_parsed_objects()
+	{
+		// Merged into the current object tree, so objects added to it while the thread ran stay.
+		// The parsed objects are in ID order, so replacedObjects stays sorted.
+		replacedObjects.clear();
+		for (const auto &object : objectPoolParser->get_object_tree())
+		{
+			if (objectPoolParser->is_parsed_object(object.first, object.second))
+			{
+				if (vtObjectTree.end() != vtObjectTree.find(object.first))
+				{
+					replacedObjects.push_back(object.first);
+				}
+				vtObjectTree[object.first] = object.second;
+			}
+		}
+		workingSetID = objectPoolParser->get_working_set_id();
+
+		for (const auto &transfer : objectPoolParser->parsedTransfers)
+		{
+			// Load Version parses the stored transfers joined together, where this padding would read as objects
+			iopFilesRawData[transfer.first].data.resize(transfer.second);
+			iopFilesRawData[transfer.first].processed = true;
+		}
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::set_fault_from_parser()
+	{
+		// A failed parse leaves the object tree as it was, so it replaced nothing
+		replacedObjects.clear();
+
+		// The parent can be a new object or one of the current pool, and a new object replaces a current one with the same ID
+		const auto &parsedObjects = objectPoolParser->get_object_tree();
+		const std::uint16_t faultingID = objectPoolParser->get_object_pool_faulting_object_id();
+		std::uint16_t parentID = NULL_OBJECT_ID;
+
+		if (NULL_OBJECT_ID != faultingID)
+		{
+			parentID = std::min(find_parent_object_id(parsedObjects, faultingID, nullptr),
+			                    find_parent_object_id(vtObjectTree, faultingID, &parsedObjects));
+		}
+		set_object_pool_fault(faultingID, parentID);
 	}
 
 	bool VirtualTerminalServerManagedWorkingSet::get_any_object_pools() const
@@ -220,7 +359,6 @@ namespace isobus
 		if (!iopFilesRawData.empty())
 		{
 			bool lSuccess = true;
-			const std::map<std::uint16_t, std::shared_ptr<VTObject>> objectsBeforeParse = get_object_tree();
 
 			LOG_INFO("[WS]: Beginning parsing of object pool. This pool has " +
 			         isobus::to_string(static_cast<int>(iopFilesRawData.size())) +
@@ -233,26 +371,13 @@ namespace isobus
 				}
 
 				std::uint32_t objectsLength = 0;
-				if (!parse_iop_into_objects(iopFilesRawData[i].data.data(), static_cast<std::uint32_t>(iopFilesRawData[i].data.size()), &objectsLength))
+				if (!objectPoolParser->parse_iop_into_objects(iopFilesRawData[i].data.data(), static_cast<std::uint32_t>(iopFilesRawData[i].data.size()), &objectsLength))
 				{
 					lSuccess = false;
 					break;
 				}
-				else
-				{
-					// Load Version parses the stored transfers joined together, where this padding would read as objects
-					iopFilesRawData[i].data.resize(objectsLength);
-					iopFilesRawData[i].processed = true;
-				}
-			}
-
-			replacedObjects.clear();
-			for (const auto &object : objectsBeforeParse)
-			{
-				if (object.second != get_object_by_id(object.first))
-				{
-					replacedObjects.push_back(object.first);
-				}
+				// Applied in join_parsing_thread(), as the server can read the transfers while this thread runs
+				objectPoolParser->parsedTransfers.emplace_back(i, objectsLength);
 			}
 
 			if (lSuccess)

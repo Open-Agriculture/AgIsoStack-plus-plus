@@ -89,9 +89,9 @@ namespace isobus
 	std::uint16_t VirtualTerminalWorkingSetBase::get_object_pool_faulting_parent_object_id()
 	{
 		std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
-		std::uint16_t retVal = NULL_OBJECT_ID;
+		std::uint16_t retVal = faultingParentObjectID;
 
-		if (NULL_OBJECT_ID != faultingObjectID)
+		if ((!isFaultingParentObjectIDSet) && (NULL_OBJECT_ID != faultingObjectID))
 		{
 			for (auto object = vtObjectTree.cbegin(); (vtObjectTree.cend() != object) && (NULL_OBJECT_ID == retVal); object++)
 			{
@@ -100,6 +100,7 @@ namespace isobus
 					if (faultingObjectID == object->second->get_child_id(i))
 					{
 						retVal = object->first;
+						break;
 					}
 				}
 			}
@@ -2735,6 +2736,16 @@ namespace isobus
 	{
 		const std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
 		faultingObjectID = value;
+		faultingParentObjectID = NULL_OBJECT_ID;
+		isFaultingParentObjectIDSet = false;
+	}
+
+	void VirtualTerminalWorkingSetBase::set_object_pool_fault(std::uint16_t objectID, std::uint16_t parentObjectID)
+	{
+		const std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
+		faultingObjectID = objectID;
+		faultingParentObjectID = parentObjectID;
+		isFaultingParentObjectIDSet = true;
 	}
 
 	bool VirtualTerminalWorkingSetBase::parse_object_macro_reference(

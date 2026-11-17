@@ -864,6 +864,13 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_enable_disable_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, bool value, std::shared_ptr<ControlFunction> destination) const;
 
+		/// @brief Stores the transfers of a working set's object pool as a version, for Store Version and Extended Store Version
+		/// @param[in] workingSet The working set whose object pool is stored
+		/// @param[in] versionLabel The version label to store the object pool under
+		/// @param[in] clientNAME The NAME of the working set master
+		/// @returns true if all transfers were stored, false if the pool is still being parsed or a transfer could not be stored
+		bool store_object_pool(VirtualTerminalServerManagedWorkingSet &workingSet, const std::vector<std::uint8_t> &versionLabel, NAME clientNAME);
+
 		/// @brief This message is sent by the VT to a Working Set Master to acknowledge the End of Object Pool message.
 		/// @details When the VT replies with an error of any type
 		/// the VT should delete the object pool from volatile memory storage and inform the operator
