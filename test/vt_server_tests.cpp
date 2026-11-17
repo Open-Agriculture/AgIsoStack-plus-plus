@@ -3667,14 +3667,15 @@ TEST_F(VirtualTerminalServerMaskChangeMacroTest, ChangeSoftKeyMaskUsesTheVisibil
 	EXPECT_EQ((std::vector<std::uint16_t>{ 10, 12, 13, 16, 17, 18 }), macrosThatRan);
 }
 
-// Working Set 0 with active mask 1000 and Data Mask 1000 as its one object, Data Mask 1000, and Number Variable 2,
+// Working Set 0 with active mask 1000 and Container 2000 as its one object, Data Mask 1000, Container 2000, and Number Variable 2,
 // as the parser wants more bytes after a Data Mask than an empty one has
 static std::vector<std::uint8_t> create_small_pool()
 {
 	constexpr auto WORKING_SET = static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSet);
 	constexpr auto DATA_MASK = static_cast<std::uint8_t>(VirtualTerminalObjectType::DataMask);
+	constexpr auto CONTAINER = static_cast<std::uint8_t>(VirtualTerminalObjectType::Container);
 	constexpr auto NUMBER_VARIABLE = static_cast<std::uint8_t>(VirtualTerminalObjectType::NumberVariable);
-	return { 0x00, 0x00, WORKING_SET, 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0xE8, 0x03, 0x00, 0x00, 0x00, 0x00, 0xE8, 0x03, DATA_MASK, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x02, 0x00, NUMBER_VARIABLE, 0x00, 0x00, 0x00, 0x00 };
+	return { 0x00, 0x00, WORKING_SET, 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0xD0, 0x07, 0x00, 0x00, 0x00, 0x00, 0xE8, 0x03, DATA_MASK, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xD0, 0x07, CONTAINER, 0x0A, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, NUMBER_VARIABLE, 0x00, 0x00, 0x00, 0x00 };
 }
 
 // Waits a bounded time for the parsing thread to finish, without joining it
@@ -3821,11 +3822,11 @@ TEST(VirtualTerminalServerManagedWorkingSetTest, TheParentOfAFaultingObjectCanBe
 	workingSet.join_parsing_thread();
 	ASSERT_NE(nullptr, workingSet.get_working_set_object());
 
-	// The Working Set lists Data Mask 1000, which a later transfer replaces with an object of an unknown type
-	workingSet.add_iop_raw_data({ 0xE8, 0x03, 0xFE, 0x00, 0x00, 0x00, 0x00, 0x00 });
+	// The Working Set lists Container 2000, which a later transfer replaces with an object of an unknown type
+	workingSet.add_iop_raw_data({ 0xD0, 0x07, 0xFE, 0x00, 0x00, 0x00, 0x00, 0x00 });
 	workingSet.start_parsing_thread();
 	ASSERT_EQ(VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Fail, wait_for_parsing_thread(workingSet));
 	workingSet.join_parsing_thread();
-	EXPECT_EQ(1000, workingSet.get_object_pool_faulting_object_id());
+	EXPECT_EQ(2000, workingSet.get_object_pool_faulting_object_id());
 	EXPECT_EQ(0, workingSet.get_object_pool_faulting_parent_object_id());
 }
