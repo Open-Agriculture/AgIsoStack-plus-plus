@@ -3033,8 +3033,12 @@ namespace isobus
 	bool VirtualTerminalServer::send_pointing_event_message(KeyActivationCode touchState, std::uint16_t xPosition, std::uint16_t yPosition, std::uint16_t parentMaskObjectId, std::shared_ptr<ControlFunction> destination)
 	{
 		bool retVal = false;
+		// ISO 11783-6:2018 H.6: VT version 3 and prior have no touch state, a Pointing Event always means a press.
+		// A release or a held touch would be read as another press, so only presses are sent.
+		const bool canReportTouchState = (get_version() >= VTVersion::Version4);
 
-		if (nullptr != destination)
+		if ((nullptr != destination) &&
+		    (canReportTouchState || (KeyActivationCode::ButtonPressedOrLatched == touchState)))
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::PointingEventMessage),
