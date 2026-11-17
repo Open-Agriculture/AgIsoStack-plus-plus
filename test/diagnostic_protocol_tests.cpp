@@ -40,6 +40,44 @@ TEST_F(DiagnosticProtocolTest, CreateAndDestroyProtocolObjects)
 	CANNetworkManager::CANNetwork.deactivate_control_function(TestInternalECU);
 }
 
+TEST_F(DiagnosticProtocolTest, IdentificationFieldValidation)
+{
+	NAME TestDeviceNAME(0);
+	auto TestInternalECU = CANNetworkManager::CANNetwork.create_internal_control_function(TestDeviceNAME, 0, 0x1C);
+	DiagnosticProtocol protocolUnderTest(TestInternalECU);
+
+	EXPECT_TRUE(protocolUnderTest.set_ecu_id_field(DiagnosticProtocol::ECUIdentificationFields::SerialNumber, "1234"));
+	EXPECT_TRUE(protocolUnderTest.set_ecu_id_field(DiagnosticProtocol::ECUIdentificationFields::HardwareID, ""));
+	EXPECT_FALSE(protocolUnderTest.set_ecu_id_field(DiagnosticProtocol::ECUIdentificationFields::NumberOfFields, "1234"));
+	EXPECT_FALSE(protocolUnderTest.set_ecu_id_field(DiagnosticProtocol::ECUIdentificationFields::SerialNumber, "12*34"));
+
+	EXPECT_TRUE(protocolUnderTest.set_software_id_field(0, "App v1.0"));
+	EXPECT_FALSE(protocolUnderTest.set_software_id_field(0, "App*v1.0"));
+	EXPECT_FALSE(protocolUnderTest.set_software_id_field(1, "*"));
+	// ISO 11783-12:2019 A.3: at most 250 fields
+	EXPECT_TRUE(protocolUnderTest.set_software_id_field(249, "Last field"));
+	EXPECT_FALSE(protocolUnderTest.set_software_id_field(250, "Too far"));
+	EXPECT_FALSE(protocolUnderTest.set_software_id_field(0xFFFFFFFF, "Too far"));
+	EXPECT_TRUE(protocolUnderTest.set_software_id_field(249, ""));
+
+	EXPECT_TRUE(protocolUnderTest.set_product_identification_code("Code"));
+	EXPECT_FALSE(protocolUnderTest.set_product_identification_code("Co*de"));
+	EXPECT_FALSE(protocolUnderTest.set_product_identification_brand("Brand*"));
+	EXPECT_FALSE(protocolUnderTest.set_product_identification_model("*Model"));
+
+	// ISO 11783-12 A.14 to A.16: up to 50 characters
+	const std::string fiftyCharacters(50, 'A');
+	const std::string fiftyOneCharacters(51, 'A');
+	EXPECT_TRUE(protocolUnderTest.set_product_identification_code(fiftyCharacters));
+	EXPECT_FALSE(protocolUnderTest.set_product_identification_code(fiftyOneCharacters));
+	EXPECT_TRUE(protocolUnderTest.set_product_identification_brand(fiftyCharacters));
+	EXPECT_FALSE(protocolUnderTest.set_product_identification_brand(fiftyOneCharacters));
+	EXPECT_TRUE(protocolUnderTest.set_product_identification_model(fiftyCharacters));
+	EXPECT_FALSE(protocolUnderTest.set_product_identification_model(fiftyOneCharacters));
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(TestInternalECU);
+}
+
 TEST_F(DiagnosticProtocolTest, MessageEncoding)
 {
 	VirtualCANPlugin testPlugin;
@@ -76,6 +114,8 @@ TEST_F(DiagnosticProtocolTest, MessageEncoding)
 		protocolUnderTest.set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::PartNumber, "1234");
 		protocolUnderTest.set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::SerialNumber, "9876");
 		protocolUnderTest.set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::Type, "AgISOStack");
+		// Out of range, must be ignored rather than written past the end of the field list
+		protocolUnderTest.set_ecu_id_field(isobus::DiagnosticProtocol::ECUIdentificationFields::NumberOfFields, "Out of range");
 
 		// Use a PGN request to trigger sending it from the protocol
 		testFrame.dataLength = 3;
@@ -487,6 +527,11 @@ TEST_F(DiagnosticProtocolTest, MessageEncoding)
 		/// Now, test software ID against J1939-71
 		protocolUnderTest.set_software_id_field(0, "Unit Test 1.0.0");
 		protocolUnderTest.set_software_id_field(1, "Another version x.x.x.x");
+		// A cleared last field is removed, so it doesn't add an empty field to the message
+		EXPECT_TRUE(protocolUnderTest.set_software_id_field(2, "Temporary"));
+		EXPECT_TRUE(protocolUnderTest.set_software_id_field(2, ""));
+		// Clearing a field that was never set doesn't add one either
+		EXPECT_TRUE(protocolUnderTest.set_software_id_field(5, ""));
 
 		// Use a PGN request to trigger sending it from the protocol
 		testFrame.dataLength = 3;
@@ -1549,13 +1594,13 @@ TEST_F(DiagnosticProtocolTest, MessageEncoding)
 }
 
 /// @brief Requests a PGN from the protocol and returns the frame it sends with that PGN
-static bool request_and_read_frame(DiagnosticProtocol &protocol,
-                                   VirtualCANPlugin &plugin,
-                                   std::shared_ptr<InternalControlFunction> responder,
-                                   std::shared_ptr<PartneredControlFunction> requester,
-                                   std::uint32_t parameterGroupNumber,
-                                   CANMessageFrame &frame,
-                                   test_helpers::TestTimeSource &timeSource)
+static bool request_and_read_single_frame(DiagnosticProtocol &protocol,
+                                          VirtualCANPlugin &plugin,
+                                          std::shared_ptr<InternalControlFunction> responder,
+                                          std::shared_ptr<PartneredControlFunction> requester,
+                                          std::uint32_t parameterGroupNumber,
+                                          CANMessageFrame &frame,
+                                          test_helpers::TestTimeSource &timeSource)
 {
 	CANMessageFrame request = {};
 	request.dataLength = 3;
@@ -1576,6 +1621,73 @@ static bool request_and_read_frame(DiagnosticProtocol &protocol,
 		}
 	}
 	return false;
+}
+
+TEST_F(DiagnosticProtocolTest, ShortIdentificationMessagesAreSentWithEightBytes)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto TestInternalECU = test_helpers::claim_internal_control_function(0xB8, 0, time_source);
+	auto TestPartneredECU = test_helpers::force_claim_partnered_control_function(0xB9, 0);
+	DiagnosticProtocol protocolUnderTest(TestInternalECU);
+	protocolUnderTest.initialize();
+
+	CANMessageFrame testFrame = {};
+	while (!testPlugin.get_queue_empty())
+	{
+		testPlugin.read_frame(testFrame);
+	}
+
+	// ISO 11783-3 5.2.8.2: a multi-packet PG with eight or fewer bytes is sent in one frame
+	// with a DLC of eight, and its unused bytes set to "not available"
+
+	// ECU identification with every field empty is just the six delimiters
+	ASSERT_TRUE(request_and_read_single_frame(protocolUnderTest, testPlugin, TestInternalECU, TestPartneredECU, 0xFDC5, testFrame, time_source));
+	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
+	for (std::uint8_t i = 0; i < 6; i++)
+	{
+		EXPECT_EQ('*', testFrame.data[i]) << static_cast<int>(i);
+	}
+	EXPECT_EQ(0xFF, testFrame.data[6]);
+	EXPECT_EQ(0xFF, testFrame.data[7]);
+
+	// Product identification "A*B*C*"
+	protocolUnderTest.set_product_identification_code("A");
+	protocolUnderTest.set_product_identification_brand("B");
+	protocolUnderTest.set_product_identification_model("C");
+	ASSERT_TRUE(request_and_read_single_frame(protocolUnderTest, testPlugin, TestInternalECU, TestPartneredECU, 0xFC8D, testFrame, time_source));
+	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
+	EXPECT_EQ('A', testFrame.data[0]);
+	EXPECT_EQ('*', testFrame.data[1]);
+	EXPECT_EQ('B', testFrame.data[2]);
+	EXPECT_EQ('*', testFrame.data[3]);
+	EXPECT_EQ('C', testFrame.data[4]);
+	EXPECT_EQ('*', testFrame.data[5]);
+	EXPECT_EQ(0xFF, testFrame.data[6]);
+	EXPECT_EQ(0xFF, testFrame.data[7]);
+
+	// Software identification with one field "1": the number of fields, then "1*"
+	protocolUnderTest.set_software_id_field(0, "1");
+	ASSERT_TRUE(request_and_read_single_frame(protocolUnderTest, testPlugin, TestInternalECU, TestPartneredECU, 0xFEDA, testFrame, time_source));
+	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
+	EXPECT_EQ(1, testFrame.data[0]);
+	EXPECT_EQ('1', testFrame.data[1]);
+	EXPECT_EQ('*', testFrame.data[2]);
+	for (std::uint8_t i = 3; i < CAN_DATA_LENGTH; i++)
+	{
+		EXPECT_EQ(0xFF, testFrame.data[i]) << static_cast<int>(i);
+	}
+
+	protocolUnderTest.terminate();
+	CANHardwareInterface::stop();
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(TestPartneredECU);
+	CANNetworkManager::CANNetwork.deactivate_control_function(TestInternalECU);
 }
 
 TEST_F(DiagnosticProtocolTest, ComplianceCertificationAndDiagnosticProtocolIdentification)
@@ -1599,7 +1711,7 @@ TEST_F(DiagnosticProtocolTest, ComplianceCertificationAndDiagnosticProtocolIdent
 	}
 
 	// ISO 11783-7:2009 B.27. Until the application sets it, every field is "not available" and no type is certified
-	ASSERT_TRUE(request_and_read_frame(protocolUnderTest, testPlugin, TestInternalECU, TestPartneredECU, 0xFD42, testFrame, time_source));
+	ASSERT_TRUE(request_and_read_single_frame(protocolUnderTest, testPlugin, TestInternalECU, TestPartneredECU, 0xFD42, testFrame, time_source));
 	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
 	EXPECT_EQ(0xFF, testFrame.data[0]); // Year 63 and revision 7: not available
 	EXPECT_EQ(0xFF, testFrame.data[1]); // Laboratory ID 0x7FF and type 7: not available
@@ -1618,7 +1730,7 @@ TEST_F(DiagnosticProtocolTest, ComplianceCertificationAndDiagnosticProtocolIdent
 	protocolUnderTest.set_compliance_certification_type(DiagnosticProtocol::CertificationType::GPSReceiver, true);
 	protocolUnderTest.set_compliance_certification_type(DiagnosticProtocol::CertificationType::FileServer, true);
 	protocolUnderTest.set_compliance_certification_type(DiagnosticProtocol::CertificationType::FileServer, false);
-	ASSERT_TRUE(request_and_read_frame(protocolUnderTest, testPlugin, TestInternalECU, TestPartneredECU, 0xFD42, testFrame, time_source));
+	ASSERT_TRUE(request_and_read_single_frame(protocolUnderTest, testPlugin, TestInternalECU, TestPartneredECU, 0xFD42, testFrame, time_source));
 	EXPECT_EQ(0x54, testFrame.data[0]); // Revision LSBits 01, year 20
 	EXPECT_EQ(0x72, testFrame.data[1]); // Laboratory ID LSBits 011, reserved bit 1, type 001, revision MSBit 0
 	EXPECT_EQ(0x24, testFrame.data[2]); // Laboratory ID MSBits
@@ -1634,16 +1746,16 @@ TEST_F(DiagnosticProtocolTest, ComplianceCertificationAndDiagnosticProtocolIdent
 	EXPECT_FALSE(protocolUnderTest.set_compliance_certification(2020, 4, DiagnosticProtocol::CertificationLaboratoryType::EUCertifiedLaboratory, 0x123, 0x1234));
 	EXPECT_FALSE(protocolUnderTest.set_compliance_certification(2020, 1, DiagnosticProtocol::CertificationLaboratoryType::EUCertifiedLaboratory, 0x800, 0x1234));
 	EXPECT_FALSE(protocolUnderTest.set_compliance_certification(2020, 1, DiagnosticProtocol::CertificationLaboratoryType::EUCertifiedLaboratory, 0x123, 64256));
-	ASSERT_TRUE(request_and_read_frame(protocolUnderTest, testPlugin, TestInternalECU, TestPartneredECU, 0xFD42, testFrame, time_source));
+	ASSERT_TRUE(request_and_read_single_frame(protocolUnderTest, testPlugin, TestInternalECU, TestPartneredECU, 0xFD42, testFrame, time_source));
 	EXPECT_EQ(0x54, testFrame.data[0]);
 	EXPECT_EQ(0x72, testFrame.data[1]);
 
 	// ISO 11783-12:2019 A.6: only the protocols in addition to ISO 11783
 	EXPECT_EQ(0x00, protocolUnderTest.get_diagnostic_protocol_identification());
-	ASSERT_TRUE(request_and_read_frame(protocolUnderTest, testPlugin, TestInternalECU, TestPartneredECU, 0xFD32, testFrame, time_source));
+	ASSERT_TRUE(request_and_read_single_frame(protocolUnderTest, testPlugin, TestInternalECU, TestPartneredECU, 0xFD32, testFrame, time_source));
 	EXPECT_EQ(0x00, testFrame.data[0]);
 	protocolUnderTest.set_additional_diagnostic_protocols(static_cast<std::uint8_t>(DiagnosticProtocol::DiagnosticProtocolIdentificationBit::ISO14229_3));
-	ASSERT_TRUE(request_and_read_frame(protocolUnderTest, testPlugin, TestInternalECU, TestPartneredECU, 0xFD32, testFrame, time_source));
+	ASSERT_TRUE(request_and_read_single_frame(protocolUnderTest, testPlugin, TestInternalECU, TestPartneredECU, 0xFD32, testFrame, time_source));
 	EXPECT_EQ(0x04, testFrame.data[0]);
 	// J1939 mode always reports J1939-73
 	protocolUnderTest.set_j1939_mode(true);
