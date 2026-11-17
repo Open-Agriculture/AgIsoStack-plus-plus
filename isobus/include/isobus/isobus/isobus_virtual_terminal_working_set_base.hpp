@@ -91,12 +91,12 @@ namespace isobus
 		/// @returns The event ID from a byte, or event 0 if the byte is invalid
 		static EventID get_event_from_byte(std::uint8_t eventByte);
 
-		/// @brief Sets the object ID associated with a faulting object during pool parsing,
-		/// and finds its parent among the objects parsed so far
+		/// @brief Sets the object ID associated with a faulting object during pool parsing
+		/// @details get_object_pool_faulting_parent_object_id() then looks for its parent in this object tree.
 		/// @param[in] value The object ID to set as the faulting object
 		void set_object_pool_faulting_object_id(std::uint16_t value);
 
-		/// @brief Sets the faulting object and its parent, for example from a pool that was parsed elsewhere
+		/// @brief Sets the faulting object together with its parent, for a pool that was parsed into another object tree
 		/// @param[in] objectID The object ID of the faulting object, or NULL_OBJECT_ID
 		/// @param[in] parentObjectID The object ID of its parent, or NULL_OBJECT_ID
 		void set_object_pool_fault(std::uint16_t objectID, std::uint16_t parentObjectID);
@@ -135,7 +135,8 @@ namespace isobus
 		std::vector<IopDataComponent> iopFilesRawData; ///< Raw IOP data from the client
 		std::uint16_t workingSetID = NULL_OBJECT_ID; ///< Stores the object ID of the working set object itself
 		std::uint16_t faultingObjectID = NULL_OBJECT_ID; ///< Stores the faulting object ID to send to a client when parsing the pool fails
-		std::uint16_t faultingParentObjectID = NULL_OBJECT_ID; ///< Stores the lowest object ID among the parsed objects that list the faulting object as a child
+		std::uint16_t faultingParentObjectID = NULL_OBJECT_ID; ///< Stores the parent of the faulting object, if set_object_pool_fault() set it
+		bool isFaultingParentObjectIDSet = false; ///< Tells if faultingParentObjectID is set, or if the parent has to be looked up in this object tree
 	};
 } // namespace isobus
 #endif // ISOBUS_VIRTUAL_TERMINAL_WORKING_SET_BASE_HPP

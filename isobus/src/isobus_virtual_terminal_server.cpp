@@ -918,25 +918,33 @@ namespace isobus
 				{
 					std::ostringstream nameString;
 					nameString << std::hex << std::setfill('0') << std::setw(16) << managedWorkingSet->get_control_function()->get_NAME().get_full_name();
-					bool allPoolsSaved = true;
+					// The transfers are only complete once the parsing thread has been joined, which trims their padding
+					bool allPoolsSaved = !is_object_pool_parse_unanswered(*managedWorkingSet);
 
-					// A Store replaces the version with the same label, and save_version() appends, so the label is emptied first.
-					// The result is not checked, as nothing may be stored under the label yet
-					delete_version(versionLabel, message.get_source_control_function()->get_NAME());
-
-					for (std::size_t i = 0; i < managedWorkingSet->get_number_iop_files(); i++)
+					if (!allPoolsSaved)
 					{
-						bool didSave = save_version(managedWorkingSet->get_iop_raw_data(i), versionLabel, message.get_source_control_function()->get_NAME());
+						LOG_WARNING("[VT Server]: Object pool for NAME " + nameString.str() + " can not be stored while it is being parsed.");
+					}
+					else
+					{
+						// A Store replaces the version with the same label, and save_version() appends, so the label is emptied first.
+						// The result is not checked, as nothing may be stored under the label yet
+						delete_version(versionLabel, message.get_source_control_function()->get_NAME());
 
-						if (didSave)
+						for (std::size_t i = 0; i < managedWorkingSet->get_number_iop_files(); i++)
 						{
-							LOG_INFO("[VT Server]: Object pool " + isobus::to_string(i) + " for NAME " + nameString.str() + " was stored.");
-						}
-						else
-						{
-							LOG_ERROR("[VT Server]: Object pool " + isobus::to_string(i) + " for NAME " + nameString.str() + " could not be stored.");
-							allPoolsSaved = false;
-							break;
+							bool didSave = save_version(managedWorkingSet->get_iop_raw_data(i), versionLabel, message.get_source_control_function()->get_NAME());
+
+							if (didSave)
+							{
+								LOG_INFO("[VT Server]: Object pool " + isobus::to_string(i) + " for NAME " + nameString.str() + " was stored.");
+							}
+							else
+							{
+								LOG_ERROR("[VT Server]: Object pool " + isobus::to_string(i) + " for NAME " + nameString.str() + " could not be stored.");
+								allPoolsSaved = false;
+								break;
+							}
 						}
 					}
 

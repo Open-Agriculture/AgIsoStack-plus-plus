@@ -51,13 +51,16 @@ namespace isobus
 		~VirtualTerminalServerManagedWorkingSet();
 
 		/// @brief Starts a thread to parse the received object pool files
-		/// @details The thread parses into an object tree of its own, which starts as a copy of the current one,
-		/// so the object tree that the server and the application use doesn't change while it runs.
+		/// @details The thread parses into an object tree of its own, which holds only the objects of the transfers it parses,
+		/// so neither the object tree nor the transfers that the server and the application use change while it runs.
 		void start_parsing_thread();
 
 		/// @brief Joins the parsing thread
-		/// @details If the pool was parsed successfully, its object tree replaces the current one here.
-		/// If parsing failed, the current object tree stays as it was.
+		/// @details If the pool was parsed successfully, its objects are added to the current object tree here,
+		/// replacing objects with the same ID, and its transfers are marked as parsed.
+		/// If parsing failed, the faulting object and its parent are set here, and the object tree stays as it was.
+		/// The transfers of the failed run stay unparsed. ISO 11783-6 describes that a VT deletes the whole pool after
+		/// a failed update, which is up to the server.
 		void join_parsing_thread();
 
 		/// @brief Returns if any object pools are being managed for this working set master
@@ -156,7 +159,7 @@ namespace isobus
 		void worker_thread_function();
 
 		std::unique_ptr<std::thread> objectPoolProcessingThread = nullptr; ///< A thread to process the object pool with, since that can be fairly time consuming.
-		std::unique_ptr<ObjectPoolParser> objectPoolParser; ///< Holds the object tree that the processing thread parses into, until join_parsing_thread() takes it over
+		std::unique_ptr<ObjectPoolParser> objectPoolParser; ///< Holds the objects that the processing thread parses, until join_parsing_thread() adds them to the object tree
 		std::shared_ptr<ControlFunction> workingSetControlFunction = nullptr; ///< Stores the control function associated with this working set
 		std::vector<isobus::EventCallbackHandle> callbackHandles; ///< A convenient way to associate callback handles to a working set
 		ObjectPoolProcessingThreadState processingState = ObjectPoolProcessingThreadState::None; ///< Stores the state of processing the object pool

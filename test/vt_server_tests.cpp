@@ -1025,6 +1025,38 @@ TEST_F(VirtualTerminalServerMessagingTest, DeleteObjectPoolIsRejectedUntilThePoo
 	EXPECT_NE(nullptr, serverUnderTest.managedWorkingSetList.front()->get_working_set_object());
 }
 
+TEST_F(VirtualTerminalServerMessagingTest, StoreVersionIsRejectedUntilThePoolIsAnswered)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0xD2, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xD3, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	CANMessageFrame storeResponse = {};
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_tp_from_client(internalECU, client, { 0x11, 0x00, 0x00, 0x00, 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x1B, 0xFF, 0xFF });
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	serverUnderTest.wait_for_object_pool_to_parse();
+	testPlugin.clear_queue();
+	receive_from_client(internalECU, client, { 0xD0, 'V', 'E', 'R', 'S', 'I', 'O', 'N' });
+	const bool foundStoreResponse = poll_for_response(serverUnderTest, testPlugin, 0xD0, storeResponse);
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(foundStoreResponse);
+	EXPECT_EQ(0x08, storeResponse.data[5]); // Any other error
+	EXPECT_TRUE(serverUnderTest.storedVersion.empty());
+	EXPECT_TRUE(serverUnderTest.deletedVersionLabels.empty());
+}
+
 TEST_F(VirtualTerminalServerMessagingTest, ChangeActiveMaskRejectsObjectsOfTheWrongType)
 {
 	VirtualCANPlugin testPlugin;
@@ -3635,6 +3667,26 @@ TEST_F(VirtualTerminalServerMaskChangeMacroTest, ChangeSoftKeyMaskUsesTheVisibil
 	EXPECT_EQ((std::vector<std::uint16_t>{ 10, 12, 13, 16, 17, 18 }), macrosThatRan);
 }
 
+// Working Set 0 with active mask 1000 and Data Mask 1000 as its one object, Data Mask 1000, and Number Variable 2,
+// as the parser wants more bytes after a Data Mask than an empty one has
+static std::vector<std::uint8_t> create_small_pool()
+{
+	constexpr auto WORKING_SET = static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSet);
+	constexpr auto DATA_MASK = static_cast<std::uint8_t>(VirtualTerminalObjectType::DataMask);
+	constexpr auto NUMBER_VARIABLE = static_cast<std::uint8_t>(VirtualTerminalObjectType::NumberVariable);
+	return { 0x00, 0x00, WORKING_SET, 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0xE8, 0x03, 0x00, 0x00, 0x00, 0x00, 0xE8, 0x03, DATA_MASK, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x02, 0x00, NUMBER_VARIABLE, 0x00, 0x00, 0x00, 0x00 };
+}
+
+// Waits a bounded time for the parsing thread to finish, without joining it
+static VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState wait_for_parsing_thread(VirtualTerminalServerManagedWorkingSet &workingSet)
+{
+	for (std::uint32_t i = 0; (i < 200) && (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Running == workingSet.get_object_pool_processing_state()); i++)
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(5));
+	}
+	return workingSet.get_object_pool_processing_state();
+}
+
 TEST_F(VirtualTerminalServerMessagingTest, StatusMessageReportsTheNewAddressOfTheActiveWorkingSetMaster)
 {
 	VirtualCANPlugin testPlugin;
@@ -3650,12 +3702,8 @@ TEST_F(VirtualTerminalServerMessagingTest, StatusMessageReportsTheNewAddressOfTh
 	DerivedTestVTServer serverUnderTest(internalECU);
 	serverUnderTest.initialize();
 
-	// Working Set 0 with active mask 1000, Data Mask 1000, and Number Variable 2, as the parser wants more bytes after a Data Mask than an empty one has
-	constexpr auto WORKING_SET = static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSet);
-	constexpr auto DATA_MASK = static_cast<std::uint8_t>(VirtualTerminalObjectType::DataMask);
-	constexpr auto NUMBER_VARIABLE = static_cast<std::uint8_t>(VirtualTerminalObjectType::NumberVariable);
 	auto workingSet = std::make_shared<TestWorkingSet>(client);
-	workingSet->add_iop_raw_data({ 0x00, 0x00, WORKING_SET, 0x00, 0x01, 0xE8, 0x03, 0x00, 0x00, 0x00, 0xE8, 0x03, DATA_MASK, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x02, 0x00, NUMBER_VARIABLE, 0x00, 0x00, 0x00, 0x00 });
+	workingSet->add_iop_raw_data(create_small_pool());
 	workingSet->start_parsing_thread();
 	workingSet->join_parsing_thread();
 	ASSERT_NE(nullptr, workingSet->get_working_set_object());
@@ -3703,15 +3751,6 @@ TEST_F(VirtualTerminalServerMessagingTest, StatusMessageReportsTheNewAddressOfTh
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
-// Working Set 0 with active mask 1000, Data Mask 1000 and Number Variable 2
-static std::vector<std::uint8_t> create_small_pool()
-{
-	constexpr auto WORKING_SET = static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSet);
-	constexpr auto DATA_MASK = static_cast<std::uint8_t>(VirtualTerminalObjectType::DataMask);
-	constexpr auto NUMBER_VARIABLE = static_cast<std::uint8_t>(VirtualTerminalObjectType::NumberVariable);
-	return { 0x00, 0x00, WORKING_SET, 0x00, 0x01, 0xE8, 0x03, 0x00, 0x00, 0x00, 0xE8, 0x03, DATA_MASK, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x02, 0x00, NUMBER_VARIABLE, 0x00, 0x00, 0x00, 0x00 };
-}
-
 TEST(VirtualTerminalServerManagedWorkingSetTest, ParsedObjectsReplaceTheObjectTreeOnlyWhenTheThreadIsJoined)
 {
 	TestWorkingSet workingSet(nullptr);
@@ -3722,19 +3761,21 @@ TEST(VirtualTerminalServerManagedWorkingSetTest, ParsedObjectsReplaceTheObjectTr
 	const auto numberVariable2 = workingSet.get_object_by_id(2);
 	ASSERT_NE(nullptr, numberVariable2);
 
-	// A later transfer adds Number Variable 3 and replaces Number Variable 2
+	// A later transfer adds Number Variable 3 and replaces Number Variable 2, with 0xFF padding after them
 	constexpr auto NUMBER_VARIABLE = static_cast<std::uint8_t>(VirtualTerminalObjectType::NumberVariable);
-	workingSet.add_iop_raw_data({ 0x03, 0x00, NUMBER_VARIABLE, 0x07, 0x00, 0x00, 0x00, 0x02, 0x00, NUMBER_VARIABLE, 0x09, 0x00, 0x00, 0x00 });
+	workingSet.add_iop_raw_data({ 0x03, 0x00, NUMBER_VARIABLE, 0x07, 0x00, 0x00, 0x00, 0x02, 0x00, NUMBER_VARIABLE, 0x09, 0x00, 0x00, 0x00, 0xFF, 0xFF });
 	workingSet.start_parsing_thread();
-	while (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Running == workingSet.get_object_pool_processing_state())
-	{
-		std::this_thread::yield();
-	}
-	EXPECT_EQ(VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Success, workingSet.get_object_pool_processing_state());
+	ASSERT_EQ(VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Success, wait_for_parsing_thread(workingSet));
 
-	// The thread is done, but the object tree is still the old one
+	// The thread is done, but the object tree and the transfer are still as they were
 	EXPECT_EQ(nullptr, workingSet.get_object_by_id(3));
 	EXPECT_EQ(numberVariable2, workingSet.get_object_by_id(2));
+	EXPECT_EQ(16u, workingSet.get_iop_raw_data(1).size());
+
+	// An object that the application adds in the meantime stays
+	auto numberVariable4 = std::make_shared<NumberVariable>();
+	numberVariable4->set_id(4);
+	workingSet.add_object(numberVariable4);
 
 	workingSet.join_parsing_thread();
 	ASSERT_NE(nullptr, workingSet.get_object_by_id(3));
@@ -3742,8 +3783,10 @@ TEST(VirtualTerminalServerManagedWorkingSetTest, ParsedObjectsReplaceTheObjectTr
 	ASSERT_NE(nullptr, workingSet.get_object_by_id(2));
 	EXPECT_NE(numberVariable2, workingSet.get_object_by_id(2));
 	EXPECT_EQ(9u, std::static_pointer_cast<NumberVariable>(workingSet.get_object_by_id(2))->get_value());
+	EXPECT_EQ(numberVariable4, workingSet.get_object_by_id(4));
 	EXPECT_NE(nullptr, workingSet.get_working_set_object());
 	EXPECT_NE(nullptr, workingSet.get_object_by_id(1000));
+	EXPECT_EQ(14u, workingSet.get_iop_raw_data(1).size());
 }
 
 TEST(VirtualTerminalServerManagedWorkingSetTest, AFailedTransferLeavesTheObjectTreeAsItWasAndReportsTheFault)
@@ -3759,16 +3802,30 @@ TEST(VirtualTerminalServerManagedWorkingSetTest, AFailedTransferLeavesTheObjectT
 	constexpr auto CONTAINER = static_cast<std::uint8_t>(VirtualTerminalObjectType::Container);
 	workingSet.add_iop_raw_data({ 0x06, 0x00, CONTAINER, 0x0A, 0x00, 0x0A, 0x00, 0x00, 0x01, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0x00, 0xFE, 0x00, 0x00, 0x00, 0x00, 0x00 });
 	workingSet.start_parsing_thread();
-	while (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Running == workingSet.get_object_pool_processing_state())
-	{
-		std::this_thread::yield();
-	}
-	EXPECT_EQ(VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Fail, workingSet.get_object_pool_processing_state());
+	ASSERT_EQ(VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Fail, wait_for_parsing_thread(workingSet));
+
+	// The parent is one of the new objects, which are never in the object tree
+	workingSet.join_parsing_thread();
 	EXPECT_EQ(7, workingSet.get_object_pool_faulting_object_id());
 	EXPECT_EQ(6, workingSet.get_object_pool_faulting_parent_object_id());
-
-	workingSet.join_parsing_thread();
 	EXPECT_EQ(objectsBefore, workingSet.get_object_tree());
 	EXPECT_EQ(nullptr, workingSet.get_object_by_id(6));
 	EXPECT_NE(nullptr, workingSet.get_working_set_object());
+}
+
+TEST(VirtualTerminalServerManagedWorkingSetTest, TheParentOfAFaultingObjectCanBeInTheCurrentPool)
+{
+	TestWorkingSet workingSet(nullptr);
+	workingSet.add_iop_raw_data(create_small_pool());
+	workingSet.start_parsing_thread();
+	workingSet.join_parsing_thread();
+	ASSERT_NE(nullptr, workingSet.get_working_set_object());
+
+	// The Working Set lists Data Mask 1000, which a later transfer replaces with an object of an unknown type
+	workingSet.add_iop_raw_data({ 0xE8, 0x03, 0xFE, 0x00, 0x00, 0x00, 0x00, 0x00 });
+	workingSet.start_parsing_thread();
+	ASSERT_EQ(VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Fail, wait_for_parsing_thread(workingSet));
+	workingSet.join_parsing_thread();
+	EXPECT_EQ(1000, workingSet.get_object_pool_faulting_object_id());
+	EXPECT_EQ(0, workingSet.get_object_pool_faulting_parent_object_id());
 }

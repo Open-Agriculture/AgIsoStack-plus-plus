@@ -89,7 +89,23 @@ namespace isobus
 	std::uint16_t VirtualTerminalWorkingSetBase::get_object_pool_faulting_parent_object_id()
 	{
 		std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
-		return faultingParentObjectID;
+		std::uint16_t retVal = faultingParentObjectID;
+
+		if ((!isFaultingParentObjectIDSet) && (NULL_OBJECT_ID != faultingObjectID))
+		{
+			for (auto object = vtObjectTree.cbegin(); (vtObjectTree.cend() != object) && (NULL_OBJECT_ID == retVal); object++)
+			{
+				for (std::uint16_t i = 0; (nullptr != object->second) && (i < object->second->get_number_children()); i++)
+				{
+					if (faultingObjectID == object->second->get_child_id(i))
+					{
+						retVal = object->first;
+						break;
+					}
+				}
+			}
+		}
+		return retVal;
 	}
 
 	void VirtualTerminalWorkingSetBase::add_iop_raw_data(const std::vector<std::uint8_t> &dataToAdd)
@@ -2718,22 +2734,10 @@ namespace isobus
 
 	void VirtualTerminalWorkingSetBase::set_object_pool_faulting_object_id(std::uint16_t value)
 	{
-		std::uint16_t parentObjectID = NULL_OBJECT_ID;
-
-		if (NULL_OBJECT_ID != value)
-		{
-			for (auto object = vtObjectTree.cbegin(); (vtObjectTree.cend() != object) && (NULL_OBJECT_ID == parentObjectID); object++)
-			{
-				for (std::uint16_t i = 0; (nullptr != object->second) && (i < object->second->get_number_children()); i++)
-				{
-					if (value == object->second->get_child_id(i))
-					{
-						parentObjectID = object->first;
-					}
-				}
-			}
-		}
-		set_object_pool_fault(value, parentObjectID);
+		const std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
+		faultingObjectID = value;
+		faultingParentObjectID = NULL_OBJECT_ID;
+		isFaultingParentObjectIDSet = false;
 	}
 
 	void VirtualTerminalWorkingSetBase::set_object_pool_fault(std::uint16_t objectID, std::uint16_t parentObjectID)
@@ -2741,6 +2745,7 @@ namespace isobus
 		const std::lock_guard<std::mutex> lock(managedWorkingSetMutex);
 		faultingObjectID = objectID;
 		faultingParentObjectID = parentObjectID;
+		isFaultingParentObjectIDSet = true;
 	}
 
 	bool VirtualTerminalWorkingSetBase::parse_object_macro_reference(
