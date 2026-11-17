@@ -73,7 +73,6 @@ namespace isobus
 	private:
 		T *ptr;
 		std::size_t _size;
-		bool _isConst;
 	};
 }
 #endif // DATA_SPAN_HPP

@@ -15,6 +15,9 @@
 #include "isobus/isobus/can_message_frame.hpp"
 #include "isobus/isobus/can_network_configuration.hpp"
 #include "isobus/isobus/can_transport_protocol_base.hpp"
+#include "isobus/utility/thread_synchronization.hpp"
+
+#include <atomic>
 
 namespace isobus
 {
@@ -134,7 +137,7 @@ namespace isobus
 			std::uint32_t get_total_number_of_packets() const;
 
 		private:
-			StateMachineState state = StateMachineState::None; ///< The state machine state for this session
+			std::atomic<StateMachineState> state{ StateMachineState::None }; ///< The state machine state for this session, read by update() while the thread that started a transmit sets it
 
 			std::uint32_t lastAcknowledgedPacketNumber = 0; ///< The last acknowledged packet number by the receiver
 			std::uint32_t sequenceNumberOffset = 0; ///< The offset of the sequence number relative to the packet number
@@ -176,8 +179,8 @@ namespace isobus
 
 		/// @brief Gets all the active transport protocol sessions that are currently active
 		/// @note The list returns pointers to the transport protocol sessions, but they can disappear at any time
-		/// @returns A list of all the active transport protocol sessions
-		const std::vector<std::shared_ptr<ExtendedTransportProtocolSession>> &get_sessions() const;
+		/// @returns A copy of the list of all the active transport protocol sessions
+		std::vector<std::shared_ptr<ExtendedTransportProtocolSession>> get_sessions() const;
 
 		/// @brief A generic way for a protocol to process a received message
 		/// @param[in] message A received CAN message
@@ -300,6 +303,7 @@ namespace isobus
 		/// @param[in] session The session to update
 		void update_state_machine(std::shared_ptr<ExtendedTransportProtocolSession> &session);
 
+		mutable Mutex activeSessionsMutex; ///< Synchronizes access to @ref activeSessions
 		std::vector<std::shared_ptr<ExtendedTransportProtocolSession>> activeSessions; ///< A list of all active ETP sessions
 		const CANMessageFrameCallback sendCANFrameCallback; ///< A callback for sending a CAN frame
 		const CANMessageCallback canMessageReceivedCallback; ///< A callback for when a complete CAN message is received using the ETP protocol

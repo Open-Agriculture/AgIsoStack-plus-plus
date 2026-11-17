@@ -69,6 +69,8 @@ namespace isobus
 
 		/// @brief Removes an internal control function from the network manager, making it inactive
 		/// @param[in] controlFunction The control function to deactivate
+		/// @details It may be called from one of the control function's own PGN request callbacks. Call it on the thread
+		/// that calls update(), or once that thread is stopped, as a PGN request being handled there uses what it destroys.
 		void deactivate_control_function(std::shared_ptr<InternalControlFunction> controlFunction);
 
 		/// @brief Removes a partnered control function from the network manager, making it inactive
@@ -92,6 +94,9 @@ namespace isobus
 		/// @param[in] parameterGroupNumber The PGN of the callback to remove
 		/// @param[in] callback The callback that will be removed
 		/// @param[in] parent A generic context variable that helps identify what object the callback was destined for
+		/// @details This stops future calls only. A call on another thread can still start or finish after this returns,
+		/// so only destroy what the callback uses once it is removed on the thread that calls update(), or once that thread is stopped.
+		/// A callback may remove itself.
 		void remove_global_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
 
 		/// @brief Registers a callback for ANY control function sending the associated PGN
@@ -104,6 +109,9 @@ namespace isobus
 		/// @param[in] parameterGroupNumber The PGN of the callback to remove
 		/// @param[in] callback The callback that will be removed
 		/// @param[in] parent A generic context variable that helps identify what object the callback was destined for
+		/// @details This stops future calls only. A call on another thread can still start or finish after this returns,
+		/// so only destroy what the callback uses once it is removed on the thread that calls update(), or once that thread is stopped.
+		/// A callback may remove itself.
 		void remove_any_control_function_parameter_group_number_callback(std::uint32_t parameterGroupNumber, CANLibCallback callback, void *parent);
 
 		/// @brief Returns the network manager's event dispatcher for notifying consumers whenever a
@@ -168,6 +176,10 @@ namespace isobus
 
 		/// @brief Used to remove callbacks added with add_control_function_status_change_callback
 		/// @param[in] callback The callback you want to remove
+		/// @details This stops future calls only. A call on another thread can still start or finish after this returns,
+		/// so only destroy what the callback uses once it is removed on the thread that calls update(), or once that thread is stopped.
+		/// The same goes for the thread that calls process_receive_can_message_frame(), which also makes these calls.
+		/// CANHardwareInterface calls both on one thread. A callback may remove itself.
 		void remove_control_function_status_change_callback(ControlFunctionStateCallback callback);
 
 		/// @brief Gets all the internal control functions that are currently registered in the network manager
@@ -266,6 +278,9 @@ namespace isobus
 		/// @brief Constructor for the network manager. Sets default values for members
 		CANNetworkManager();
 
+		/// @brief Unregisters every internal control function's PGN request protocol while the callback list still exists, since a protocol can outlive this object
+		~CANNetworkManager();
+
 		/// @brief Factory function to create an external control function, also automatically assigns it to the lookup table.
 		/// @param[in] desiredName The NAME of the control function
 		/// @param[in] address The address of the control function
@@ -355,6 +370,13 @@ namespace isobus
 		/// address claiming and removes it if needed.
 		void prune_inactive_control_functions();
 
+		/// @brief Lets an offline partner take over an online external CF that matches its NAME filters
+		/// @note Call with controlFunctionsMutex held. The caller makes the partner's Online callback.
+		/// @param[in] partner The partner that just went offline
+		/// @param[in] channelIndex The CAN channel to look on
+		/// @returns true if the partner took over a CF and is online again
+		bool take_over_online_external_control_function(std::shared_ptr<PartneredControlFunction> partner, std::uint8_t channelIndex);
+
 		/// @brief Sends a CAN message using raw addresses. Used only by the stack.
 		/// @param[in] portIndex The CAN channel index to send the message from
 		/// @param[in] sourceAddress The source address to send the CAN message from
@@ -389,7 +411,8 @@ namespace isobus
 		std::list<std::shared_ptr<ControlFunction>> inactiveControlFunctions; ///< A list of the control function that currently don't have a valid address
 		std::list<std::shared_ptr<InternalControlFunction>> internalControlFunctions; ///< A list of the internal control functions
 		std::list<std::shared_ptr<PartneredControlFunction>> partneredControlFunctions; ///< A list of the partnered control functions
-		mutable Mutex controlFunctionsMutex; ///< Mutex to protect access to controlFunctionTable, internalControlFunctions, and partneredControlFunctions.
+		std::vector<std::shared_ptr<PartneredControlFunction>> partnersComingOnline; ///< Partners that came online since the last update(), whose state callbacks it still has to make
+		mutable RecursiveMutex controlFunctionsMutex; ///< Mutex to protect access to controlFunctionTable, internalControlFunctions, and partneredControlFunctions. Recursive, because the address claiming that runs under it looks up the table through get_control_function().
 
 		std::list<ParameterGroupNumberCallbackData> protocolPGNCallbacks; ///< A list of PGN callback registered by CAN protocols
 		Queue<std::shared_ptr<CANMessage>> receivedMessageQueue; ///< A queue of received messages to process

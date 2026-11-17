@@ -71,6 +71,7 @@ namespace isobus
 		const Type controlFunctionType; ///< The Type of the control function
 		NAME controlFunctionNAME; ///< The NAME of the control function
 		bool claimedAddressSinceLastAddressClaimRequest = false; ///< Used to mark CFs as stale if they don't claim within a certain time
+		std::uint8_t missedAddressClaimRequests = 0; ///< Requests for address claim in a row this CF did not answer, reset whenever it claims
 		std::atomic<std::uint8_t> address; ///< The address of the control function
 		const std::uint8_t canPortIndex; ///< The CAN channel index of the control function
 	};

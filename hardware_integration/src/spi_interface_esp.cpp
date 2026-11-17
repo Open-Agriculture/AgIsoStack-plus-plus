@@ -7,6 +7,7 @@
 /// @copyright 2022 The Open-Agriculture Developers
 //================================================================================================
 
+#ifdef ESP_PLATFORM
 #include "isobus/hardware_integration/spi_interface_esp.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/to_string.hpp"
@@ -105,3 +106,4 @@ namespace isobus
 		return retVal;
 	}
 }
+#endif // ESP_PLATFORM

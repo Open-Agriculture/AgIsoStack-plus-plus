@@ -58,8 +58,9 @@ namespace isobus
 
 	void TransportProtocolManager::TransportProtocolSession::set_state(StateMachineState value)
 	{
-		state = value;
+		// Timestamp first, so a thread that sees the new state doesn't time it out from the old timestamp
 		update_timestamp();
+		state = value;
 	}
 
 	std::uint8_t TransportProtocolManager::TransportProtocolSession::get_cts_number_of_packets_remaining() const
@@ -142,9 +143,9 @@ namespace isobus
 			LOG_WARNING("[TP]: Ignoring Broadcast Announcement Message (BAM) for 0x%05X, configured maximum number of sessions reached.",
 			            parameterGroupNumber);
 		}
-		else if (totalMessageSize > MAX_PROTOCOL_DATA_LENGTH)
+		else if ((totalMessageSize <= CAN_DATA_LENGTH) || (totalMessageSize > MAX_PROTOCOL_DATA_LENGTH))
 		{
-			LOG_WARNING("[TP]: Ignoring Broadcast Announcement Message (BAM) for 0x%05X, message size (%hu) is greater than the maximum (%hu).",
+			LOG_WARNING("[TP]: Ignoring Broadcast Announcement Message (BAM) for 0x%05X, message size (%hu) is outside 9 to %u bytes.",
 			            parameterGroupNumber,
 			            totalMessageSize,
 			            MAX_PROTOCOL_DATA_LENGTH);
@@ -202,6 +203,14 @@ namespace isobus
 			LOG_WARNING("[TP]: Replying with abort to Request To Send (RTS) for 0x%05X, configured maximum number of sessions reached.", parameterGroupNumber);
 			send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, parameterGroupNumber, ConnectionAbortReason::AlreadyInCMSession);
 		}
+		else if ((totalMessageSize <= CAN_DATA_LENGTH) || (totalMessageSize > MAX_PROTOCOL_DATA_LENGTH))
+		{
+			LOG_WARNING("[TP]: Replying with abort to Request To Send (RTS) for 0x%05X, message size (%hu) is outside 9 to %u bytes.",
+			            parameterGroupNumber,
+			            totalMessageSize,
+			            MAX_PROTOCOL_DATA_LENGTH);
+			send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, parameterGroupNumber, ConnectionAbortReason::TotalMessageSizeTooBig);
+		}
 		else
 		{
 			auto oldSession = get_session(source, destination);
@@ -220,8 +229,6 @@ namespace isobus
 					close_session(oldSession, false);
 				}
 			}
-
-			auto data = std::unique_ptr<CANMessageData>(new CANMessageDataVector(totalMessageSize));
 
 			if (clearToSendPacketMax > configuration->get_number_of_packets_per_cts_message())
 			{
@@ -763,7 +770,11 @@ namespace isobus
 
 			case StateMachineState::SendBroadcastAnnounce:
 			{
-				if (send_broadcast_announce_message(session))
+				// Checked again and sent under the lock: a session's first frame can be sent by the
+				// thread that started the transmit and by update() on the stack's thread at once,
+				// and only one of them may send it.
+				LOCK_GUARD(Mutex, activeSessionsMutex);
+				if ((StateMachineState::SendBroadcastAnnounce == session->state) && send_broadcast_announce_message(session))
 				{
 					session->set_state(StateMachineState::SendDataTransferPackets);
 				}
@@ -772,7 +783,9 @@ namespace isobus
 
 			case StateMachineState::SendRequestToSend:
 			{
-				if (send_request_to_send(session))
+				// As above: only one thread sends the RTS.
+				LOCK_GUARD(Mutex, activeSessionsMutex);
+				if ((StateMachineState::SendRequestToSend == session->state) && send_request_to_send(session))
 				{
 					session->set_state(StateMachineState::WaitForClearToSend);
 				}
@@ -1047,7 +1060,7 @@ namespace isobus
 		return activeSessions.size();
 	}
 
-	std::list<std::shared_ptr<TransportProtocolManager::TransportProtocolSession>> TransportProtocolManager::get_sessions() const
+	std::vector<std::shared_ptr<TransportProtocolManager::TransportProtocolSession>> TransportProtocolManager::get_sessions() const
 	{
 		LOCK_GUARD(Mutex, activeSessionsMutex);
 		return activeSessions;
