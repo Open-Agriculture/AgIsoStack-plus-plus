@@ -158,6 +158,12 @@ namespace isobus
 		/// @brief The object pool processing thread will execute this function when it runs
 		void worker_thread_function();
 
+		/// @brief Adds the objects of a successful parse to the object tree, and marks its transfers as parsed
+		void take_over_parsed_objects();
+
+		/// @brief Sets the faulting object of a failed parse and looks up its parent
+		void set_fault_from_parser();
+
 		std::unique_ptr<std::thread> objectPoolProcessingThread = nullptr; ///< A thread to process the object pool with, since that can be fairly time consuming.
 		std::unique_ptr<ObjectPoolParser> objectPoolParser; ///< Holds the objects that the processing thread parses, until join_parsing_thread() adds them to the object tree
 		std::shared_ptr<ControlFunction> workingSetControlFunction = nullptr; ///< Stores the control function associated with this working set

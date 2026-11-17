@@ -103,7 +103,15 @@ namespace isobus
 
 	VirtualTerminalServerManagedWorkingSet::~VirtualTerminalServerManagedWorkingSet()
 	{
-		join_parsing_thread();
+		try
+		{
+			join_parsing_thread();
+		}
+		catch (...)
+		{
+			// A destructor must not throw, and joining can fail with a system error
+			LOG_ERROR("[WS]: The object pool parsing thread could not be joined.");
+		}
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::start_parsing_thread()
@@ -134,46 +142,52 @@ namespace isobus
 			objectPoolProcessingThread->join();
 			objectPoolProcessingThread = nullptr;
 
-			if (nullptr != objectPoolParser)
+			if ((nullptr != objectPoolParser) && (ObjectPoolProcessingThreadState::Success == get_object_pool_processing_state()))
 			{
-				const auto &parsedObjects = objectPoolParser->get_object_tree();
-
-				if (ObjectPoolProcessingThreadState::Success == get_object_pool_processing_state())
-				{
-					// Merged into the current object tree, so objects added to it while the thread ran stay
-					for (const auto &object : parsedObjects)
-					{
-						if (objectPoolParser->is_parsed_object(object.first, object.second))
-						{
-							vtObjectTree[object.first] = object.second;
-						}
-					}
-					workingSetID = objectPoolParser->get_working_set_id();
-
-					for (const auto &transfer : objectPoolParser->parsedTransfers)
-					{
-						// Load Version parses the stored transfers joined together, where this padding would read as objects
-						iopFilesRawData[transfer.first].data.resize(transfer.second);
-						iopFilesRawData[transfer.first].processed = true;
-					}
-				}
-				else
-				{
-					// The parent can be a new object or one of the current pool, and a new object replaces a current one with the same ID
-					const std::uint16_t faultingID = objectPoolParser->get_object_pool_faulting_object_id();
-					std::uint16_t parentID = NULL_OBJECT_ID;
-
-					if (NULL_OBJECT_ID != faultingID)
-					{
-						parentID = std::min(find_parent_object_id(parsedObjects, faultingID, nullptr),
-						                    find_parent_object_id(vtObjectTree, faultingID, &parsedObjects));
-					}
-					set_object_pool_fault(faultingID, parentID);
-				}
+				take_over_parsed_objects();
+			}
+			else if (nullptr != objectPoolParser)
+			{
+				set_fault_from_parser();
 			}
 			objectPoolParser.reset();
 			set_object_pool_processing_state(ObjectPoolProcessingThreadState::Joined);
 		}
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::take_over_parsed_objects()
+	{
+		// Merged into the current object tree, so objects added to it while the thread ran stay
+		for (const auto &object : objectPoolParser->get_object_tree())
+		{
+			if (objectPoolParser->is_parsed_object(object.first, object.second))
+			{
+				vtObjectTree[object.first] = object.second;
+			}
+		}
+		workingSetID = objectPoolParser->get_working_set_id();
+
+		for (const auto &transfer : objectPoolParser->parsedTransfers)
+		{
+			// Load Version parses the stored transfers joined together, where this padding would read as objects
+			iopFilesRawData[transfer.first].data.resize(transfer.second);
+			iopFilesRawData[transfer.first].processed = true;
+		}
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::set_fault_from_parser()
+	{
+		// The parent can be a new object or one of the current pool, and a new object replaces a current one with the same ID
+		const auto &parsedObjects = objectPoolParser->get_object_tree();
+		const std::uint16_t faultingID = objectPoolParser->get_object_pool_faulting_object_id();
+		std::uint16_t parentID = NULL_OBJECT_ID;
+
+		if (NULL_OBJECT_ID != faultingID)
+		{
+			parentID = std::min(find_parent_object_id(parsedObjects, faultingID, nullptr),
+			                    find_parent_object_id(vtObjectTree, faultingID, &parsedObjects));
+		}
+		set_object_pool_fault(faultingID, parentID);
 	}
 
 	bool VirtualTerminalServerManagedWorkingSet::get_any_object_pools() const
