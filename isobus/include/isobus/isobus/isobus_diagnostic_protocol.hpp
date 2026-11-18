@@ -189,7 +189,7 @@ namespace isobus
 
 			/// @brief A useful way to compare DTC objects to each other for equality
 			/// @param[in] obj The "rhs" of the comparison
-			/// @returns `true` if the objects were equal
+			/// @returns `true` if the SPN and FMI match. The lamp is not compared, because it does not identify a DTC
 			bool operator==(const DiagnosticTroubleCode &obj) const;
 
 			/// @brief Returns the occurrence count, which will be kept track of by the protocol
@@ -418,7 +418,7 @@ namespace isobus
 
 		/// @brief Sends a DM1 encoded CAN message
 		/// @returns true if the message was sent, otherwise false
-		bool send_diagnostic_message_1() const;
+		bool send_diagnostic_message_1();
 
 		/// @brief Sends a DM2 encoded CAN message
 		/// @returns true if the message was sent, otherwise false
@@ -516,6 +516,7 @@ namespace isobus
 		std::uint32_t lastDM13ReceivedTimestamp = 0; ///< A timestamp in milliseconds when we last got a DM13 message
 		std::uint16_t customDM13SuspensionTime = 0; ///< If using a non-standard DM13 suspension time, this tracks that duration in milliseconds
 		bool broadcastState = true; ///< Bitfield for tracking the network broadcast state for DM13
+		bool noFaultsDM1Pending = false; ///< Set when the last active DTC clears, so one DM1 with no faults goes out at the next 1 s tick
 		bool j1939Mode = false; ///< Tells the protocol to operate according to J1939 instead of ISO11783
 		bool initialized = false; ///< Stores if the interface has been initialized
 	};
