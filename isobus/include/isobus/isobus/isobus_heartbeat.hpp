@@ -155,6 +155,7 @@ namespace isobus
 		static constexpr std::uint8_t MAX_SEQUENCE_COUNTER = 250; ///< The sequence counter runs from 0 to 250, then restarts at 0
 		static constexpr std::uint8_t MAX_ALLOWED_INCREMENT = 3; ///< An increase of more than 3 is a sequence error
 		static constexpr std::uint8_t RECOVERY_MESSAGE_COUNT = 8; ///< Correct sequential heartbeats in a row needed to leave an error state
+		static constexpr std::uint16_t REPETITION_RATE_DEFAULT = 0; ///< A requested rate of 0 asks for the default rate, which for the heartbeat is 100 ms
 		static constexpr std::uint16_t REPETITION_RATE_NO_CHANGE = 0xFFFF; ///< A requested rate of 0xFFFF means the rate shall not change
 
 		/// @brief A request from the application, applied by update() so that only the update thread touches trackedHeartbeats.
@@ -207,6 +208,15 @@ namespace isobus
 		/// @brief Applies a request from the application. Called from update().
 		/// @param[in] command The request to apply
 		void apply_command(const PendingCommand &command);
+
+		/// @brief Sends a due local heartbeat or checks a remote heartbeat for timeout.
+		/// @param[in,out] heartbeat The tracked heartbeat to update
+		/// @returns True if the heartbeat should be removed from tracking.
+		bool update_tracked_heartbeat(Heartbeat &heartbeat);
+
+		/// @brief Sends a local heartbeat when due and advances its counter on success.
+		/// @param[in,out] heartbeat The local heartbeat to send
+		void send_heartbeat_if_due(Heartbeat &heartbeat);
 
 		/// @brief Checks the sequence counter of a received heartbeat against the previous one and updates the state.
 		/// @param[in,out] heartbeat The tracked heartbeat the message belongs to

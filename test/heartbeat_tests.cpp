@@ -643,11 +643,45 @@ TEST_F(HeartbeatProducerTest, RateRequestFromUnknownSourceIsIgnored)
 	EXPECT_TRUE(testPlugin.get_queue_empty());
 }
 
-TEST_F(HeartbeatProducerTest, NoChangeRateRequestIsIgnored)
+TEST_F(HeartbeatProducerTest, RateRequestOf100msIsAnswered)
+{
+	receive_rate_request(0x66, 0x65, 100);
+
+	CANMessageFrame frame = {};
+	ASSERT_TRUE(testPlugin.read_frame(frame));
+	EXPECT_EQ(frame.identifier, 0x18FE0E65);
+	EXPECT_EQ(frame.dataLength, 8);
+	EXPECT_EQ(0, std::memcmp(REPETITION_RATE_100_MS, frame.data, sizeof(REPETITION_RATE_100_MS)));
+	ASSERT_TRUE(testPlugin.read_frame(frame));
+	EXPECT_EQ(frame.identifier, 0x0CF0E465);
+	EXPECT_EQ(frame.data[0], 251);
+}
+
+TEST_F(HeartbeatProducerTest, NoChangeRateRequestIsAnsweredWith100ms)
 {
 	receive_rate_request(0x66, 0x65, 0xFFFF);
 
-	EXPECT_TRUE(testPlugin.get_queue_empty());
+	CANMessageFrame frame = {};
+	ASSERT_TRUE(testPlugin.read_frame(frame));
+	EXPECT_EQ(frame.identifier, 0x18FE0E65);
+	EXPECT_EQ(frame.dataLength, 8);
+	EXPECT_EQ(0, std::memcmp(REPETITION_RATE_100_MS, frame.data, sizeof(REPETITION_RATE_100_MS)));
+	ASSERT_TRUE(testPlugin.read_frame(frame));
+	EXPECT_EQ(frame.identifier, 0x0CF0E465);
+	EXPECT_EQ(frame.data[0], 251);
+}
+
+TEST_F(HeartbeatProducerTest, UnsupportedRateRequestIsIgnored)
+{
+	for (const std::uint16_t rate : { 500, 0xFFFE, 64256 })
+	{
+		receive_rate_request(0x66, 0x65, rate);
+		EXPECT_TRUE(testPlugin.get_queue_empty());
+
+		time_source.update_for_ms(250);
+		EXPECT_EQ(0, count_frames(0x0CF0E465));
+		testPlugin.clear_queue();
+	}
 }
 
 TEST_F(HeartbeatProducerTest, RateRequestIsAnsweredWithTheActualRate)

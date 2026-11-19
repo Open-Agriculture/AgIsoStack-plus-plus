@@ -161,41 +161,7 @@ namespace isobus
 		if (enabled)
 		{
 			trackedHeartbeats.erase(std::remove_if(trackedHeartbeats.begin(), trackedHeartbeats.end(), [this](Heartbeat &heartbeat) {
-				                        bool retVal = false;
-
-				                        if (nullptr != heartbeat.controlFunction)
-				                        {
-					                        if (ControlFunction::Type::Internal == heartbeat.controlFunction->get_type())
-					                        {
-						                        if ((SystemTiming::time_expired_ms(heartbeat.timestamp_ms, heartbeat.repetitionRate_ms)) &&
-						                            heartbeat.send(*this))
-						                        {
-							                        heartbeat.sequenceCounter++;
-
-							                        if (heartbeat.sequenceCounter > MAX_SEQUENCE_COUNTER)
-							                        {
-								                        heartbeat.sequenceCounter = 0;
-							                        }
-						                        }
-					                        }
-					                        else if (heartbeat.requestPending && (SystemTiming::get_time_elapsed_ms(heartbeat.timestamp_ms) > SEQUENCE_INITIAL_RESPONSE_TIMEOUT_MS))
-					                        {
-						                        retVal = true;
-						                        LOG_WARNING("[HB]: Control function at address 0x%02X did not accept the heartbeat request.", heartbeat.controlFunction->get_address());
-						                        heartbeatErrorEventDispatcher.call(HeartBeatError::RequestNotAccepted, heartbeat.controlFunction);
-					                        }
-					                        else if (SystemTiming::get_time_elapsed_ms(heartbeat.timestamp_ms) > SEQUENCE_TIMEOUT_MS)
-					                        {
-						                        retVal = true;
-						                        LOG_ERROR("[HB]: Heartbeat from control function at address 0x%02X timed out.", heartbeat.controlFunction->get_address());
-						                        heartbeatErrorEventDispatcher.call(HeartBeatError::TimedOut, heartbeat.controlFunction);
-					                        }
-				                        }
-				                        else
-				                        {
-					                        retVal = true;
-				                        }
-				                        return retVal;
+				                        return update_tracked_heartbeat(heartbeat);
 			                        }),
 			                        trackedHeartbeats.end());
 
@@ -205,6 +171,46 @@ namespace isobus
 				{
 					apply_command(command);
 				}
+			}
+		}
+	}
+
+	bool HeartbeatInterface::update_tracked_heartbeat(Heartbeat &heartbeat)
+	{
+		bool shouldRemove = false;
+
+		if (nullptr == heartbeat.controlFunction)
+		{
+			shouldRemove = true;
+		}
+		else if (ControlFunction::Type::Internal == heartbeat.controlFunction->get_type())
+		{
+			send_heartbeat_if_due(heartbeat);
+		}
+		else if (heartbeat.requestPending && (SystemTiming::get_time_elapsed_ms(heartbeat.timestamp_ms) > SEQUENCE_INITIAL_RESPONSE_TIMEOUT_MS))
+		{
+			LOG_WARNING("[HB]: Control function at address 0x%02X did not accept the heartbeat request.", heartbeat.controlFunction->get_address());
+			heartbeatErrorEventDispatcher.call(HeartBeatError::RequestNotAccepted, heartbeat.controlFunction);
+			shouldRemove = true;
+		}
+		else if (SystemTiming::get_time_elapsed_ms(heartbeat.timestamp_ms) > SEQUENCE_TIMEOUT_MS)
+		{
+			LOG_ERROR("[HB]: Heartbeat from control function at address 0x%02X timed out.", heartbeat.controlFunction->get_address());
+			heartbeatErrorEventDispatcher.call(HeartBeatError::TimedOut, heartbeat.controlFunction);
+			shouldRemove = true;
+		}
+
+		return shouldRemove;
+	}
+
+	void HeartbeatInterface::send_heartbeat_if_due(Heartbeat &heartbeat)
+	{
+		if (SystemTiming::time_expired_ms(heartbeat.timestamp_ms, heartbeat.repetitionRate_ms) && heartbeat.send(*this))
+		{
+			heartbeat.sequenceCounter++;
+			if (heartbeat.sequenceCounter > MAX_SEQUENCE_COUNTER)
+			{
+				heartbeat.sequenceCounter = 0;
 			}
 		}
 	}
@@ -457,34 +463,44 @@ namespace isobus
 			auto interface = static_cast<HeartbeatInterface *>(parentPointer);
 
 			if ((interface->is_enabled()) &&
-			    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage) == parameterGroupNumber) &&
-			    (REPETITION_RATE_NO_CHANGE != repetitionRate))
+			    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage) == parameterGroupNumber))
 			{
-				retVal = true;
-				LOG_DEBUG("[HB]: Control function at address 0x%02X requested the ISOBUS heartbeat from control function at address 0x%02X at %u ms. It is sent every 100 ms.", requestingControlFunction->get_address(), targetControlFunction->get_address(), static_cast<unsigned>(repetitionRate));
+				const bool rateHonoured = ((REPETITION_RATE_DEFAULT == repetitionRate) ||
+				                           (SEQUENCE_REPETITION_RATE_MS == repetitionRate) ||
+				                           (REPETITION_RATE_NO_CHANGE == repetitionRate));
 
-				auto managedHeartbeat = interface->find_tracked_heartbeat(targetControlFunction);
-
-				if (managedHeartbeat == interface->trackedHeartbeats.end())
+				if (rateHonoured)
 				{
-					interface->trackedHeartbeats.emplace_back(targetControlFunction);
-					interface->trackedHeartbeats.back().timestamp_ms = 0; // Heartbeat will be sent on next update
-				}
+					retVal = true;
+					LOG_DEBUG("[HB]: Control function at address 0x%02X requested the ISOBUS heartbeat from control function at address 0x%02X at %u ms. It is sent every 100 ms.", requestingControlFunction->get_address(), targetControlFunction->get_address(), static_cast<unsigned>(repetitionRate));
 
-				const std::uint32_t pgn = static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage);
-				const std::array<std::uint8_t, 8> response = { static_cast<std::uint8_t>(pgn & 0xFF),
-					                                             static_cast<std::uint8_t>((pgn >> 8) & 0xFF),
-					                                             static_cast<std::uint8_t>((pgn >> 16) & 0xFF),
-					                                             static_cast<std::uint8_t>(SEQUENCE_REPETITION_RATE_MS & 0xFF),
-					                                             static_cast<std::uint8_t>((SEQUENCE_REPETITION_RATE_MS >> 8) & 0xFF),
-					                                             0xFF,
-					                                             0xFF,
-					                                             0xFF };
-				interface->sendCANFrameCallback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ResponseForRepetitionRate),
-				                                CANDataSpan(response.data(), response.size()),
-				                                CANNetworkManager::CANNetwork.get_internal_control_function(targetControlFunction),
-				                                nullptr,
-				                                CANIdentifier::CANPriority::PriorityDefault6);
+					auto managedHeartbeat = interface->find_tracked_heartbeat(targetControlFunction);
+
+					if (managedHeartbeat == interface->trackedHeartbeats.end())
+					{
+						interface->trackedHeartbeats.emplace_back(targetControlFunction);
+						interface->trackedHeartbeats.back().timestamp_ms = 0; // Heartbeat will be sent on next update
+					}
+
+					const std::uint32_t pgn = static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage);
+					const std::array<std::uint8_t, 8> response = { static_cast<std::uint8_t>(pgn & 0xFF),
+						                                             static_cast<std::uint8_t>((pgn >> 8) & 0xFF),
+						                                             static_cast<std::uint8_t>((pgn >> 16) & 0xFF),
+						                                             static_cast<std::uint8_t>(SEQUENCE_REPETITION_RATE_MS & 0xFF),
+						                                             static_cast<std::uint8_t>((SEQUENCE_REPETITION_RATE_MS >> 8) & 0xFF),
+						                                             0xFF,
+						                                             0xFF,
+						                                             0xFF };
+					interface->sendCANFrameCallback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ResponseForRepetitionRate),
+					                                CANDataSpan(response.data(), response.size()),
+					                                CANNetworkManager::CANNetwork.get_internal_control_function(targetControlFunction),
+					                                nullptr,
+					                                CANIdentifier::CANPriority::PriorityDefault6);
+				}
+				else
+				{
+					LOG_WARNING("[HB]: Control function at address 0x%02X requested the ISOBUS heartbeat at %u ms, which is not supported. The heartbeat is sent every 100 ms, so the request is ignored.", requestingControlFunction->get_address(), static_cast<unsigned>(repetitionRate));
+				}
 			}
 		}
 		return retVal;
