@@ -75,13 +75,13 @@ namespace isobus
 		/// @brief From the next update on, the heartbeat carries 255 (graceful shutdown) until the control function is removed.
 		/// Does nothing unless the control function is already sending heartbeats.
 		/// @param[in] controlFunction The internal control function that is shutting down
-		void send_shutdown(std::shared_ptr<InternalControlFunction> controlFunction);
+		void send_shutdown(std::shared_ptr<InternalControlFunction> controlFunction) const;
 
 		/// @brief While set, the heartbeat carries 254 instead of the counter.
 		/// Does nothing unless the control function is already sending heartbeats.
 		/// @param[in] controlFunction The internal control function to change
 		/// @param[in] error True to report a transmission error, false to clear it
-		void set_transmission_error(std::shared_ptr<InternalControlFunction> controlFunction, bool error);
+		void set_transmission_error(std::shared_ptr<InternalControlFunction> controlFunction, bool error) const;
 
 		/// @brief Called by the internal control function class when a new internal control function is added.
 		/// This allows us to respond to requests for heartbeats from other control functions.
@@ -217,7 +217,7 @@ namespace isobus
 
 		/// @brief Sends a local heartbeat when due and advances its counter on success.
 		/// @param[in,out] heartbeat The local heartbeat to send
-		void send_heartbeat_if_due(Heartbeat &heartbeat);
+		void send_heartbeat_if_due(Heartbeat &heartbeat) const;
 
 		/// @brief Checks the sequence counter of a received heartbeat against the previous one and updates the state.
 		/// @param[in,out] heartbeat The tracked heartbeat the message belongs to

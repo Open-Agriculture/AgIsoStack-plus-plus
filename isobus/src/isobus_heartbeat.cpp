@@ -66,7 +66,7 @@ namespace isobus
 		return retVal;
 	}
 
-	void HeartbeatInterface::send_shutdown(std::shared_ptr<InternalControlFunction> controlFunction)
+	void HeartbeatInterface::send_shutdown(std::shared_ptr<InternalControlFunction> controlFunction) const
 	{
 		if (nullptr != controlFunction)
 		{
@@ -74,7 +74,7 @@ namespace isobus
 		}
 	}
 
-	void HeartbeatInterface::set_transmission_error(std::shared_ptr<InternalControlFunction> controlFunction, bool error)
+	void HeartbeatInterface::set_transmission_error(std::shared_ptr<InternalControlFunction> controlFunction, bool error) const
 	{
 		if (nullptr != controlFunction)
 		{
@@ -187,7 +187,7 @@ namespace isobus
 		return shouldRemove;
 	}
 
-	void HeartbeatInterface::send_heartbeat_if_due(Heartbeat &heartbeat)
+	void HeartbeatInterface::send_heartbeat_if_due(Heartbeat &heartbeat) const
 	{
 		if (SystemTiming::time_expired_ms(heartbeat.timestamp_ms, heartbeat.repetitionRate_ms) && heartbeat.send(*this))
 		{
@@ -404,7 +404,7 @@ namespace isobus
 		else if (static_cast<std::uint8_t>(SequenceCounterSpecialValue::NotAvailable) != previous)
 		{
 			const std::uint8_t base = (static_cast<std::uint8_t>(SequenceCounterSpecialValue::Initial) == previous) ? MAX_SEQUENCE_COUNTER : previous; // 251 is followed by 0
-			const std::uint8_t increment = static_cast<std::uint8_t>((sequenceCounter + MAX_SEQUENCE_COUNTER + 1 - base) % (MAX_SEQUENCE_COUNTER + 1));
+			const auto increment = static_cast<std::uint8_t>((sequenceCounter + MAX_SEQUENCE_COUNTER + 1 - base) % (MAX_SEQUENCE_COUNTER + 1));
 
 			if ((0 == increment) || (MAX_ALLOWED_INCREMENT < increment))
 			{
@@ -483,7 +483,7 @@ namespace isobus
 						interface->trackedHeartbeats.back().timestamp_ms = 0; // Heartbeat will be sent on next update
 					}
 
-					const std::uint32_t pgn = static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage);
+					const auto pgn = static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage);
 					const std::array<std::uint8_t, 8> response = { static_cast<std::uint8_t>(pgn & 0xFF),
 						                                             static_cast<std::uint8_t>((pgn >> 8) & 0xFF),
 						                                             static_cast<std::uint8_t>((pgn >> 16) & 0xFF),
