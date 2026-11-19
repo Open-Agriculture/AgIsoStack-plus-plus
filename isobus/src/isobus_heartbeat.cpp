@@ -11,6 +11,7 @@
 /// correct data in all its messages
 ///
 /// @author Adrian Del Grosso
+/// @author Sujan Dumaru
 ///
 /// @copyright 2024 The Open-Agriculture Developers
 //================================================================================================
@@ -34,7 +35,17 @@ namespace isobus
 		{
 			LOG_DEBUG("[HB]: Disabling ISOBUS heartbeat interface.");
 		}
+
+		LOCK_GUARD(Mutex, pendingCommandsMutex);
 		enabled = enable;
+
+		if (!enable)
+		{
+			pendingCommands.erase(std::remove_if(pendingCommands.begin(), pendingCommands.end(), [](const PendingCommand &command) {
+				                      return (CommandType::Remove != command.type);
+			                      }),
+			                      pendingCommands.end());
+		}
 	}
 
 	bool HeartbeatInterface::is_enabled() const
@@ -48,15 +59,43 @@ namespace isobus
 		bool retVal = false;
 
 		if ((nullptr != sourceControlFunction) &&
-		    (nullptr != destinationControlFunction) &&
-		    enabled)
+		    (nullptr != destinationControlFunction))
 		{
-			retVal = ParameterGroupNumberRequestProtocol::request_repetition_rate(static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage),
-			                                                                      SEQUENCE_REPETITION_RATE_MS,
-			                                                                      sourceControlFunction,
-			                                                                      destinationControlFunction);
+			LOCK_GUARD(Mutex, pendingCommandsMutex);
+
+			if (enabled)
+			{
+				pendingCommands.push_back({ CommandType::RequestHeartbeat, sourceControlFunction, destinationControlFunction });
+				retVal = true;
+			}
 		}
 		return retVal;
+	}
+
+	void HeartbeatInterface::send_shutdown(std::shared_ptr<InternalControlFunction> controlFunction)
+	{
+		if (nullptr != controlFunction)
+		{
+			LOCK_GUARD(Mutex, pendingCommandsMutex);
+
+			if (enabled)
+			{
+				pendingCommands.push_back({ CommandType::Shutdown, nullptr, controlFunction });
+			}
+		}
+	}
+
+	void HeartbeatInterface::set_transmission_error(std::shared_ptr<InternalControlFunction> controlFunction, bool error)
+	{
+		if (nullptr != controlFunction)
+		{
+			LOCK_GUARD(Mutex, pendingCommandsMutex);
+
+			if (enabled)
+			{
+				pendingCommands.push_back({ error ? CommandType::SetTransmissionError : CommandType::ClearTransmissionError, nullptr, controlFunction });
+			}
+		}
 	}
 
 	void HeartbeatInterface::on_new_internal_control_function(std::shared_ptr<InternalControlFunction> newControlFunction)
@@ -77,6 +116,9 @@ namespace isobus
 		{
 			pgnRequestProtocol->remove_request_for_repetition_rate_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage), process_request_for_heartbeat, this);
 		}
+
+		LOCK_GUARD(Mutex, pendingCommandsMutex);
+		pendingCommands.push_back({ CommandType::Remove, nullptr, destroyedControlFunction });
 	}
 
 	EventDispatcher<HeartbeatInterface::HeartBeatError, std::shared_ptr<ControlFunction>> &HeartbeatInterface::get_heartbeat_error_event_dispatcher()
@@ -89,8 +131,28 @@ namespace isobus
 		return newTrackedHeartbeatEventDispatcher;
 	}
 
+	EventDispatcher<std::shared_ptr<ControlFunction>> &HeartbeatInterface::get_heartbeat_recovered_event_dispatcher()
+	{
+		return heartbeatRecoveredEventDispatcher;
+	}
+
 	void HeartbeatInterface::update()
 	{
+		std::vector<PendingCommand> commands;
+		{
+			LOCK_GUARD(Mutex, pendingCommandsMutex);
+			commands.swap(pendingCommands);
+		}
+
+		// Flags and removals go first so they apply to a frame that is due in this update. Requests go after the timeout sweep so a retry for a heartbeat that just timed out is sent.
+		for (const auto &command : commands)
+		{
+			if ((CommandType::RequestHeartbeat != command.type) && (enabled || (CommandType::Remove == command.type)))
+			{
+				apply_command(command);
+			}
+		}
+
 		if (enabled)
 		{
 			trackedHeartbeats.erase(std::remove_if(trackedHeartbeats.begin(), trackedHeartbeats.end(), [this](Heartbeat &heartbeat) {
@@ -105,26 +167,34 @@ namespace isobus
 						                        {
 							                        heartbeat.sequenceCounter++;
 
-							                        if (heartbeat.sequenceCounter > 250)
+							                        if (heartbeat.sequenceCounter > MAX_SEQUENCE_COUNTER)
 							                        {
 								                        heartbeat.sequenceCounter = 0;
 							                        }
 						                        }
 					                        }
-					                        else if (SystemTiming::time_expired_ms(heartbeat.timestamp_ms, SEQUENCE_TIMEOUT_MS))
+					                        else if (SystemTiming::get_time_elapsed_ms(heartbeat.timestamp_ms) > SEQUENCE_TIMEOUT_MS)
 					                        {
-						                        retVal = true; // External heartbeat is timed-out
+						                        retVal = true;
 						                        LOG_ERROR("[HB]: Heartbeat from control function at address 0x%02X timed out.", heartbeat.controlFunction->get_address());
 						                        heartbeatErrorEventDispatcher.call(HeartBeatError::TimedOut, heartbeat.controlFunction);
 					                        }
 				                        }
 				                        else
 				                        {
-					                        retVal = true; // Invalid state
+					                        retVal = true;
 				                        }
 				                        return retVal;
 			                        }),
 			                        trackedHeartbeats.end());
+
+			for (const auto &command : commands)
+			{
+				if (CommandType::RequestHeartbeat == command.type)
+				{
+					apply_command(command);
+				}
+			}
 		}
 	}
 
@@ -137,7 +207,17 @@ namespace isobus
 	bool HeartbeatInterface::Heartbeat::send(const HeartbeatInterface &parent)
 	{
 		bool retVal = false;
-		const std::array<std::uint8_t, 8> buffer = { sequenceCounter, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+		std::uint8_t counterToSend = sequenceCounter;
+
+		if (shutdown)
+		{
+			counterToSend = static_cast<std::uint8_t>(SequenceCounterSpecialValue::NotAvailable);
+		}
+		else if (transmissionError)
+		{
+			counterToSend = static_cast<std::uint8_t>(SequenceCounterSpecialValue::Error);
+		}
+		const std::array<std::uint8_t, 8> buffer = { counterToSend, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 
 		retVal = parent.sendCANFrameCallback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage),
 		                                     CANDataSpan(buffer.data(), buffer.size()),
@@ -146,7 +226,7 @@ namespace isobus
 		                                     CANIdentifier::CANPriority::Priority3);
 		if (retVal)
 		{
-			timestamp_ms = SystemTiming::get_timestamp_ms(); // Sent OK
+			timestamp_ms = SystemTiming::get_timestamp_ms();
 		}
 		return retVal;
 	}
@@ -158,45 +238,180 @@ namespace isobus
 		    (nullptr != message.get_source_control_function()) &&
 		    (message.get_data_length() >= 1))
 		{
-			auto managedHeartbeat = std::find_if(trackedHeartbeats.begin(),
-			                                     trackedHeartbeats.end(),
-			                                     [&message](const Heartbeat &hb) {
-				                                     return (message.get_source_control_function() == hb.controlFunction);
-			                                     });
+			const std::uint8_t sequenceCounter = message.get_uint8_at(0);
 
-			if (managedHeartbeat != trackedHeartbeats.end())
+			// Receivers shall ignore 252 and 253, so they don't count as a received heartbeat either
+			if ((static_cast<std::uint8_t>(SequenceCounterSpecialValue::FirstReserved) != sequenceCounter) &&
+			    (static_cast<std::uint8_t>(SequenceCounterSpecialValue::LastReserved) != sequenceCounter))
 			{
-				managedHeartbeat->timestamp_ms = SystemTiming::get_timestamp_ms();
+				auto managedHeartbeat = std::find_if(trackedHeartbeats.begin(),
+				                                     trackedHeartbeats.end(),
+				                                     [&message](const Heartbeat &hb) {
+					                                     return (message.get_source_control_function() == hb.controlFunction);
+				                                     });
 
-				// A CF sends the initial value 251 once, then runs 0-250 and restarts at 0
-				const std::uint8_t expectedSequenceCounter = (static_cast<std::uint8_t>(SequenceCounterSpecialValue::Initial) == managedHeartbeat->sequenceCounter) ? 0 : ((managedHeartbeat->sequenceCounter + 1) % 251);
+				if ((managedHeartbeat != trackedHeartbeats.end()) &&
+				    (ControlFunction::Type::Internal != managedHeartbeat->controlFunction->get_type()) &&
+				    (SystemTiming::get_time_elapsed_ms(managedHeartbeat->timestamp_ms) > SEQUENCE_TIMEOUT_MS))
+				{
+					LOG_ERROR("[HB]: Heartbeat from control function at address 0x%02X timed out.", managedHeartbeat->controlFunction->get_address());
+					heartbeatErrorEventDispatcher.call(HeartBeatError::TimedOut, managedHeartbeat->controlFunction);
+					trackedHeartbeats.erase(managedHeartbeat);
+					managedHeartbeat = trackedHeartbeats.end();
+				}
 
-				if (message.get_uint8_at(0) == managedHeartbeat->sequenceCounter)
+				if (static_cast<std::uint8_t>(SequenceCounterSpecialValue::NotAvailable) == sequenceCounter)
 				{
-					LOG_ERROR("[HB]: Duplicate sequence counter received in heartbeat.");
-					heartbeatErrorEventDispatcher.call(HeartBeatError::InvalidSequenceCounter, message.get_source_control_function());
+					if (managedHeartbeat != trackedHeartbeats.end())
+					{
+						LOG_INFO("[HB]: Control function at address 0x%02X is shutting down.", message.get_source_control_function()->get_address());
+						heartbeatErrorEventDispatcher.call(HeartBeatError::GracefulShutdown, message.get_source_control_function());
+						trackedHeartbeats.erase(managedHeartbeat);
+					}
 				}
-				else if (message.get_uint8_at(0) != expectedSequenceCounter)
+				else if (managedHeartbeat != trackedHeartbeats.end())
 				{
-					LOG_ERROR("[HB]: Invalid sequence counter received in heartbeat.");
-					heartbeatErrorEventDispatcher.call(HeartBeatError::InvalidSequenceCounter, message.get_source_control_function());
+					managedHeartbeat->timestamp_ms = SystemTiming::get_timestamp_ms();
+					process_sequence_counter(*managedHeartbeat, sequenceCounter);
 				}
-				managedHeartbeat->sequenceCounter = message.get_uint8_at(0);
+				else
+				{
+					trackedHeartbeats.emplace_back(message.get_source_control_function());
+					trackedHeartbeats.back().sequenceCounter = static_cast<std::uint8_t>(SequenceCounterSpecialValue::NotAvailable);
+					process_sequence_counter(trackedHeartbeats.back(), sequenceCounter);
+				}
+			}
+		}
+	}
+
+	void HeartbeatInterface::apply_command(const PendingCommand &command)
+	{
+		auto managedHeartbeat = std::find_if(trackedHeartbeats.begin(),
+		                                     trackedHeartbeats.end(),
+		                                     [&command](const Heartbeat &hb) {
+			                                     return (command.controlFunction == hb.controlFunction);
+		                                     });
+		const bool found = (managedHeartbeat != trackedHeartbeats.end());
+
+		switch (command.type)
+		{
+			case CommandType::RequestHeartbeat:
+			{
+				if ((!found) &&
+				    ParameterGroupNumberRequestProtocol::request_repetition_rate(static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage),
+				                                                                 SEQUENCE_REPETITION_RATE_MS,
+				                                                                 command.source,
+				                                                                 command.controlFunction))
+				{
+					if (ControlFunction::Type::Internal != command.controlFunction->get_type())
+					{
+						trackedHeartbeats.emplace_back(command.controlFunction);
+						trackedHeartbeats.back().sequenceCounter = static_cast<std::uint8_t>(SequenceCounterSpecialValue::NotAvailable);
+					}
+				}
+			}
+			break;
+
+			case CommandType::Shutdown:
+			{
+				if (found)
+				{
+					managedHeartbeat->shutdown = true;
+				}
+			}
+			break;
+
+			case CommandType::SetTransmissionError:
+			case CommandType::ClearTransmissionError:
+			{
+				if (found)
+				{
+					managedHeartbeat->transmissionError = (CommandType::SetTransmissionError == command.type);
+				}
+			}
+			break;
+
+			case CommandType::Remove:
+			{
+				if (found)
+				{
+					trackedHeartbeats.erase(managedHeartbeat);
+				}
+			}
+			break;
+		}
+	}
+
+	void HeartbeatInterface::process_sequence_counter(Heartbeat &heartbeat, std::uint8_t sequenceCounter)
+	{
+		const std::uint8_t previous = heartbeat.sequenceCounter;
+		const std::uint8_t address = heartbeat.controlFunction->get_address();
+		heartbeat.sequenceCounter = sequenceCounter;
+
+		if (static_cast<std::uint8_t>(SequenceCounterSpecialValue::NotAvailable) == previous)
+		{
+			LOG_DEBUG("[HB]: Tracking new heartbeat from control function at address 0x%02X.", address);
+
+			if (static_cast<std::uint8_t>(SequenceCounterSpecialValue::Initial) != sequenceCounter)
+			{
+				LOG_WARNING("[HB]: Initial heartbeat sequence counter not received from control function at address 0x%02X.", address);
+			}
+			newTrackedHeartbeatEventDispatcher.call(heartbeat.controlFunction);
+		}
+
+		if (static_cast<std::uint8_t>(SequenceCounterSpecialValue::Error) == sequenceCounter)
+		{
+			LOG_WARNING("[HB]: Control function at address 0x%02X reported a transmission error.", address);
+			enter_error_state(heartbeat, ReceiveState::TransmissionError);
+		}
+		else if (static_cast<std::uint8_t>(SequenceCounterSpecialValue::Initial) == sequenceCounter)
+		{
+			heartbeat.correctMessagesInARow = 0; // The sender restarted, which is a resync and not an error
+		}
+		else if (static_cast<std::uint8_t>(SequenceCounterSpecialValue::Error) == previous)
+		{
+			heartbeat.correctMessagesInARow = 1; // The first valid counter after 254 starts the recovery count
+		}
+		else if (static_cast<std::uint8_t>(SequenceCounterSpecialValue::NotAvailable) != previous)
+		{
+			const std::uint8_t base = (static_cast<std::uint8_t>(SequenceCounterSpecialValue::Initial) == previous) ? MAX_SEQUENCE_COUNTER : previous; // 251 is followed by 0
+			const std::uint8_t increment = static_cast<std::uint8_t>((sequenceCounter + MAX_SEQUENCE_COUNTER + 1 - base) % (MAX_SEQUENCE_COUNTER + 1));
+
+			if ((0 == increment) || (MAX_ALLOWED_INCREMENT < increment))
+			{
+				LOG_ERROR("[HB]: Invalid sequence counter %u after %u received in heartbeat from control function at address 0x%02X.", sequenceCounter, previous, address);
+				enter_error_state(heartbeat, ReceiveState::SequenceError);
+			}
+			else if (1 == increment)
+			{
+				if (ReceiveState::Operational != heartbeat.state)
+				{
+					heartbeat.correctMessagesInARow++;
+
+					if (RECOVERY_MESSAGE_COUNT <= heartbeat.correctMessagesInARow)
+					{
+						heartbeat.state = ReceiveState::Operational;
+						heartbeat.correctMessagesInARow = 0;
+						LOG_INFO("[HB]: Heartbeat from control function at address 0x%02X recovered.", address);
+						heartbeatRecoveredEventDispatcher.call(heartbeat.controlFunction);
+					}
+				}
 			}
 			else
 			{
-				LOG_DEBUG("[HB]: Tracking new heartbeat from control function at address 0x%02X.", message.get_source_control_function()->get_address());
-
-				if (message.get_uint8_at(0) != static_cast<std::uint8_t>(HeartbeatInterface::SequenceCounterSpecialValue::Initial))
-				{
-					LOG_WARNING("[HB]: Initial heartbeat sequence counter not received from control function at address 0x%02X.", message.get_source_control_function()->get_address());
-				}
-
-				trackedHeartbeats.emplace_back(message.get_source_control_function());
-				trackedHeartbeats.back().timestamp_ms = SystemTiming::get_timestamp_ms();
-				trackedHeartbeats.back().sequenceCounter = message.get_uint8_at(0);
-				newTrackedHeartbeatEventDispatcher.call(message.get_source_control_function());
+				heartbeat.correctMessagesInARow = 0; // Missed messages are allowed, but they break "in a row"
 			}
+		}
+	}
+
+	void HeartbeatInterface::enter_error_state(Heartbeat &heartbeat, ReceiveState errorState)
+	{
+		heartbeat.correctMessagesInARow = 0;
+
+		if (errorState != heartbeat.state)
+		{
+			heartbeat.state = errorState;
+			heartbeatErrorEventDispatcher.call((ReceiveState::TransmissionError == errorState) ? HeartBeatError::TransmissionError : HeartBeatError::InvalidSequenceCounter, heartbeat.controlFunction);
 		}
 	}
 
@@ -213,18 +428,11 @@ namespace isobus
 			auto interface = static_cast<HeartbeatInterface *>(parentPointer);
 
 			if ((interface->is_enabled()) &&
-			    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage) == parameterGroupNumber))
+			    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage) == parameterGroupNumber) &&
+			    (REPETITION_RATE_NO_CHANGE != repetitionRate))
 			{
 				retVal = true;
-
-				if (SEQUENCE_REPETITION_RATE_MS != repetitionRate)
-				{
-					LOG_WARNING("[HB]: Control function at address 0x%02X requested the ISOBUS heartbeat at non-compliant interval. Interval should be 100ms.", requestingControlFunction->get_address());
-				}
-				else
-				{
-					LOG_DEBUG("[HB]: Control function at address 0x%02X requested the ISOBUS heartbeat from control function at address 0x%02X.", requestingControlFunction->get_address(), targetControlFunction->get_address());
-				}
+				LOG_DEBUG("[HB]: Control function at address 0x%02X requested the ISOBUS heartbeat from control function at address 0x%02X at %u ms. It is sent every 100 ms.", requestingControlFunction->get_address(), targetControlFunction->get_address(), static_cast<unsigned>(repetitionRate));
 
 				auto managedHeartbeat = std::find_if(interface->trackedHeartbeats.begin(),
 				                                     interface->trackedHeartbeats.end(),
@@ -237,6 +445,21 @@ namespace isobus
 					interface->trackedHeartbeats.emplace_back(targetControlFunction);
 					interface->trackedHeartbeats.back().timestamp_ms = 0; // Heartbeat will be sent on next update
 				}
+
+				const std::uint32_t pgn = static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage);
+				const std::array<std::uint8_t, 8> response = { static_cast<std::uint8_t>(pgn & 0xFF),
+					                                             static_cast<std::uint8_t>((pgn >> 8) & 0xFF),
+					                                             static_cast<std::uint8_t>((pgn >> 16) & 0xFF),
+					                                             static_cast<std::uint8_t>(SEQUENCE_REPETITION_RATE_MS & 0xFF),
+					                                             static_cast<std::uint8_t>((SEQUENCE_REPETITION_RATE_MS >> 8) & 0xFF),
+					                                             0xFF,
+					                                             0xFF,
+					                                             0xFF };
+				interface->sendCANFrameCallback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ResponseForRepetitionRate),
+				                                CANDataSpan(response.data(), response.size()),
+				                                CANNetworkManager::CANNetwork.get_internal_control_function(targetControlFunction),
+				                                nullptr,
+				                                CANIdentifier::CANPriority::PriorityDefault6);
 			}
 		}
 		return retVal;
