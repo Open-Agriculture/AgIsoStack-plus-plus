@@ -118,6 +118,11 @@ namespace isobus
 		}
 
 		LOCK_GUARD(Mutex, pendingCommandsMutex);
+		pendingCommands.erase(std::remove_if(pendingCommands.begin(), pendingCommands.end(), [&destroyedControlFunction](const PendingCommand &command) {
+			                      return ((CommandType::Remove != command.type) &&
+			                              ((destroyedControlFunction == command.source) || (destroyedControlFunction == command.controlFunction)));
+		                      }),
+		                      pendingCommands.end());
 		pendingCommands.push_back({ CommandType::Remove, nullptr, destroyedControlFunction });
 	}
 
@@ -196,7 +201,7 @@ namespace isobus
 
 			for (const auto &command : commands)
 			{
-				if (CommandType::RequestHeartbeat == command.type)
+				if (enabled && (CommandType::RequestHeartbeat == command.type))
 				{
 					apply_command(command);
 				}
@@ -288,12 +293,15 @@ namespace isobus
 		else if (enabled &&
 		         (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ResponseForRepetitionRate) == message.get_identifier().get_parameter_group_number()) &&
 		         (nullptr != message.get_source_control_function()) &&
-		         (message.get_data_length() >= 3) &&
-		         (static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage) == message.get_uint24_at(0)))
+		         (message.get_data_length() >= 5) &&
+		         (static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage) == message.get_uint24_at(0)) &&
+		         (SEQUENCE_REPETITION_RATE_MS == message.get_uint16_at(3)))
 		{
 			auto managedHeartbeat = find_tracked_heartbeat(message.get_source_control_function());
 
-			if ((managedHeartbeat != trackedHeartbeats.end()) && managedHeartbeat->requestPending)
+			if ((managedHeartbeat != trackedHeartbeats.end()) &&
+			    managedHeartbeat->requestPending &&
+			    (SystemTiming::get_time_elapsed_ms(managedHeartbeat->timestamp_ms) <= SEQUENCE_INITIAL_RESPONSE_TIMEOUT_MS))
 			{
 				managedHeartbeat->requestPending = false;
 				managedHeartbeat->timestamp_ms = SystemTiming::get_timestamp_ms(); // The first heartbeat may come up to 100 ms after the response
