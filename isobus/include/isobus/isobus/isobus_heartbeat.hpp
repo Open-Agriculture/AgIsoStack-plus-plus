@@ -40,7 +40,8 @@ namespace isobus
 			InvalidSequenceCounter, ///< Sequence error: the counter repeated, or increased by more than 3
 			TimedOut, ///< The heartbeat message has not been received within the repetition rate
 			TransmissionError, ///< The sender reported an error by sending sequence counter 254
-			GracefulShutdown ///< The sender is shutting down (sequence counter 255) and is no longer tracked
+			GracefulShutdown, ///< The sender is shutting down (sequence counter 255) and is no longer tracked
+			RequestNotAccepted ///< Neither a Response for Repetition Rate nor a heartbeat arrived within 250 ms of a request, so the control function is no longer tracked
 		};
 
 		/// @brief Constructor for a HeartbeatInterface
@@ -62,14 +63,10 @@ namespace isobus
 		/// @brief This method can be used to request that another control function on the bus
 		/// start sending the heartbeat message. This does not mean the request will be honored.
 		/// The request is queued, and the next update() sends it unless the destination is already
-		/// tracked (sending, or already requested). The destination is tracked from that moment, so a
-		/// TimedOut error follows if no heartbeat arrives within 300 ms. The first heartbeat
-		/// fires the new tracked heartbeat event.
-		/// In order to know if your request was accepted, you will need to either
-		/// register for timeout events, register for heartbeat events, or check to see if your
-		/// destination control function ever responded at some later time using the various methods
-		/// available to you on this class' public interface.
-		/// @note CFs may take up to 250ms to begin sending the heartbeat.
+		/// tracked (sending, or already requested). If neither a Response for Repetition Rate nor a
+		/// heartbeat arrives from the destination within 250 ms, a RequestNotAccepted error follows and
+		/// the destination is no longer tracked. After that, a TimedOut error follows when no heartbeat
+		/// arrives for more than 300 ms. The first heartbeat fires the new tracked heartbeat event.
 		/// @param[in] sourceControlFunction The internal control function to use when sending the request
 		/// @param[in] destinationControlFunction The destination for the request
 		/// @returns true if the request was queued, otherwise false.
@@ -191,6 +188,7 @@ namespace isobus
 			std::uint8_t correctMessagesInARow = 0; ///< For received heartbeats, the correct sequential messages counted towards recovery
 			bool shutdown = false; ///< For internal control functions, true once the graceful shutdown value is being sent
 			bool transmissionError = false; ///< For internal control functions, true while the transmission error value is being sent
+			bool requestPending = false; ///< For requested heartbeats, true until a Response for Repetition Rate or a heartbeat arrives from the control function
 		};
 
 		/// @brief Processes a PGN request for a heartbeat.
@@ -219,6 +217,11 @@ namespace isobus
 		/// @param[in,out] heartbeat The tracked heartbeat in error
 		/// @param[in] errorState The error state to enter
 		void enter_error_state(Heartbeat &heartbeat, ReceiveState errorState);
+
+		/// @brief Finds the tracked heartbeat of a control function.
+		/// @param[in] controlFunction The control function to look for
+		/// @returns The tracked heartbeat, or trackedHeartbeats.end() if it is not tracked
+		std::list<Heartbeat>::iterator find_tracked_heartbeat(const std::shared_ptr<ControlFunction> &controlFunction);
 
 		const CANMessageFrameCallback sendCANFrameCallback; ///< A callback for sending a CAN frame
 		EventDispatcher<HeartBeatError, std::shared_ptr<ControlFunction>> heartbeatErrorEventDispatcher; ///< Event dispatcher for heartbeat errors

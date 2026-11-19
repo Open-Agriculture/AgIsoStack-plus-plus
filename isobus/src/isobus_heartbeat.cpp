@@ -173,6 +173,12 @@ namespace isobus
 							                        }
 						                        }
 					                        }
+					                        else if (heartbeat.requestPending && (SystemTiming::get_time_elapsed_ms(heartbeat.timestamp_ms) > SEQUENCE_INITIAL_RESPONSE_TIMEOUT_MS))
+					                        {
+						                        retVal = true;
+						                        LOG_WARNING("[HB]: Control function at address 0x%02X did not accept the heartbeat request.", heartbeat.controlFunction->get_address());
+						                        heartbeatErrorEventDispatcher.call(HeartBeatError::RequestNotAccepted, heartbeat.controlFunction);
+					                        }
 					                        else if (SystemTiming::get_time_elapsed_ms(heartbeat.timestamp_ms) > SEQUENCE_TIMEOUT_MS)
 					                        {
 						                        retVal = true;
@@ -244,11 +250,7 @@ namespace isobus
 			if ((static_cast<std::uint8_t>(SequenceCounterSpecialValue::FirstReserved) != sequenceCounter) &&
 			    (static_cast<std::uint8_t>(SequenceCounterSpecialValue::LastReserved) != sequenceCounter))
 			{
-				auto managedHeartbeat = std::find_if(trackedHeartbeats.begin(),
-				                                     trackedHeartbeats.end(),
-				                                     [&message](const Heartbeat &hb) {
-					                                     return (message.get_source_control_function() == hb.controlFunction);
-				                                     });
+				auto managedHeartbeat = find_tracked_heartbeat(message.get_source_control_function());
 
 				if ((managedHeartbeat != trackedHeartbeats.end()) &&
 				    (ControlFunction::Type::Internal != managedHeartbeat->controlFunction->get_type()) &&
@@ -271,6 +273,7 @@ namespace isobus
 				}
 				else if (managedHeartbeat != trackedHeartbeats.end())
 				{
+					managedHeartbeat->requestPending = false;
 					managedHeartbeat->timestamp_ms = SystemTiming::get_timestamp_ms();
 					process_sequence_counter(*managedHeartbeat, sequenceCounter);
 				}
@@ -282,15 +285,25 @@ namespace isobus
 				}
 			}
 		}
+		else if (enabled &&
+		         (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ResponseForRepetitionRate) == message.get_identifier().get_parameter_group_number()) &&
+		         (nullptr != message.get_source_control_function()) &&
+		         (message.get_data_length() >= 3) &&
+		         (static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage) == message.get_uint24_at(0)))
+		{
+			auto managedHeartbeat = find_tracked_heartbeat(message.get_source_control_function());
+
+			if ((managedHeartbeat != trackedHeartbeats.end()) && managedHeartbeat->requestPending)
+			{
+				managedHeartbeat->requestPending = false;
+				managedHeartbeat->timestamp_ms = SystemTiming::get_timestamp_ms(); // The first heartbeat may come up to 100 ms after the response
+			}
+		}
 	}
 
 	void HeartbeatInterface::apply_command(const PendingCommand &command)
 	{
-		auto managedHeartbeat = std::find_if(trackedHeartbeats.begin(),
-		                                     trackedHeartbeats.end(),
-		                                     [&command](const Heartbeat &hb) {
-			                                     return (command.controlFunction == hb.controlFunction);
-		                                     });
+		auto managedHeartbeat = find_tracked_heartbeat(command.controlFunction);
 		const bool found = (managedHeartbeat != trackedHeartbeats.end());
 
 		switch (command.type)
@@ -307,6 +320,7 @@ namespace isobus
 					{
 						trackedHeartbeats.emplace_back(command.controlFunction);
 						trackedHeartbeats.back().sequenceCounter = static_cast<std::uint8_t>(SequenceCounterSpecialValue::NotAvailable);
+						trackedHeartbeats.back().requestPending = true;
 					}
 				}
 			}
@@ -415,6 +429,13 @@ namespace isobus
 		}
 	}
 
+	std::list<HeartbeatInterface::Heartbeat>::iterator HeartbeatInterface::find_tracked_heartbeat(const std::shared_ptr<ControlFunction> &controlFunction)
+	{
+		return std::find_if(trackedHeartbeats.begin(), trackedHeartbeats.end(), [&controlFunction](const Heartbeat &hb) {
+			return (controlFunction == hb.controlFunction);
+		});
+	}
+
 	bool HeartbeatInterface::process_request_for_heartbeat(std::uint32_t parameterGroupNumber,
 	                                                       std::shared_ptr<ControlFunction> requestingControlFunction,
 	                                                       std::shared_ptr<ControlFunction> targetControlFunction,
@@ -434,11 +455,7 @@ namespace isobus
 				retVal = true;
 				LOG_DEBUG("[HB]: Control function at address 0x%02X requested the ISOBUS heartbeat from control function at address 0x%02X at %u ms. It is sent every 100 ms.", requestingControlFunction->get_address(), targetControlFunction->get_address(), static_cast<unsigned>(repetitionRate));
 
-				auto managedHeartbeat = std::find_if(interface->trackedHeartbeats.begin(),
-				                                     interface->trackedHeartbeats.end(),
-				                                     [targetControlFunction](const Heartbeat &hb) {
-					                                     return (targetControlFunction == hb.controlFunction);
-				                                     });
+				auto managedHeartbeat = interface->find_tracked_heartbeat(targetControlFunction);
 
 				if (managedHeartbeat == interface->trackedHeartbeats.end())
 				{
