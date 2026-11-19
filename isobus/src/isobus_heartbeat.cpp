@@ -61,13 +61,7 @@ namespace isobus
 		if ((nullptr != sourceControlFunction) &&
 		    (nullptr != destinationControlFunction))
 		{
-			LOCK_GUARD(Mutex, pendingCommandsMutex);
-
-			if (enabled)
-			{
-				pendingCommands.push_back({ CommandType::RequestHeartbeat, sourceControlFunction, destinationControlFunction });
-				retVal = true;
-			}
+			retVal = queue_command({ CommandType::RequestHeartbeat, sourceControlFunction, destinationControlFunction });
 		}
 		return retVal;
 	}
@@ -76,12 +70,7 @@ namespace isobus
 	{
 		if (nullptr != controlFunction)
 		{
-			LOCK_GUARD(Mutex, pendingCommandsMutex);
-
-			if (enabled)
-			{
-				pendingCommands.push_back({ CommandType::Shutdown, nullptr, controlFunction });
-			}
+			queue_command({ CommandType::Shutdown, nullptr, controlFunction });
 		}
 	}
 
@@ -89,12 +78,7 @@ namespace isobus
 	{
 		if (nullptr != controlFunction)
 		{
-			LOCK_GUARD(Mutex, pendingCommandsMutex);
-
-			if (enabled)
-			{
-				pendingCommands.push_back({ error ? CommandType::SetTransmissionError : CommandType::ClearTransmissionError, nullptr, controlFunction });
-			}
+			queue_command({ error ? CommandType::SetTransmissionError : CommandType::ClearTransmissionError, nullptr, controlFunction });
 		}
 	}
 
@@ -149,7 +133,7 @@ namespace isobus
 			commands.swap(pendingCommands);
 		}
 
-		// Flags and removals go first so they apply to a frame that is due in this update. Requests go after the timeout sweep so a retry for a heartbeat that just timed out is sent.
+		// Flags and removals apply before a due frame is sent; requests wait for the timeout sweep so a retry after a timeout goes out
 		for (const auto &command : commands)
 		{
 			if ((CommandType::RequestHeartbeat != command.type) && (enabled || (CommandType::Remove == command.type)))
@@ -265,10 +249,8 @@ namespace isobus
 
 				if ((managedHeartbeat != trackedHeartbeats.end()) &&
 				    (ControlFunction::Type::Internal != managedHeartbeat->controlFunction->get_type()) &&
-				    (SystemTiming::get_time_elapsed_ms(managedHeartbeat->timestamp_ms) > SEQUENCE_TIMEOUT_MS))
+				    update_tracked_heartbeat(*managedHeartbeat))
 				{
-					LOG_ERROR("[HB]: Heartbeat from control function at address 0x%02X timed out.", managedHeartbeat->controlFunction->get_address());
-					heartbeatErrorEventDispatcher.call(HeartBeatError::TimedOut, managedHeartbeat->controlFunction);
 					trackedHeartbeats.erase(managedHeartbeat);
 					managedHeartbeat = trackedHeartbeats.end();
 				}
@@ -315,6 +297,18 @@ namespace isobus
 		}
 	}
 
+	bool HeartbeatInterface::queue_command(const PendingCommand &command) const
+	{
+		LOCK_GUARD(Mutex, pendingCommandsMutex);
+		const bool queued = enabled;
+
+		if (queued)
+		{
+			pendingCommands.push_back(command);
+		}
+		return queued;
+	}
+
 	void HeartbeatInterface::apply_command(const PendingCommand &command)
 	{
 		auto managedHeartbeat = find_tracked_heartbeat(command.controlFunction);
@@ -324,17 +318,24 @@ namespace isobus
 		{
 			case CommandType::RequestHeartbeat:
 			{
-				if ((!found) &&
-				    ParameterGroupNumberRequestProtocol::request_repetition_rate(static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage),
-				                                                                 SEQUENCE_REPETITION_RATE_MS,
-				                                                                 command.source,
-				                                                                 command.controlFunction))
+				if (!found)
 				{
-					if (ControlFunction::Type::Internal != command.controlFunction->get_type())
+					if (ParameterGroupNumberRequestProtocol::request_repetition_rate(static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage),
+					                                                                 SEQUENCE_REPETITION_RATE_MS,
+					                                                                 command.source,
+					                                                                 command.controlFunction))
 					{
-						trackedHeartbeats.emplace_back(command.controlFunction);
-						trackedHeartbeats.back().sequenceCounter = static_cast<std::uint8_t>(SequenceCounterSpecialValue::NotAvailable);
-						trackedHeartbeats.back().requestPending = true;
+						if (ControlFunction::Type::Internal != command.controlFunction->get_type())
+						{
+							trackedHeartbeats.emplace_back(command.controlFunction);
+							trackedHeartbeats.back().sequenceCounter = static_cast<std::uint8_t>(SequenceCounterSpecialValue::NotAvailable);
+							trackedHeartbeats.back().requestPending = true;
+						}
+					}
+					else
+					{
+						LOG_WARNING("[HB]: The heartbeat request to control function at address 0x%02X could not be sent.", command.controlFunction->get_address());
+						heartbeatErrorEventDispatcher.call(HeartBeatError::RequestNotAccepted, command.controlFunction);
 					}
 				}
 			}
@@ -472,7 +473,7 @@ namespace isobus
 				if (rateHonoured)
 				{
 					retVal = true;
-					LOG_DEBUG("[HB]: Control function at address 0x%02X requested the ISOBUS heartbeat from control function at address 0x%02X at %u ms. It is sent every 100 ms.", requestingControlFunction->get_address(), targetControlFunction->get_address(), static_cast<unsigned>(repetitionRate));
+					LOG_DEBUG("[HB]: Control function at address 0x%02X requested the heartbeat from control function at address 0x%02X at %u ms.", requestingControlFunction->get_address(), targetControlFunction->get_address(), static_cast<unsigned>(repetitionRate));
 
 					auto managedHeartbeat = interface->find_tracked_heartbeat(targetControlFunction);
 

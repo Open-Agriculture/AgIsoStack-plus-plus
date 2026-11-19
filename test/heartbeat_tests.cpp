@@ -48,12 +48,9 @@ protected:
 		interface().set_enabled(true);
 		CANNetworkManager::CANNetwork.update(); // The network manager drops received frames until it has been updated once
 
-		// Heartbeats left tracked by earlier tests keep raising events, so every count is per control function
+		// Claimed addresses and tracked heartbeats outlive a test in the CANNetwork singleton, so each test claims its own addresses and every count is per control function
 		errorListener = interface().get_heartbeat_error_event_dispatcher().add_listener([this](HeartbeatInterface::HeartBeatError error, std::shared_ptr<ControlFunction> controlFunction) {
 			errors.push_back(std::make_pair(error, controlFunction));
-		});
-		recoveredListener = interface().get_heartbeat_recovered_event_dispatcher().add_listener([this](std::shared_ptr<ControlFunction> controlFunction) {
-			recovered.push_back(controlFunction);
 		});
 		newTrackedListener = interface().get_new_tracked_heartbeat_event_dispatcher().add_listener([this](std::shared_ptr<ControlFunction> controlFunction) {
 			newTracked.push_back(controlFunction);
@@ -64,7 +61,6 @@ protected:
 	void TearDown() override
 	{
 		interface().get_heartbeat_error_event_dispatcher().remove_listener(errorListener);
-		interface().get_heartbeat_recovered_event_dispatcher().remove_listener(recoveredListener);
 		interface().get_new_tracked_heartbeat_event_dispatcher().remove_listener(newTrackedListener);
 		interface().set_enabled(false);
 		AgIsoStackTestFixture::TearDown();
@@ -143,12 +139,17 @@ protected:
 		time_source.update_for_ms(5);
 	}
 
+	void request_heartbeat_and_send(std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination)
+	{
+		EXPECT_TRUE(interface().request_heartbeat(source, destination));
+		CANNetworkManager::CANNetwork.update();
+		time_source.update_for_ms(5);
+	}
+
 	VirtualCANPlugin testPlugin;
 	std::vector<std::pair<HeartbeatInterface::HeartBeatError, std::shared_ptr<ControlFunction>>> errors;
-	std::vector<std::shared_ptr<ControlFunction>> recovered;
 	std::vector<std::shared_ptr<ControlFunction>> newTracked;
 	EventCallbackHandle errorListener = 0;
-	EventCallbackHandle recoveredListener = 0;
 	EventCallbackHandle newTrackedListener = 0;
 };
 
@@ -158,9 +159,7 @@ TEST_F(HeartbeatTest, HeartBeat)
 	auto partner = test_helpers::force_claim_partnered_control_function(0xF4, 0);
 	testPlugin.clear_queue();
 
-	interface().request_heartbeat(internalECU, partner);
-	CANNetworkManager::CANNetwork.update();
-	time_source.update_for_ms(5);
+	request_heartbeat_and_send(internalECU, partner);
 
 	CANMessageFrame frame = {};
 	ASSERT_TRUE(testPlugin.read_frame(frame));
@@ -208,15 +207,11 @@ TEST_F(HeartbeatTest, RequestToSendingControlFunctionIsNotRepeated)
 	auto internalECU = test_helpers::claim_internal_control_function(0x41, 0, time_source);
 	auto partner = test_helpers::force_claim_partnered_control_function(0xF4, 0);
 
-	interface().request_heartbeat(internalECU, partner);
-	CANNetworkManager::CANNetwork.update();
-	time_source.update_for_ms(5);
+	request_heartbeat_and_send(internalECU, partner);
 	receive_heartbeat(partner, 251);
 	testPlugin.clear_queue();
 
-	EXPECT_TRUE(interface().request_heartbeat(internalECU, partner));
-	CANNetworkManager::CANNetwork.update();
-	time_source.update_for_ms(5);
+	request_heartbeat_and_send(internalECU, partner);
 
 	EXPECT_EQ(0, count_frames(0x18CCF441));
 }
@@ -227,9 +222,7 @@ TEST_F(HeartbeatTest, RequestedPartnerThatNeverAnswersIsNotAccepted)
 	auto silentPartner = test_helpers::force_claim_partnered_control_function(0x67, 0);
 	testPlugin.clear_queue();
 
-	EXPECT_TRUE(interface().request_heartbeat(internalECU, silentPartner));
-	CANNetworkManager::CANNetwork.update();
-	time_source.update_for_ms(5);
+	request_heartbeat_and_send(internalECU, silentPartner);
 	EXPECT_EQ(1, count_frames(0x18CC6765));
 
 	time_source.simulate_delay_ms(245);
@@ -249,9 +242,7 @@ TEST_F(HeartbeatTest, RateResponseAcceptsTheRequest)
 {
 	auto internalECU = test_helpers::claim_internal_control_function(0x71, 0, time_source);
 	auto partner = test_helpers::force_claim_partnered_control_function(0x72, 0);
-	EXPECT_TRUE(interface().request_heartbeat(internalECU, partner));
-	CANNetworkManager::CANNetwork.update();
-	time_source.update_for_ms(5);
+	request_heartbeat_and_send(internalECU, partner);
 
 	receive_rate_response(partner, static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage));
 	time_source.simulate_delay_ms(JUST_PAST_RESPONSE_TIMEOUT_MS);
@@ -267,9 +258,7 @@ TEST_F(HeartbeatTest, RateResponseForAnotherPgnIsIgnored)
 {
 	auto internalECU = test_helpers::claim_internal_control_function(0x73, 0, time_source);
 	auto partner = test_helpers::force_claim_partnered_control_function(0x74, 0);
-	EXPECT_TRUE(interface().request_heartbeat(internalECU, partner));
-	CANNetworkManager::CANNetwork.update();
-	time_source.update_for_ms(5);
+	request_heartbeat_and_send(internalECU, partner);
 
 	receive_rate_response(partner, 0xFEE6);
 	time_source.simulate_delay_ms(JUST_PAST_RESPONSE_TIMEOUT_MS);
@@ -283,9 +272,7 @@ TEST_F(HeartbeatTest, RequestToInternalControlFunctionIsNotTracked)
 	auto target = test_helpers::claim_internal_control_function(0x6E, 0, time_source);
 	testPlugin.clear_queue();
 
-	EXPECT_TRUE(interface().request_heartbeat(requester, target));
-	CANNetworkManager::CANNetwork.update();
-	time_source.update_for_ms(5);
+	request_heartbeat_and_send(requester, target);
 	EXPECT_EQ(1, count_frames(0x18CC6E6D));
 	for (std::uint8_t i = 0; i < 3; i++)
 	{
@@ -306,9 +293,7 @@ TEST_F(HeartbeatTest, RetryAtExpiryIsSent)
 	auto silentPartner = test_helpers::force_claim_partnered_control_function(0x6B, 0);
 	testPlugin.clear_queue();
 
-	EXPECT_TRUE(interface().request_heartbeat(internalECU, silentPartner));
-	CANNetworkManager::CANNetwork.update();
-	time_source.update_for_ms(5);
+	request_heartbeat_and_send(internalECU, silentPartner);
 	EXPECT_EQ(1, count_frames(0x18CC6B6F));
 
 	time_source.simulate_delay_ms(JUST_PAST_RESPONSE_TIMEOUT_MS);
@@ -340,9 +325,7 @@ TEST_F(HeartbeatTest, LateRateResponseDoesNotAcceptTheRequest)
 {
 	auto internalECU = test_helpers::claim_internal_control_function(0xA0, 0, time_source);
 	auto partner = test_helpers::force_claim_partnered_control_function(0xA1, 0);
-	EXPECT_TRUE(interface().request_heartbeat(internalECU, partner));
-	CANNetworkManager::CANNetwork.update();
-	time_source.update_for_ms(5);
+	request_heartbeat_and_send(internalECU, partner);
 
 	time_source.simulate_delay_ms(JUST_PAST_RESPONSE_TIMEOUT_MS);
 	receive_rate_response(partner, static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage));
@@ -351,13 +334,40 @@ TEST_F(HeartbeatTest, LateRateResponseDoesNotAcceptTheRequest)
 	EXPECT_EQ(1, count_errors(partner));
 }
 
+TEST_F(HeartbeatTest, LateFirstHeartbeatDoesNotAcceptTheRequest)
+{
+	auto internalECU = test_helpers::claim_internal_control_function(0xA9, 0, time_source);
+	auto partner = test_helpers::force_claim_partnered_control_function(0xAA, 0);
+	request_heartbeat_and_send(internalECU, partner);
+
+	time_source.simulate_delay_ms(JUST_PAST_RESPONSE_TIMEOUT_MS);
+	receive_heartbeat(partner, 251);
+
+	EXPECT_EQ(1, count_errors(partner, HeartbeatInterface::HeartBeatError::RequestNotAccepted));
+	EXPECT_EQ(1, count_errors(partner));
+	EXPECT_EQ(1, count_new_tracked(partner));
+}
+
+TEST_F(HeartbeatTest, RequestThatCannotBeSentIsNotAccepted)
+{
+	auto unclaimedECU = CANNetworkManager::CANNetwork.create_internal_control_function(test_helpers::find_available_name(0), 0);
+	auto partner = test_helpers::force_claim_partnered_control_function(0xAB, 0);
+	ASSERT_FALSE(unclaimedECU->get_address_valid());
+	testPlugin.clear_queue();
+
+	EXPECT_TRUE(interface().request_heartbeat(unclaimedECU, partner));
+	CANNetworkManager::CANNetwork.update();
+
+	EXPECT_EQ(1, count_errors(partner, HeartbeatInterface::HeartBeatError::RequestNotAccepted));
+	EXPECT_EQ(1, count_errors(partner));
+	EXPECT_EQ(0, count_frames(0x18CCAB00 | NULL_CAN_ADDRESS));
+}
+
 TEST_F(HeartbeatTest, InvalidRateResponseIsIgnored)
 {
 	auto internalECU = test_helpers::claim_internal_control_function(0xA2, 0, time_source);
 	auto partner = test_helpers::force_claim_partnered_control_function(0xA3, 0);
-	EXPECT_TRUE(interface().request_heartbeat(internalECU, partner));
-	CANNetworkManager::CANNetwork.update();
-	time_source.update_for_ms(5);
+	request_heartbeat_and_send(internalECU, partner);
 
 	receive_rate_response(partner, static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage), 200);
 	auto shortResponse = test_helpers::create_message_frame_broadcast(6, static_cast<std::uint32_t>(CANLibParameterGroupNumber::ResponseForRepetitionRate), partner, { 0xE4, 0xF0, 0x00 });
@@ -413,14 +423,30 @@ TEST_F(HeartbeatTest, DeactivatedSourceDropsQueuedRequest)
 	EXPECT_EQ(0, count_errors(partner));
 }
 
-// Each test claims its own partner address, because tracked heartbeats and claimed addresses outlive a test in the CANNetwork singleton
 class HeartbeatReceiverTest : public HeartbeatTest
 {
 protected:
+	void SetUp() override
+	{
+		HeartbeatTest::SetUp();
+		recoveredListener = interface().get_heartbeat_recovered_event_dispatcher().add_listener([this](std::shared_ptr<ControlFunction> controlFunction) {
+			recovered.push_back(controlFunction);
+		});
+	}
+
+	void TearDown() override
+	{
+		interface().get_heartbeat_recovered_event_dispatcher().remove_listener(recoveredListener);
+		HeartbeatTest::TearDown();
+	}
+
 	std::size_t count_recovered(std::shared_ptr<ControlFunction> controlFunction) const
 	{
 		return static_cast<std::size_t>(std::count(recovered.begin(), recovered.end(), controlFunction));
 	}
+
+	std::vector<std::shared_ptr<ControlFunction>> recovered;
+	EventCallbackHandle recoveredListener = 0;
 };
 
 TEST_F(HeartbeatReceiverTest, InitialSequenceCounterThenZero)
@@ -614,14 +640,14 @@ protected:
 		testPlugin.clear_queue();
 	}
 
-	/// @brief The partner asks for a heartbeat every 100 ms, so internalECU starts sending
+	/// @brief The partner requests 100 ms, so internalECU starts sending
 	void start_sending()
 	{
 		receive_rate_request(0x66, 0x65, 100);
 		testPlugin.clear_queue();
 	}
 
-	/// @brief Makes the next heartbeat due without sending it: unlike update_for_ms, simulate_delay_ms does not pump the stack
+	/// @brief Makes the next heartbeat due without pumping the stack, unlike update_for_ms
 	void make_frame_due()
 	{
 		time_source.simulate_delay_ms(101);
@@ -630,6 +656,20 @@ protected:
 	std::vector<std::uint8_t> sent_counters()
 	{
 		return first_data_bytes(0x0CF0E465);
+	}
+
+	void expect_rate_request_answered_with_100ms(std::uint16_t rate)
+	{
+		receive_rate_request(0x66, 0x65, rate);
+
+		CANMessageFrame frame = {};
+		ASSERT_TRUE(testPlugin.read_frame(frame));
+		EXPECT_EQ(frame.identifier, 0x18FE0E65);
+		EXPECT_EQ(frame.dataLength, 8);
+		EXPECT_EQ(0, std::memcmp(REPETITION_RATE_100_MS, frame.data, sizeof(REPETITION_RATE_100_MS)));
+		ASSERT_TRUE(testPlugin.read_frame(frame));
+		EXPECT_EQ(frame.identifier, 0x0CF0E465);
+		EXPECT_EQ(frame.data[0], 251);
 	}
 
 	std::shared_ptr<InternalControlFunction> internalECU;
@@ -645,30 +685,12 @@ TEST_F(HeartbeatProducerTest, RateRequestFromUnknownSourceIsIgnored)
 
 TEST_F(HeartbeatProducerTest, RateRequestOf100msIsAnswered)
 {
-	receive_rate_request(0x66, 0x65, 100);
-
-	CANMessageFrame frame = {};
-	ASSERT_TRUE(testPlugin.read_frame(frame));
-	EXPECT_EQ(frame.identifier, 0x18FE0E65);
-	EXPECT_EQ(frame.dataLength, 8);
-	EXPECT_EQ(0, std::memcmp(REPETITION_RATE_100_MS, frame.data, sizeof(REPETITION_RATE_100_MS)));
-	ASSERT_TRUE(testPlugin.read_frame(frame));
-	EXPECT_EQ(frame.identifier, 0x0CF0E465);
-	EXPECT_EQ(frame.data[0], 251);
+	expect_rate_request_answered_with_100ms(100);
 }
 
 TEST_F(HeartbeatProducerTest, NoChangeRateRequestIsAnsweredWith100ms)
 {
-	receive_rate_request(0x66, 0x65, 0xFFFF);
-
-	CANMessageFrame frame = {};
-	ASSERT_TRUE(testPlugin.read_frame(frame));
-	EXPECT_EQ(frame.identifier, 0x18FE0E65);
-	EXPECT_EQ(frame.dataLength, 8);
-	EXPECT_EQ(0, std::memcmp(REPETITION_RATE_100_MS, frame.data, sizeof(REPETITION_RATE_100_MS)));
-	ASSERT_TRUE(testPlugin.read_frame(frame));
-	EXPECT_EQ(frame.identifier, 0x0CF0E465);
-	EXPECT_EQ(frame.data[0], 251);
+	expect_rate_request_answered_with_100ms(0xFFFF);
 }
 
 TEST_F(HeartbeatProducerTest, UnsupportedRateRequestIsIgnored)
@@ -686,16 +708,7 @@ TEST_F(HeartbeatProducerTest, UnsupportedRateRequestIsIgnored)
 
 TEST_F(HeartbeatProducerTest, RateRequestIsAnsweredWithTheActualRate)
 {
-	receive_rate_request(0x66, 0x65, 0);
-
-	CANMessageFrame frame = {};
-	ASSERT_TRUE(testPlugin.read_frame(frame));
-	EXPECT_EQ(frame.identifier, 0x18FE0E65);
-	EXPECT_EQ(frame.dataLength, 8);
-	EXPECT_EQ(0, std::memcmp(REPETITION_RATE_100_MS, frame.data, sizeof(REPETITION_RATE_100_MS)));
-	ASSERT_TRUE(testPlugin.read_frame(frame));
-	EXPECT_EQ(frame.identifier, 0x0CF0E465);
-	EXPECT_EQ(frame.data[0], 251);
+	expect_rate_request_answered_with_100ms(0);
 }
 
 TEST_F(HeartbeatProducerTest, TransmissionErrorSends254UntilCleared)

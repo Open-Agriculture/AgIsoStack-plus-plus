@@ -41,7 +41,7 @@ namespace isobus
 			TimedOut, ///< The heartbeat message has not been received within the repetition rate
 			TransmissionError, ///< The sender reported an error by sending sequence counter 254
 			GracefulShutdown, ///< The sender is shutting down (sequence counter 255) and is no longer tracked
-			RequestNotAccepted ///< Neither a Response for Repetition Rate nor a heartbeat arrived within 250 ms of a request, so the control function is no longer tracked
+			RequestNotAccepted ///< The request was not sent, or neither a Response for Repetition Rate nor a heartbeat came within 250 ms, so the control function is no longer tracked
 		};
 
 		/// @brief Constructor for a HeartbeatInterface
@@ -60,25 +60,25 @@ namespace isobus
 		/// @returns true if the interface is enabled, false if the interface is disabled
 		bool is_enabled() const;
 
-		/// @brief This method can be used to request that another control function on the bus
-		/// start sending the heartbeat message. This does not mean the request will be honored.
-		/// The request is queued, and the next update() sends it unless the destination is already
-		/// tracked (sending, or already requested). If neither a Response for Repetition Rate nor a
-		/// heartbeat arrives from the destination within 250 ms, a RequestNotAccepted error follows and
-		/// the destination is no longer tracked. After that, a TimedOut error follows when no heartbeat
-		/// arrives for more than 300 ms. The first heartbeat fires the new tracked heartbeat event.
+		/// @brief Requests that another control function start sending the heartbeat message.
+		/// The request is queued and sent by the next update(), unless the destination is already tracked.
+		/// If it cannot be sent, or neither a Response for Repetition Rate nor a heartbeat arrives within
+		/// 250 ms, a RequestNotAccepted error follows and the destination is not tracked. Once tracked, a
+		/// TimedOut error follows when no heartbeat arrives for more than 300 ms. The first heartbeat fires
+		/// the new tracked heartbeat event.
 		/// @param[in] sourceControlFunction The internal control function to use when sending the request
 		/// @param[in] destinationControlFunction The destination for the request
 		/// @returns true if the request was queued, otherwise false.
 		bool request_heartbeat(std::shared_ptr<InternalControlFunction> sourceControlFunction,
 		                       std::shared_ptr<ControlFunction> destinationControlFunction) const;
 
-		/// @brief From the next update on, the heartbeat of this control function carries 255 (graceful shutdown)
-		/// until the control function is removed. Has an effect only while the control function is sending heartbeats.
+		/// @brief From the next update on, the heartbeat carries 255 (graceful shutdown) until the control function is removed.
+		/// Does nothing unless the control function is already sending heartbeats.
 		/// @param[in] controlFunction The internal control function that is shutting down
 		void send_shutdown(std::shared_ptr<InternalControlFunction> controlFunction);
 
-		/// @brief While set, the heartbeat of this control function carries 254 instead of the counter. Has an effect only while the control function is sending heartbeats.
+		/// @brief While set, the heartbeat carries 254 instead of the counter.
+		/// Does nothing unless the control function is already sending heartbeats.
 		/// @param[in] controlFunction The internal control function to change
 		/// @param[in] error True to report a transmission error, false to clear it
 		void set_transmission_error(std::shared_ptr<InternalControlFunction> controlFunction, bool error);
@@ -88,27 +88,23 @@ namespace isobus
 		/// @param[in] newControlFunction The new internal control function
 		void on_new_internal_control_function(std::shared_ptr<InternalControlFunction> newControlFunction);
 
-		/// @brief Called when an internal control function is deleted. Cleans up stale registrations with
-		/// PGN request protocol.
+		/// @brief Called when an internal control function is deleted. Removes its PGN request registration.
 		/// @param[in] destroyedControlFunction The destroyed internal control function
 		void on_destroyed_internal_control_function(std::shared_ptr<InternalControlFunction> destroyedControlFunction);
 
-		/// @brief Returns an event dispatcher which can be used to register for heartbeat errors.
-		/// Heartbeat errors are generated when a heartbeat message is not received within the
-		/// repetition rate, or when the sequence counter is not valid.
-		/// The control function that generated the error is passed as an argument to the event.
+		/// @brief Returns an event dispatcher for heartbeat errors.
+		/// The control function that generated the error is passed to the event.
 		/// @returns An event dispatcher for heartbeat errors
 		EventDispatcher<HeartBeatError, std::shared_ptr<ControlFunction>> &get_heartbeat_error_event_dispatcher();
 
-		/// @brief Returns an event dispatcher which can be used to register for new tracked heartbeat events.
-		/// An event will be generated when a new control function is added to the list of CFs sending heartbeats.
-		/// The control function that generated the error is passed as an argument to the event.
+		/// @brief Returns an event dispatcher that fires when a new control function starts being tracked.
+		/// The tracked control function is passed to the event.
 		/// @returns An event dispatcher for new tracked heartbeat events
 		EventDispatcher<std::shared_ptr<ControlFunction>> &get_new_tracked_heartbeat_event_dispatcher();
 
-		/// @brief Returns an event dispatcher which fires when a tracked control function leaves a
+		/// @brief Returns an event dispatcher that fires when a tracked control function leaves a
 		/// sequence or transmission error after 8 correct sequential heartbeats in a row.
-		/// The control function that recovered is passed as an argument to the event.
+		/// The control function that recovered is passed to the event.
 		/// @returns An event dispatcher for heartbeat recovery events
 		EventDispatcher<std::shared_ptr<ControlFunction>> &get_heartbeat_recovered_event_dispatcher();
 
@@ -128,7 +124,7 @@ namespace isobus
 			FirstReserved = 252, ///< Reserved; receivers shall ignore it
 			LastReserved = 253, ///< Reserved; receivers shall ignore it
 			Error = 254, ///< Sequence Number value 254 indicates an error condition.
-			NotAvailable = 255 ///< This value shall be used when the transmitted CF is in a shutdown status and is gracefully disconnecting from the network. It also marks a tracked CF from which no heartbeat has been received yet.
+			NotAvailable = 255 ///< The sender is shutting down; also marks a tracked control function that has not sent a heartbeat yet
 		};
 
 		/// @brief The state of a tracked heartbeat, as seen by the receiver.
@@ -183,7 +179,7 @@ namespace isobus
 
 			std::shared_ptr<ControlFunction> controlFunction; ///< The CF that is sending the message
 			std::uint32_t timestamp_ms; ///< The last time the message was sent by the associated control function
-			std::uint32_t repetitionRate_ms = SEQUENCE_REPETITION_RATE_MS; ///< For internal control functions, this controls how often the heartbeat is sent. This should really stay at the standard 100ms defined in ISO11783-7.
+			std::uint32_t repetitionRate_ms = SEQUENCE_REPETITION_RATE_MS; ///< For internal control functions, how often the heartbeat is sent. Only 100 ms is supported for now, although the standard allows other rates.
 			std::uint8_t sequenceCounter = static_cast<std::uint8_t>(SequenceCounterSpecialValue::Initial); ///< The sequence counter used to validate the heartbeat. Counts from 0-250 normally.
 			ReceiveState state = ReceiveState::Operational; ///< For received heartbeats, whether the sender is in an error state
 			std::uint8_t correctMessagesInARow = 0; ///< For received heartbeats, the correct sequential messages counted towards recovery
@@ -204,6 +200,11 @@ namespace isobus
 		                                          std::shared_ptr<ControlFunction> targetControlFunction,
 		                                          std::uint32_t repetitionRate,
 		                                          void *parentPointer);
+
+		/// @brief Queues a command for the next update() unless the interface is disabled.
+		/// @param[in] command The command to queue
+		/// @returns True if the command was queued.
+		bool queue_command(const PendingCommand &command) const;
 
 		/// @brief Applies a request from the application. Called from update().
 		/// @param[in] command The request to apply
