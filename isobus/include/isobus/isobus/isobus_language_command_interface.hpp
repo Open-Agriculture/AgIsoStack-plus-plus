@@ -12,6 +12,7 @@
 
 #include "isobus/isobus/can_callbacks.hpp"
 #include "isobus/isobus/can_message.hpp"
+#include "isobus/utility/event_dispatcher.hpp"
 
 #include <memory>
 #include <string>
@@ -160,7 +161,16 @@ namespace isobus
 		/// @details This needs to be called before the interface is useable.
 		/// It registers its PGN callback and sets up the PGN request interface
 		/// if needed.
+		/// In the server role (shouldRespondToRequests), the interface also sends the language command each time
+		/// its control function claims an address, because a VT reports the selected language, formats and units
+		/// at power up (ISO 11783-6:2018, 4.6.3, and ISO 11783-7:2009, B.21). Call set_send_on_address_claim(false)
+		/// before initializing to send it yourself instead.
 		void initialize();
+
+		/// @brief Sets if the interface sends the language command when its control function claims an address
+		/// @details Only used in the server role (shouldRespondToRequests). On by default.
+		/// @param[in] value `true` to send it when an address is claimed, `false` to leave it to the application
+		void set_send_on_address_claim(bool value);
 
 		/// @brief Changes the partner being used by the interface to a new partner
 		/// @param[in] filteredControlFunction The new partner to communicate with
@@ -180,6 +190,7 @@ namespace isobus
 		bool send_request_language_command() const;
 
 		/// @brief Sends a language command based on the current content of this class as a broadcast.
+		/// @details A language code is required. The country code is optional: without one, bytes 7 and 8 are sent as 0xFF.
 		/// @note This is only meant to be used by a VT server or TC/DL server
 		/// @return `true` if the message was sent, otherwise `false`
 		bool send_language_command();
@@ -192,7 +203,9 @@ namespace isobus
 		/// @brief Sets the country code specifying the operator's desired language dialect.
 		/// @attention This is meant for servers only
 		/// @note ISO 11783 networks shall use the alpha-2 country codes in accordance with ISO 3166-1.
-		/// @param[in] country The country code to set
+		/// ISO 11783-6:2018 4.6.3 recommends that a VT sends one. An empty string clears it, and the language
+		/// command is then sent without a country code (bytes 7 and 8 set to 0xFF).
+		/// @param[in] country The country code to set, or an empty string for none
 		void set_country_code(std::string country);
 
 		/// @brief Returns the commanded language code parsed from the last language command
@@ -318,6 +331,9 @@ namespace isobus
 		static void process_rx_message(const CANMessage &message, void *parentPointer);
 
 	private:
+		/// @brief Sends the language command if a language code is set, for the sends the interface makes by itself
+		void send_language_command_if_set();
+
 		/// @brief This is a callback to handle clients requesting the content of our language data for things like VT/TC servers
 		/// @param[in] parameterGroupNumber The PGN to handle in the callback
 		/// @param[in] requestingControlFunction The control function that is requesting the PGN
@@ -349,6 +365,9 @@ namespace isobus
 		UnitSystem genericUnitSystem = UnitSystem::Metric; ///< The "unit system" that was commanded by the last language command message
 		bool initialized = false; ///< Tracks if initialize has been called yet for this interface
 		bool respondToRequests = false; ///< Stores if the class should respond to PGN requests for the language command
+		bool sendOnAddressClaim = true; ///< In the server role, send the language command when the control function claims an address
+		bool hasAddressClaimedListener = false; ///< Tracks if addressClaimedListener is registered
+		EventCallbackHandle addressClaimedListener = 0; ///< The listener for the control function's address claims
 	};
 } // namespace isobus
 
