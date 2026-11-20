@@ -80,6 +80,20 @@ namespace isobus
 		return retVal;
 	}
 
+	bool ParameterGroupNumberRequestProtocol::register_pgn_request_callback(std::uint32_t pgn, PGNRequestCallbackWithDestination callback, void *parentPointer)
+	{
+		PGNRequestCallbackInfo pgnCallback(callback, pgn, parentPointer);
+		bool retVal = false;
+		LOCK_GUARD(Mutex, pgnRequestMutex);
+
+		if ((nullptr != callback) && (pgnRequestCallbacks.end() == std::find(pgnRequestCallbacks.begin(), pgnRequestCallbacks.end(), pgnCallback)))
+		{
+			pgnRequestCallbacks.push_back(pgnCallback);
+			retVal = true;
+		}
+		return retVal;
+	}
+
 	bool ParameterGroupNumberRequestProtocol::register_request_for_repetition_rate_callback(std::uint32_t pgn, PGNRequestForRepetitionRateCallback callback, void *parentPointer)
 	{
 		PGNRequestForRepetitionRateCallbackInfo repetitionRateCallback(callback, pgn, parentPointer);
@@ -101,6 +115,22 @@ namespace isobus
 		LOCK_GUARD(Mutex, pgnRequestMutex);
 
 		auto callbackLocation = find(pgnRequestCallbacks.begin(), pgnRequestCallbacks.end(), repetitionRateCallback);
+
+		if (pgnRequestCallbacks.end() != callbackLocation)
+		{
+			pgnRequestCallbacks.erase(callbackLocation);
+			retVal = true;
+		}
+		return retVal;
+	}
+
+	bool ParameterGroupNumberRequestProtocol::remove_pgn_request_callback(std::uint32_t pgn, PGNRequestCallbackWithDestination callback, void *parentPointer)
+	{
+		PGNRequestCallbackInfo pgnCallback(callback, pgn, parentPointer);
+		bool retVal = false;
+		LOCK_GUARD(Mutex, pgnRequestMutex);
+
+		auto callbackLocation = find(pgnRequestCallbacks.begin(), pgnRequestCallbacks.end(), pgnCallback);
 
 		if (pgnRequestCallbacks.end() != callbackLocation)
 		{
@@ -138,9 +168,37 @@ namespace isobus
 
 	ParameterGroupNumberRequestProtocol::PGNRequestCallbackInfo::PGNRequestCallbackInfo(PGNRequestCallback callback, std::uint32_t parameterGroupNumber, void *parentPointer) :
 	  callbackFunction(callback),
+	  callbackWithDestination(nullptr),
 	  pgn(parameterGroupNumber),
 	  parent(parentPointer)
 	{
+	}
+
+	ParameterGroupNumberRequestProtocol::PGNRequestCallbackInfo::PGNRequestCallbackInfo(PGNRequestCallbackWithDestination callback, std::uint32_t parameterGroupNumber, void *parentPointer) :
+	  callbackFunction(nullptr),
+	  callbackWithDestination(callback),
+	  pgn(parameterGroupNumber),
+	  parent(parentPointer)
+	{
+	}
+
+	bool ParameterGroupNumberRequestProtocol::PGNRequestCallbackInfo::call(std::uint32_t requestedPGN,
+	                                                                       std::shared_ptr<ControlFunction> requestingControlFunction,
+	                                                                       std::shared_ptr<ControlFunction> destinationControlFunction,
+	                                                                       bool &acknowledge,
+	                                                                       AcknowledgementType &acknowledgeType) const
+	{
+		bool retVal = false;
+
+		if (nullptr != callbackWithDestination)
+		{
+			retVal = callbackWithDestination(requestedPGN, requestingControlFunction, destinationControlFunction, acknowledge, acknowledgeType, parent);
+		}
+		else if (nullptr != callbackFunction)
+		{
+			retVal = callbackFunction(requestedPGN, requestingControlFunction, acknowledge, acknowledgeType, parent);
+		}
+		return retVal;
 	}
 
 	ParameterGroupNumberRequestProtocol::PGNRequestForRepetitionRateCallbackInfo::PGNRequestForRepetitionRateCallbackInfo(PGNRequestForRepetitionRateCallback callback, std::uint32_t parameterGroupNumber, void *parentPointer) :
@@ -152,7 +210,10 @@ namespace isobus
 
 	bool ParameterGroupNumberRequestProtocol::PGNRequestCallbackInfo::operator==(const PGNRequestCallbackInfo &obj) const
 	{
-		return ((obj.callbackFunction == this->callbackFunction) && (obj.pgn == this->pgn) && (obj.parent == this->parent));
+		return ((obj.callbackFunction == this->callbackFunction) &&
+		        (obj.callbackWithDestination == this->callbackWithDestination) &&
+		        (obj.pgn == this->pgn) &&
+		        (obj.parent == this->parent));
 	}
 
 	bool ParameterGroupNumberRequestProtocol::PGNRequestForRepetitionRateCallbackInfo::operator==(const PGNRequestForRepetitionRateCallbackInfo &obj) const
@@ -228,7 +289,7 @@ namespace isobus
 							if (((pgnRequestCallback.pgn == requestedPGN) ||
 							     (static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::Any) == pgnRequestCallback.pgn)) &&
 							    is_registered(pgnRequestMutex, pgnRequestCallbacks, pgnRequestCallback) &&
-							    (pgnRequestCallback.callbackFunction(requestedPGN, message.get_source_control_function(), shouldAck, ackType, pgnRequestCallback.parent)))
+							    (pgnRequestCallback.call(requestedPGN, message.get_source_control_function(), message.get_destination_control_function(), shouldAck, ackType)))
 							{
 								// If we're here, the callback was able to process the PGN request.
 								anyCallbackProcessed = true;

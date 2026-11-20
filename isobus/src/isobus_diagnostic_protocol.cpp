@@ -1273,10 +1273,14 @@ namespace isobus
 
 	bool DiagnosticProtocol::process_parameter_group_number_request(std::uint32_t parameterGroupNumber,
 	                                                                std::shared_ptr<ControlFunction> requestingControlFunction,
+	                                                                std::shared_ptr<ControlFunction> destinationControlFunction,
 	                                                                bool &acknowledge,
 	                                                                AcknowledgementType &acknowledgementType)
 	{
 		bool retVal = false;
+		// ISO 11783-3: a reply that needs the transport protocol goes to the global address for a global request (BAM),
+		// and to the requester for a destination-specific one, so only that one keeps the requester
+		const std::shared_ptr<ControlFunction> replyDestination = (nullptr != destinationControlFunction) ? requestingControlFunction : nullptr;
 		acknowledge = false;
 		acknowledgementType = AcknowledgementType::Negative;
 
@@ -1318,7 +1322,7 @@ namespace isobus
 
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::ProductIdentification):
 				{
-					pendingRequests.insert(make_pair(parameterGroupNumber, requestingControlFunction));
+					pendingRequests[parameterGroupNumber] = replyDestination;
 					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::ProductIdentification));
 					retVal = true;
 				}
@@ -1333,7 +1337,7 @@ namespace isobus
 
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification):
 				{
-					pendingRequests.insert(make_pair(parameterGroupNumber, requestingControlFunction));
+					pendingRequests[parameterGroupNumber] = replyDestination;
 					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SoftwareIdentification));
 					retVal = true;
 				}
@@ -1341,7 +1345,7 @@ namespace isobus
 
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUIdentificationInformation):
 				{
-					pendingRequests.insert(make_pair(parameterGroupNumber, requestingControlFunction));
+					pendingRequests[parameterGroupNumber] = replyDestination;
 					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::ECUIdentification));
 					retVal = true;
 				}
@@ -1359,6 +1363,7 @@ namespace isobus
 
 	bool DiagnosticProtocol::process_parameter_group_number_request(std::uint32_t parameterGroupNumber,
 	                                                                std::shared_ptr<ControlFunction> requestingControlFunction,
+	                                                                std::shared_ptr<ControlFunction> destinationControlFunction,
 	                                                                bool &acknowledge,
 	                                                                AcknowledgementType &acknowledgementType,
 	                                                                void *parentPointer)
@@ -1367,7 +1372,7 @@ namespace isobus
 
 		if (nullptr != parentPointer)
 		{
-			retVal = reinterpret_cast<DiagnosticProtocol *>(parentPointer)->process_parameter_group_number_request(parameterGroupNumber, requestingControlFunction, acknowledge, acknowledgementType);
+			retVal = reinterpret_cast<DiagnosticProtocol *>(parentPointer)->process_parameter_group_number_request(parameterGroupNumber, requestingControlFunction, destinationControlFunction, acknowledge, acknowledgementType);
 		}
 		return retVal;
 	}
