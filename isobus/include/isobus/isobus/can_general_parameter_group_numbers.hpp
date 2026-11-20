@@ -38,6 +38,7 @@ namespace isobus
 		ControlFunctionFunctionalities = 0xFC8E,
 		DiagnosticProtocolIdentification = 0xFD32,
 		MachineSelectedSpeedCommand = 0xFD43,
+		WorkingSetMember = 0xFE0C,
 		WorkingSetMaster = 0xFE0D,
 		LanguageCommand = 0xFE0F,
 		MaintainPower = 0xFE47,
