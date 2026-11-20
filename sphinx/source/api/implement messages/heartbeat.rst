@@ -15,6 +15,7 @@ To monitor another control function, call ``request_heartbeat()`` and listen to 
 - ``get_new_tracked_heartbeat_event_dispatcher()`` fires on the first heartbeat received from a control function, requested or not.
 - ``get_heartbeat_error_event_dispatcher()`` reports ``RequestNotAccepted``, ``TimedOut``, ``InvalidSequenceCounter``, ``TransmissionError`` and ``GracefulShutdown``.
   After ``RequestNotAccepted``, ``TimedOut`` and ``GracefulShutdown`` the control function is no longer tracked, so request it again if you still need it.
+  The exception is a timeout while in an error state: the control function stays in that state, and when it resumes it needs 8 correct heartbeats in a row to recover.
 - ``get_heartbeat_recovered_event_dispatcher()`` fires when a control function leaves an error state after 8 correct heartbeats in a row.
 
 Call ``set_transmission_error()`` to report a fault in your own control function.

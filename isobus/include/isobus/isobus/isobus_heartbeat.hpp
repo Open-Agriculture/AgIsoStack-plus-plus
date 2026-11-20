@@ -50,7 +50,7 @@ namespace isobus
 
 		/// @brief This can be used to disable or enable this heartbeat functionality.
 		/// It's probably best to leave it enabled for most applications, but it's not
-		/// strictly needed.
+		/// strictly needed. Disabling drops all tracking and sending state, and enabling starts from scratch.
 		/// @note The interface is enabled by default.
 		/// @param[in] enable Set to true to enable the interface, or false to disable it.
 		void set_enabled(bool enable);
@@ -73,12 +73,12 @@ namespace isobus
 		                       std::shared_ptr<ControlFunction> destinationControlFunction) const;
 
 		/// @brief From the next update on, the heartbeat carries 255 (graceful shutdown) until the control function is removed.
-		/// Does nothing unless the control function is already sending heartbeats.
+		/// The setting is kept and applies once the heartbeat is requested.
 		/// @param[in] controlFunction The internal control function that is shutting down
 		void send_shutdown(std::shared_ptr<InternalControlFunction> controlFunction) const;
 
 		/// @brief While set, the heartbeat carries 254 instead of the counter.
-		/// Does nothing unless the control function is already sending heartbeats.
+		/// The setting is kept and applies once the heartbeat is requested.
 		/// @param[in] controlFunction The internal control function to change
 		/// @param[in] error True to report a transmission error, false to clear it
 		void set_transmission_error(std::shared_ptr<InternalControlFunction> controlFunction, bool error) const;
@@ -179,13 +179,14 @@ namespace isobus
 
 			std::shared_ptr<ControlFunction> controlFunction; ///< The CF that is sending the message
 			std::uint32_t timestamp_ms; ///< The last time the message was sent by the associated control function
-			std::uint32_t repetitionRate_ms = SEQUENCE_REPETITION_RATE_MS; ///< For internal control functions, how often the heartbeat is sent. Only 100 ms is supported for now, although the standard allows other rates.
 			std::uint8_t sequenceCounter = static_cast<std::uint8_t>(SequenceCounterSpecialValue::Initial); ///< The sequence counter used to validate the heartbeat. Counts from 0-250 normally.
 			ReceiveState state = ReceiveState::Operational; ///< For received heartbeats, whether the sender is in an error state
 			std::uint8_t correctMessagesInARow = 0; ///< For received heartbeats, the correct sequential messages counted towards recovery
 			bool shutdown = false; ///< For internal control functions, true once the graceful shutdown value is being sent
 			bool transmissionError = false; ///< For internal control functions, true while the transmission error value is being sent
 			bool requestPending = false; ///< For requested heartbeats, true until a Response for Repetition Rate or a heartbeat arrives from the control function
+			bool sending = false; ///< For internal control functions, true once the heartbeat has been requested, so it is being sent
+			bool timedOut = false; ///< For received heartbeats in an error state that stopped arriving; kept so the 8 correct heartbeats are still needed when it resumes
 		};
 
 		/// @brief Processes a PGN request for a heartbeat.

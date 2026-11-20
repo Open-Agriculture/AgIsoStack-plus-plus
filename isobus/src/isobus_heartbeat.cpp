@@ -22,6 +22,8 @@
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
 
+#include <iterator>
+
 namespace isobus
 {
 	HeartbeatInterface::HeartbeatInterface(const CANMessageFrameCallback &sendCANFrameCallback) :
@@ -157,6 +159,10 @@ namespace isobus
 				}
 			}
 		}
+		else
+		{
+			trackedHeartbeats.clear();
+		}
 	}
 
 	bool HeartbeatInterface::update_tracked_heartbeat(Heartbeat &heartbeat)
@@ -177,11 +183,12 @@ namespace isobus
 			heartbeatErrorEventDispatcher.call(HeartBeatError::RequestNotAccepted, heartbeat.controlFunction);
 			shouldRemove = true;
 		}
-		else if (SystemTiming::get_time_elapsed_ms(heartbeat.timestamp_ms) > SEQUENCE_TIMEOUT_MS)
+		else if (!heartbeat.timedOut && (SystemTiming::get_time_elapsed_ms(heartbeat.timestamp_ms) > SEQUENCE_TIMEOUT_MS))
 		{
 			LOG_ERROR("[HB]: Heartbeat from control function at address 0x%02X timed out.", heartbeat.controlFunction->get_address());
 			heartbeatErrorEventDispatcher.call(HeartBeatError::TimedOut, heartbeat.controlFunction);
-			shouldRemove = true;
+			heartbeat.timedOut = (ReceiveState::Operational != heartbeat.state);
+			shouldRemove = !heartbeat.timedOut;
 		}
 
 		return shouldRemove;
@@ -189,7 +196,7 @@ namespace isobus
 
 	void HeartbeatInterface::send_heartbeat_if_due(Heartbeat &heartbeat) const
 	{
-		if (SystemTiming::time_expired_ms(heartbeat.timestamp_ms, heartbeat.repetitionRate_ms) && heartbeat.send(*this))
+		if (heartbeat.sending && SystemTiming::time_expired_ms(heartbeat.timestamp_ms, SEQUENCE_REPETITION_RATE_MS) && heartbeat.send(*this))
 		{
 			heartbeat.sequenceCounter++;
 			if (heartbeat.sequenceCounter > MAX_SEQUENCE_COUNTER)
@@ -237,6 +244,7 @@ namespace isobus
 		if (enabled &&
 		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage) == message.get_identifier().get_parameter_group_number()) &&
 		    (nullptr != message.get_source_control_function()) &&
+		    (ControlFunction::Type::Internal != message.get_source_control_function()->get_type()) &&
 		    (message.get_data_length() >= 1))
 		{
 			const std::uint8_t sequenceCounter = message.get_uint8_at(0);
@@ -248,7 +256,6 @@ namespace isobus
 				auto managedHeartbeat = find_tracked_heartbeat(message.get_source_control_function());
 
 				if ((managedHeartbeat != trackedHeartbeats.end()) &&
-				    (ControlFunction::Type::Internal != managedHeartbeat->controlFunction->get_type()) &&
 				    update_tracked_heartbeat(*managedHeartbeat))
 				{
 					trackedHeartbeats.erase(managedHeartbeat);
@@ -267,6 +274,7 @@ namespace isobus
 				else if (managedHeartbeat != trackedHeartbeats.end())
 				{
 					managedHeartbeat->requestPending = false;
+					managedHeartbeat->timedOut = false;
 					managedHeartbeat->timestamp_ms = SystemTiming::get_timestamp_ms();
 					process_sequence_counter(*managedHeartbeat, sequenceCounter);
 				}
@@ -281,9 +289,8 @@ namespace isobus
 		else if (enabled &&
 		         (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ResponseForRepetitionRate) == message.get_identifier().get_parameter_group_number()) &&
 		         (nullptr != message.get_source_control_function()) &&
-		         (message.get_data_length() >= 5) &&
-		         (static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage) == message.get_uint24_at(0)) &&
-		         (SEQUENCE_REPETITION_RATE_MS == message.get_uint16_at(3)))
+		         (message.get_data_length() >= 3) &&
+		         (static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage) == message.get_uint24_at(0)))
 		{
 			auto managedHeartbeat = find_tracked_heartbeat(message.get_source_control_function());
 
@@ -312,13 +319,18 @@ namespace isobus
 	void HeartbeatInterface::apply_command(const PendingCommand &command)
 	{
 		auto managedHeartbeat = find_tracked_heartbeat(command.controlFunction);
-		const bool found = (managedHeartbeat != trackedHeartbeats.end());
 
 		switch (command.type)
 		{
 			case CommandType::RequestHeartbeat:
 			{
-				if (!found)
+				if ((managedHeartbeat != trackedHeartbeats.end()) && managedHeartbeat->timedOut)
+				{
+					trackedHeartbeats.erase(managedHeartbeat);
+					managedHeartbeat = trackedHeartbeats.end();
+				}
+
+				if (managedHeartbeat == trackedHeartbeats.end())
 				{
 					if (ParameterGroupNumberRequestProtocol::request_repetition_rate(static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage),
 					                                                                 SEQUENCE_REPETITION_RATE_MS,
@@ -342,27 +354,32 @@ namespace isobus
 			break;
 
 			case CommandType::Shutdown:
-			{
-				if (found)
-				{
-					managedHeartbeat->shutdown = true;
-				}
-			}
-			break;
-
 			case CommandType::SetTransmissionError:
 			case CommandType::ClearTransmissionError:
 			{
-				if (found)
+				if ((managedHeartbeat == trackedHeartbeats.end()) && (CommandType::ClearTransmissionError != command.type))
 				{
-					managedHeartbeat->transmissionError = (CommandType::SetTransmissionError == command.type);
+					trackedHeartbeats.emplace_back(command.controlFunction);
+					managedHeartbeat = std::prev(trackedHeartbeats.end());
+				}
+
+				if (managedHeartbeat != trackedHeartbeats.end())
+				{
+					if (CommandType::Shutdown == command.type)
+					{
+						managedHeartbeat->shutdown = true;
+					}
+					else
+					{
+						managedHeartbeat->transmissionError = (CommandType::SetTransmissionError == command.type);
+					}
 				}
 			}
 			break;
 
 			case CommandType::Remove:
 			{
-				if (found)
+				if (managedHeartbeat != trackedHeartbeats.end())
 				{
 					trackedHeartbeats.erase(managedHeartbeat);
 				}
@@ -466,6 +483,7 @@ namespace isobus
 			if ((interface->is_enabled()) &&
 			    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage) == parameterGroupNumber))
 			{
+				// 0xFFFF is "no change requested" (SPN 2418), but the requester still wants the heartbeat, and 100 ms is our only rate
 				const bool rateHonoured = ((REPETITION_RATE_DEFAULT == repetitionRate) ||
 				                           (SEQUENCE_REPETITION_RATE_MS == repetitionRate) ||
 				                           (REPETITION_RATE_NO_CHANGE == repetitionRate));
@@ -480,7 +498,13 @@ namespace isobus
 					if (managedHeartbeat == interface->trackedHeartbeats.end())
 					{
 						interface->trackedHeartbeats.emplace_back(targetControlFunction);
-						interface->trackedHeartbeats.back().timestamp_ms = 0; // Heartbeat will be sent on next update
+						managedHeartbeat = std::prev(interface->trackedHeartbeats.end());
+					}
+
+					if (!managedHeartbeat->sending)
+					{
+						managedHeartbeat->sending = true;
+						managedHeartbeat->timestamp_ms = 0; // Heartbeat will be sent on next update
 					}
 
 					const auto pgn = static_cast<std::uint32_t>(CANLibParameterGroupNumber::HeartbeatMessage);
