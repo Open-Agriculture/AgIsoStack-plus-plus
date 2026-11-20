@@ -16,6 +16,7 @@
 #include "isobus/utility/to_string.hpp"
 
 #include <algorithm>
+#include <cstring>
 #include <iomanip>
 #include <limits>
 #include <set>
@@ -244,30 +245,8 @@ namespace isobus
 	static bool is_version_label_valid(const std::vector<std::uint8_t> &label)
 	{
 		return std::all_of(label.begin(), label.end(), [](std::uint8_t character) {
-			bool isAllowed = (character >= 0x20) && ((character < 0x7F) || (character >= 0xA0));
-
-			switch (character)
-			{
-				case '\\':
-				case '"':
-				case '\'':
-				case '`':
-				case '/':
-				case ':':
-				case '*':
-				case '<':
-				case '>':
-				case '|':
-				case '?':
-				{
-					isAllowed = false;
-				}
-				break;
-
-				default:
-					break;
-			}
-			return isAllowed;
+			const bool isVisible = (character >= 0x20) && ((character < 0x7F) || (character >= 0xA0));
+			return isVisible && (nullptr == std::strchr("\\\"'`/:*<>|?", character));
 		});
 	}
 
@@ -1088,11 +1067,7 @@ namespace isobus
 							}
 						}
 
-						if (allPoolsSaved)
-						{
-							lastStoredVersionLabels[std::make_pair(clientNAME.get_full_name(), versionLabelLength)] = versionLabel;
-						}
-						else
+						if (!allPoolsSaved)
 						{
 							errorBitfield = get_bit(static_cast<std::uint8_t>(StoreVersionErrorBit::AnyOtherError));
 						}
@@ -1154,18 +1129,10 @@ namespace isobus
 					if (isDeleteAllWildcard)
 					{
 						deleted = delete_all_versions(versionLabelLength, clientNAME);
-						if (deleted)
-						{
-							forget_last_stored_version_label(clientNAME, versionLabelLength, {});
-						}
 					}
 					else if (!versionLabel.empty())
 					{
 						deleted = delete_version(versionLabel, clientNAME);
-						if (deleted)
-						{
-							forget_last_stored_version_label(clientNAME, versionLabelLength, versionLabel);
-						}
 					}
 
 					if (deleted)
@@ -3370,16 +3337,11 @@ namespace isobus
 
 	std::vector<std::uint8_t> VirtualTerminalServer::get_last_stored_version_label(NAME clientNAME, std::uint8_t labelLength)
 	{
+		// The application returns the versions in the order they were stored, so the last one is the last stored version
 		std::vector<std::uint8_t> retVal;
-		const auto lastStored = lastStoredVersionLabels.find(std::make_pair(clientNAME.get_full_name(), labelLength));
 
-		if (lastStoredVersionLabels.end() != lastStored)
+		if (VERSION_LABEL_LENGTH == labelLength)
 		{
-			retVal = lastStored->second;
-		}
-		else if (VERSION_LABEL_LENGTH == labelLength)
-		{
-			// Nothing stored while the server runs, so the last version the application lists
 			const auto versions = get_versions(clientNAME);
 			if (!versions.empty())
 			{
@@ -3395,17 +3357,6 @@ namespace isobus
 			}
 		}
 		return retVal;
-	}
-
-	void VirtualTerminalServer::forget_last_stored_version_label(NAME clientNAME, std::uint8_t labelLength, const std::vector<std::uint8_t> &deletedLabel)
-	{
-		const auto lastStored = lastStoredVersionLabels.find(std::make_pair(clientNAME.get_full_name(), labelLength));
-
-		if ((lastStoredVersionLabels.end() != lastStored) &&
-		    (deletedLabel.empty() || (deletedLabel == lastStored->second)))
-		{
-			lastStoredVersionLabels.erase(lastStored);
-		}
 	}
 
 	void VirtualTerminalServer::process_macro(std::shared_ptr<isobus::VTObject> object, isobus::EventID macroEvent, isobus::VirtualTerminalObjectType targetObjectType, std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> workingset)

@@ -19,7 +19,6 @@
 #include "isobus/utility/thread_synchronization.hpp"
 
 #include <deque>
-#include <map>
 #include <utility>
 
 namespace isobus
@@ -224,8 +223,7 @@ namespace isobus
 
 		/// @brief This function is called when the interface needs to know what versions of object pools are available for a client.
 		/// @details Return them in the order they were stored, the last stored one last. A version command with a blank label refers
-		/// to the last stored version (ISO 11783-6:2018, E.4 to E.8), and before the client stores a version while the server runs,
-		/// the server takes the last label of this list for it.
+		/// to the last stored version (ISO 11783-6:2018, E.4 to E.8), and the server takes the last label of this list for it.
 		/// @param[in] clientNAME The client requesting the object pool versions
 		/// @returns A vector of object pool versions available for the client
 		virtual std::vector<std::array<std::uint8_t, 7>> get_versions(NAME clientNAME) = 0;
@@ -1078,20 +1076,11 @@ namespace isobus
 		static constexpr std::uint8_t EXTENDED_VERSION_LABEL_LENGTH = 32; ///< The length of an extended object pool version label (VT version 5 and later)
 
 		/// @brief Finds the version a blank version label refers to: the last stored one (ISO 11783-6:2018, E.4 to E.8)
-		/// @details That is the label of the last Store Version of the client while the server runs. Before the client has stored
-		/// a version, it is the last label that get_versions() or get_extended_versions() returns.
+		/// @details That is the last label that get_versions() or get_extended_versions() returns.
 		/// @param[in] clientNAME The client the version belongs to
 		/// @param[in] labelLength The label length of the command, VERSION_LABEL_LENGTH or EXTENDED_VERSION_LABEL_LENGTH
 		/// @returns The version label, or an empty vector if the client has no stored version of that label length
 		std::vector<std::uint8_t> get_last_stored_version_label(NAME clientNAME, std::uint8_t labelLength);
-
-		/// @brief Forgets the last stored version label of a client, after that version was deleted
-		/// @param[in] clientNAME The client the version belongs to
-		/// @param[in] labelLength The label length of the deleted version
-		/// @param[in] deletedLabel The deleted label, or an empty vector if all versions of that label length were deleted
-		void forget_last_stored_version_label(NAME clientNAME, std::uint8_t labelLength, const std::vector<std::uint8_t> &deletedLabel);
-
-		std::map<std::pair<std::uint64_t, std::uint8_t>, std::vector<std::uint8_t>> lastStoredVersionLabels; ///< The label each client last stored, per client NAME and label length
 
 		/// @brief Sends a response to a load version or extended load version command
 		/// @param[in] function The command being answered, LoadVersionCommand or ExtendedLoadVersionCommand

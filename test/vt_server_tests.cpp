@@ -96,7 +96,7 @@ public:
 
 	std::vector<std::array<std::uint8_t, 7>> get_versions(NAME) override
 	{
-		return {};
+		return versions;
 	}
 
 	std::vector<std::array<std::uint8_t, 32>> get_extended_versions(NAME) override
@@ -121,6 +121,15 @@ public:
 		if (saveSucceeds)
 		{
 			storedVersion.push_back(objectPool);
+
+			// A version stored again moves to the end, as get_versions() lists them in the order they were stored
+			if (versionLabel.size() == VERSION_LABEL_SIZE)
+			{
+				std::array<std::uint8_t, VERSION_LABEL_SIZE> label;
+				std::copy(versionLabel.begin(), versionLabel.end(), label.begin());
+				versions.erase(std::remove(versions.begin(), versions.end(), label), versions.end());
+				versions.push_back(label);
+			}
 		}
 		return saveSucceeds;
 	}
@@ -130,6 +139,13 @@ public:
 		lastVersionLabel = versionLabel;
 		deletedVersionLabels.push_back(versionLabel);
 		storedVersion.clear();
+		if (deleteSucceeds)
+		{
+			versions.erase(std::remove_if(versions.begin(), versions.end(), [&versionLabel](const std::array<std::uint8_t, VERSION_LABEL_SIZE> &label) {
+				               return std::equal(label.begin(), label.end(), versionLabel.begin(), versionLabel.end());
+			               }),
+			               versions.end());
+		}
 		return deleteSucceeds;
 	}
 
@@ -260,8 +276,10 @@ public:
 	bool deleteSucceeds = true;
 	std::uint8_t deletedAllVersionsLabelLength = 0;
 	std::vector<std::array<std::uint8_t, 32>> extendedVersions;
+	static constexpr std::size_t VERSION_LABEL_SIZE = 7;
 	std::vector<std::uint8_t> lastVersionLabel;
 	std::vector<std::vector<std::uint8_t>> storedVersion;
+	std::vector<std::array<std::uint8_t, VERSION_LABEL_SIZE>> versions; ///< The 7 byte labels stored, in the order they were stored
 	std::vector<std::vector<std::uint8_t>> deletedVersionLabels;
 	std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> shutDownWorkingSets;
 	std::vector<UnexpectedShutdownReason> shutdownReasons;
