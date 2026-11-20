@@ -575,7 +575,7 @@ namespace isobus
 		deactivate_working_set(workingSet);
 		managedWorkingSetIopLoadStateMap.erase(workingSet);
 		workingSet->clear_object_pool_data({});
-		pendingObjectPoolDeletions.push_back(workingSet);
+		pendingObjectPoolDeletions.push_back({ workingSet, {} });
 	}
 
 	void VirtualTerminalServer::report_shut_down_working_sets()
@@ -592,6 +592,14 @@ namespace isobus
 			// The parsing thread uses the working set, so it has to be joined before the working set can be released
 			shutDown.first->join_parsing_thread();
 			handle_unexpected_working_set_shutdown(shutDown.first, shutDown.second);
+		}
+	}
+
+	void VirtualTerminalServer::report_suspension(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet, const EndOfObjectPoolFailure &failure)
+	{
+		if (0 != failure.errorCodes)
+		{
+			suspend_working_set(workingSet, failure.errorCodes, failure.parentIDOfFaultingObject, failure.faultingObjectID, failure.objectPoolErrorCodes);
 		}
 	}
 
@@ -1087,7 +1095,8 @@ namespace isobus
 					                                 NULL_OBJECT_ID,
 					                                 get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::ObjectPoolWasDeletedFromVolatileMemory)),
 					                                 message.get_source_control_function(),
-					                                 true);
+					                                 true,
+					                                 &pendingObjectPoolDeletions.back().failure);
 				}
 				else if (managedWorkingSet->get_any_object_pools())
 				{
@@ -3540,7 +3549,8 @@ namespace isobus
 	                                                             std::uint16_t faultingObjectID,
 	                                                             std::uint8_t objectPoolErrorCodes,
 	                                                             std::shared_ptr<ControlFunction> destination,
-	                                                             bool ranOutOfMemory) const
+	                                                             bool ranOutOfMemory,
+	                                                             EndOfObjectPoolFailure *failure) const
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
 
@@ -3562,6 +3572,12 @@ namespace isobus
 		buffer[5] = get_high_byte(faultingObjectID);
 		buffer[6] = objectPoolErrorCodes;
 		buffer[7] = 0xFF; // Reserved
+
+		// Recorded before sending, so a response that could not be sent still raises the alarm
+		if (nullptr != failure)
+		{
+			*failure = { errorCodes, parentIDOfFaultingObject, faultingObjectID, objectPoolErrorCodes };
+		}
 
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 		                                                      buffer.data(),
@@ -3819,11 +3835,12 @@ namespace isobus
 		const std::uint32_t drainTimestamp_ms = SystemTiming::get_timestamp_ms();
 		process_rx_messages();
 
-		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> deletedObjectPools;
+		std::vector<PendingObjectPoolDeletion> deletedObjectPools;
 		deletedObjectPools.swap(pendingObjectPoolDeletions);
-		for (const auto &ws : deletedObjectPools)
+		for (const auto &deletion : deletedObjectPools)
 		{
-			object_pool_deleted(ws);
+			object_pool_deleted(deletion.workingSet);
+			report_suspension(deletion.workingSet, deletion.failure);
 		}
 
 		// Timeouts are handled first, so the status message never reports a working set that has already shut down
@@ -3858,13 +3875,22 @@ namespace isobus
 			statusMessageTimestamp_ms = isobus::SystemTiming::get_timestamp_ms();
 		}
 
-		std::vector<std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, bool>> parsedWorkingSets;
+		struct ParsedWorkingSet
+		{
+			std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet;
+			bool success;
+			EndOfObjectPoolFailure failure;
+		};
+		std::vector<ParsedWorkingSet> parsedWorkingSets;
 		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> selectableWorkingSets;
 		for (const auto &ws : managedWorkingSetList)
 		{
+			EndOfObjectPoolFailure failure = {};
 			const auto processingState = ws->get_object_pool_processing_state();
 			// A pool deleted after the swap above, from inside a hook that update() calls, is reported by the next update() before the new pool
-			const bool deletionPending = (pendingObjectPoolDeletions.end() != std::find(pendingObjectPoolDeletions.begin(), pendingObjectPoolDeletions.end(), ws));
+			const bool deletionPending = (std::any_of(pendingObjectPoolDeletions.begin(), pendingObjectPoolDeletions.end(), [&ws](const PendingObjectPoolDeletion &deletion) {
+				return deletion.workingSet == ws;
+			}));
 
 			if ((!deletionPending) && (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Success == processingState))
 			{
@@ -3882,7 +3908,7 @@ namespace isobus
 					}
 					else
 					{
-						send_end_of_object_pool_response(false, NULL_OBJECT_ID, NULL_OBJECT_ID, get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::AnyOtherError)), ws->get_control_function());
+						send_end_of_object_pool_response(false, NULL_OBJECT_ID, NULL_OBJECT_ID, get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::AnyOtherError)), ws->get_control_function(), false, &failure);
 						LOG_ERROR("[VT Server]: The object pool was parsed but contains no working set object. Rejecting the pool.");
 					}
 				}
@@ -3910,7 +3936,7 @@ namespace isobus
 						selectableWorkingSets.push_back(ws);
 					}
 				}
-				parsedWorkingSets.emplace_back(ws, success);
+				parsedWorkingSets.push_back({ ws, success, failure });
 			}
 			else if ((!deletionPending) && (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Fail == processingState))
 			{
@@ -3921,9 +3947,9 @@ namespace isobus
 				}
 				else
 				{
-					send_end_of_object_pool_response(false, ws->get_object_pool_faulting_parent_object_id(), ws->get_object_pool_faulting_object_id(), get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::AnyOtherError)), ws->get_control_function());
+					send_end_of_object_pool_response(false, ws->get_object_pool_faulting_parent_object_id(), ws->get_object_pool_faulting_object_id(), get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::AnyOtherError)), ws->get_control_function(), false, &failure);
 				}
-				parsedWorkingSets.emplace_back(ws, false);
+				parsedWorkingSets.push_back({ ws, false, failure });
 			}
 		}
 
@@ -3937,11 +3963,12 @@ namespace isobus
 		}
 		for (const auto &parsed : parsedWorkingSets)
 		{
-			if (parsed.second)
+			if (parsed.success)
 			{
-				notify_focus_lost_if_removed(parsed.first, true);
+				notify_focus_lost_if_removed(parsed.workingSet, true);
 			}
-			object_pool_parse_finished(parsed.first, parsed.second);
+			object_pool_parse_finished(parsed.workingSet, parsed.success);
+			report_suspension(parsed.workingSet, parsed.failure);
 		}
 	}
 }

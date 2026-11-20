@@ -11,7 +11,9 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cstdio>
 #include <functional>
+#include <string>
 #include <thread>
 
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
@@ -34,6 +36,15 @@ static constexpr std::uint32_t JUST_PAST_MAINTENANCE_TIMEOUT_MS = 3001;
 class DerivedTestVTServer : public VirtualTerminalServer
 {
 public:
+	struct Suspension
+	{
+		std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet;
+		std::uint8_t errorCodes;
+		std::uint16_t parentIDOfFaultingObject;
+		std::uint16_t faultingObjectID;
+		std::uint8_t objectPoolErrorCodes;
+	};
+
 	explicit DerivedTestVTServer(std::shared_ptr<InternalControlFunction> controlFunctionToUse) :
 	  VirtualTerminalServer(controlFunctionToUse)
 	{
@@ -84,8 +95,17 @@ public:
 		return 0;
 	}
 
-	void suspend_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>) override
+	void suspend_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet,
+	                         std::uint8_t errorCodes,
+	                         std::uint16_t parentIDOfFaultingObject,
+	                         std::uint16_t faultingObjectID,
+	                         std::uint8_t objectPoolErrorCodes) override
 	{
+		suspensions.push_back({ workingSet, errorCodes, parentIDOfFaultingObject, faultingObjectID, objectPoolErrorCodes });
+		if (onSuspendWorkingSet)
+		{
+			onSuspendWorkingSet(workingSet);
+		}
 	}
 
 	SupportedWideCharsErrorCode get_supported_wide_chars(std::uint8_t, std::uint16_t, std::uint16_t, std::uint8_t &numberOfRanges, std::vector<std::uint8_t> &) override
@@ -272,10 +292,12 @@ public:
 	bool selectOfferedWorkingSets = true;
 	std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> deletedObjectPools;
 	std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> activeWorkingSetsWhenDeleted;
+	std::vector<Suspension> suspensions;
 	std::uint_fast8_t abortInputCount = 0;
 	std::uint16_t inputOpenOnlyInApp = NULL_OBJECT_ID; ///< An input the app has open without calling set_object_open_for_input(), like a VT built against an older stack
 	std::function<void(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>)> onObjectPoolParseFinished;
 	std::function<void(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>)> onObjectPoolDeleted;
+	std::function<void(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>)> onSuspendWorkingSet;
 	std::uint_fast8_t objectPoolDeletionRequests = 0;
 	std::vector<std::uint8_t> supportedObjects;
 	std::vector<std::array<std::uint16_t, 4>> audioSignals;
@@ -604,6 +626,26 @@ protected:
 		server->set_max_rx_queue_size(DerivedTestVTServer::DEFAULT_MAX_RX_QUEUE_SIZE_BYTES);
 	}
 
+	/// @brief Checks that suspend_working_set() was called once, for the only working set, with the given response fields
+	void expect_single_suspension(std::uint8_t errorCodes, std::uint16_t parentIDOfFaultingObject, std::uint16_t faultingObjectID, std::uint8_t objectPoolErrorCodes) const
+	{
+		ASSERT_EQ(1U, server->suspensions.size());
+		EXPECT_EQ(server->managedWorkingSetList.front(), server->suspensions.front().workingSet);
+		EXPECT_EQ(errorCodes, server->suspensions.front().errorCodes);
+		EXPECT_EQ(parentIDOfFaultingObject, server->suspensions.front().parentIDOfFaultingObject);
+		EXPECT_EQ(faultingObjectID, server->suspensions.front().faultingObjectID);
+		EXPECT_EQ(objectPoolErrorCodes, server->suspensions.front().objectPoolErrorCodes);
+	}
+
+	/// @brief Names a hook call for the order log, like "deleted:82" for the working set at address 0x82
+	static std::string describe_hook_call(const char *hook, const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet)
+	{
+		char text[32];
+
+		std::snprintf(text, sizeof(text), "%s:%x", hook, static_cast<unsigned>(workingSet->get_control_function()->get_address()));
+		return text;
+	}
+
 	VirtualCANPlugin testPlugin;
 	std::shared_ptr<InternalControlFunction> internalECU;
 	std::shared_ptr<PartneredControlFunction> client;
@@ -701,6 +743,7 @@ TEST_F(VirtualTerminalServerBusTest, DroppedObjectPoolTransferFailsEndOfObjectPo
 	EXPECT_EQ(0x08, response.data[6]); // Object pool was deleted from volatile memory
 	EXPECT_EQ(1U, server->deletedObjectPools.size());
 	EXPECT_TRUE(server->parsedWorkingSets.empty());
+	expect_single_suspension(0x02, NULL_OBJECT_ID, NULL_OBJECT_ID, 0x08);
 }
 
 TEST_F(VirtualTerminalServerBusTest, UploadWorksAgainAfterADroppedTransferFailed)
@@ -716,6 +759,7 @@ TEST_F(VirtualTerminalServerBusTest, UploadWorksAgainAfterADroppedTransferFailed
 
 	ASSERT_TRUE(poll_for_response(*server, testPlugin, 0x12, response));
 	EXPECT_EQ(0x00, response.data[1]);
+	EXPECT_EQ(1U, server->suspensions.size());
 }
 
 TEST_F(VirtualTerminalServerBusTest, DeleteObjectPoolAfterADroppedTransferAllowsANewUpload)
@@ -812,6 +856,13 @@ TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsAnErrorWhenTh
 
 	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
 	testPlugin.clear_queue();
+	std::vector<std::string> order;
+	server->onObjectPoolParseFinished = [&](std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet) {
+		order.push_back(describe_hook_call("parsed", workingSet));
+	};
+	server->onSuspendWorkingSet = [&](std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet) {
+		order.push_back(describe_hook_call("suspended", workingSet));
+	};
 
 	CANMessageFrame responseFrame = {};
 	const bool foundResponse = poll_for_response(*server, testPlugin, 0x12, responseFrame);
@@ -821,6 +872,10 @@ TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsAnErrorWhenTh
 	EXPECT_EQ(0x04, responseFrame.data[6]); // Any other error
 	ASSERT_EQ(1U, server->parseResults.size());
 	EXPECT_FALSE(server->parseResults.front());
+	ASSERT_EQ(1U, server->suspensions.size());
+	EXPECT_EQ(0x01, server->suspensions.front().errorCodes);
+	EXPECT_EQ(0x04, server->suspensions.front().objectPoolErrorCodes);
+	EXPECT_EQ((std::vector<std::string>{ "parsed:81", "suspended:81" }), order);
 }
 
 TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsAnErrorWhenTheObjectPoolHasNoWorkingSetObject)
@@ -839,6 +894,7 @@ TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsAnErrorWhenTh
 	ASSERT_TRUE(foundResponse);
 	EXPECT_EQ(0x01, responseFrame.data[1]); // Error in object pool
 	EXPECT_EQ(0x04, responseFrame.data[6]); // Any other error
+	expect_single_suspension(0x01, NULL_OBJECT_ID, NULL_OBJECT_ID, 0x04);
 }
 
 TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsTheParentOfTheFaultyObject)
@@ -856,6 +912,7 @@ TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsTheParentOfTh
 	EXPECT_EQ(0x01, responseFrame.data[1]);
 	EXPECT_EQ(258, responseFrame.data[2] | (responseFrame.data[3] << 8));
 	EXPECT_EQ(1, responseFrame.data[4] | (responseFrame.data[5] << 8));
+	expect_single_suspension(0x01, 258, 1, 0x04);
 }
 
 TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsNoParentWhenTheFaultyObjectHasNoID)
@@ -990,6 +1047,7 @@ TEST_F(VirtualTerminalServerBusTest, DeleteObjectPoolDeletesThePoolAndKeepsTheWo
 	EXPECT_EQ(0x00, reloadResponse.data[1]);
 	EXPECT_EQ(2U, server->parseResults.size());
 	EXPECT_TRUE(server->shutDownWorkingSets.empty());
+	EXPECT_TRUE(server->suspensions.empty());
 }
 
 TEST_F(VirtualTerminalServerBusTest, ObjectPoolDeletedIsCalledFromUpdate)
@@ -1068,6 +1126,64 @@ TEST_F(VirtualTerminalServerBusTest, ObjectPoolDeletedIsCalledBeforeTheNextPoolO
 	EXPECT_EQ(server->managedWorkingSetList.front(), server->deletedObjectPools.back());
 	EXPECT_EQ(nullptr, server->activeWorkingSetsWhenDeleted.back());
 	EXPECT_EQ(server->managedWorkingSetList.front(), server->get_active_working_set());
+}
+
+TEST_F(VirtualTerminalServerBusTest, SuspendWorkingSetFollowsTheDeletionOfThePoolItReports)
+{
+	auto otherClient = test_helpers::force_claim_partnered_control_function(0x82, 0);
+	std::vector<std::string> order;
+
+	const bool otherPoolLoaded = upload_pool(SELECTABLE_OBJECT_POOL, otherClient);
+	receive_from_client(internalECU, otherClient, { 0xB2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	server->onObjectPoolDeleted = [&](std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet) {
+		order.push_back(describe_hook_call("deleted", workingSet));
+		if (0x82 == workingSet->get_control_function()->get_address())
+		{
+			drop_object_pool_transfer();
+			receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+		}
+	};
+	server->onSuspendWorkingSet = [&](std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet) {
+		order.push_back(describe_hook_call("suspended", workingSet));
+	};
+
+	server->run_update();
+	const std::vector<std::string> afterFirstUpdate = order;
+	server->run_update();
+
+	ASSERT_TRUE(otherPoolLoaded);
+	EXPECT_EQ((std::vector<std::string>{ "deleted:82" }), afterFirstUpdate);
+	EXPECT_EQ((std::vector<std::string>{ "deleted:82", "deleted:81", "suspended:81" }), order);
+}
+
+TEST_F(VirtualTerminalServerBusTest, SuspendWorkingSetIsNotRaisedForTheDeletionOfAnEarlierPoolOfTheSameWorkingSet)
+{
+	ASSERT_TRUE(upload_pool(SELECTABLE_OBJECT_POOL));
+	const auto workingSet = server->managedWorkingSetList.front();
+	server->onObjectPoolDeleted = [&](std::shared_ptr<VirtualTerminalServerManagedWorkingSet> deleted) {
+		EXPECT_EQ(workingSet, deleted);
+		if (1U == server->deletedObjectPools.size())
+		{
+			server->set_max_rx_queue_size(1);
+			receive_from_client_without_processing(internalECU, client, { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF });
+			receive_tp_from_client_without_processing(internalECU, client, SELECTABLE_OBJECT_POOL);
+			server->process_rx_messages();
+			server->set_max_rx_queue_size(DerivedTestVTServer::DEFAULT_MAX_RX_QUEUE_SIZE_BYTES);
+			receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+		}
+	};
+	receive_from_client_without_processing(internalECU, client, { 0xB2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+
+	server->run_update();
+	ASSERT_EQ(1U, server->deletedObjectPools.size());
+	EXPECT_TRUE(server->suspensions.empty());
+
+	server->run_update();
+	ASSERT_EQ(2U, server->deletedObjectPools.size());
+	ASSERT_EQ(1U, server->suspensions.size());
+	EXPECT_EQ(workingSet, server->suspensions.front().workingSet);
+	EXPECT_EQ(0x02, server->suspensions.front().errorCodes);
+	EXPECT_EQ(0x08, server->suspensions.front().objectPoolErrorCodes);
 }
 
 TEST_F(VirtualTerminalServerBusTest, DeleteObjectPoolIsRejectedUntilThePoolIsAnswered)
