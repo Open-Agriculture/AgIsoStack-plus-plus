@@ -204,14 +204,11 @@ namespace isobus
 		/// @returns The number of y pixels (height) of your data key mask render area
 		virtual std::uint16_t get_data_mask_area_size_y_pixels() const = 0;
 
-		/// @brief This function is called from update() after the server answered an End of Object Pool message with an error
-		/// @details Inform the operator by an alarm type method that the working set is suspended, and show the reason, which is the error the response reported.
-		/// The working set's own Alarm Masks can not be used for this, as its object pool failed. The means is proprietary to the VT.
-		/// It is called right after object_pool_deleted() or object_pool_parse_finished() for the pool that failed.
-		/// It is also called when the error response could not be sent on the bus.
-		/// A pool deleted by a Delete Object Pool command is not reported here, as the operator is not alerted then.
+		/// @brief This function is called from update() when an End of Object Pool message was answered with an error
+		/// @details It follows object_pool_deleted() or object_pool_parse_finished() for that pool. Alert the operator that the working set is suspended, and why.
+		/// It is not called for a pool deleted by a Delete Object Pool command.
 		/// @param[in] workingSet The working set that is suspended
-		/// @param[in] errorCodes Byte 2 of the response: bit 0 = errors in the object pool, bit 1 = the VT ran out of memory during transfer
+		/// @param[in] errorCodes Byte 2 of the response: bit 0 = errors in the object pool, bit 1 = the VT ran out of memory
 		/// @param[in] parentIDOfFaultingObject The parent object ID of the faulty object, or NULL_OBJECT_ID
 		/// @param[in] faultingObjectID The faulty object's ID, or NULL_OBJECT_ID
 		/// @param[in] objectPoolErrorCodes Byte 7 of the response, a bitfield of ObjectPoolErrorBit
