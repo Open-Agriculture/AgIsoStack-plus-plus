@@ -901,6 +901,16 @@ TEST_F(VirtualTerminalServerBusTest, FirstSelectableWorkingSetIsSelectedAutomati
 	EXPECT_EQ(0x03E8, statusAfterSelectable.data[2] | (statusAfterSelectable.data[3] << 8));
 }
 
+// The server reads the object with the Working Set's ID as the Working Set when it answers the pool
+TEST_F(VirtualTerminalServerBusTest, PoolThatGivesTheWorkingSetIdToAnotherObjectTypeIsRejected)
+{
+	auto pool = SELECTABLE_OBJECT_POOL;
+	pool.insert(pool.end(), { 0x00, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::NumberVariable), 0x2A, 0x00, 0x00, 0x00 });
+
+	EXPECT_FALSE(upload_pool(pool));
+	EXPECT_EQ(nullptr, server->get_active_working_set());
+}
+
 TEST_F(VirtualTerminalServerBusTest, ObjectPoolParseFinishedIsCalledWithTheWorkingSetAlreadyActive)
 {
 	const bool poolLoaded = upload_pool(SELECTABLE_OBJECT_POOL);
@@ -3043,6 +3053,16 @@ protected:
 
 	std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet;
 };
+
+TEST_F(VirtualTerminalServerOpenInputTest, PoolUpdateCannotGiveTheWorkingSetIdToAnotherObjectType)
+{
+	// Number Variable 31, then a Number Variable with the Working Set's ID
+	send_pool_update({ 0x1F, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::NumberVariable), 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::NumberVariable), 0x2A, 0x00, 0x00, 0x00 });
+
+	EXPECT_FALSE(pool_update_succeeded());
+	ASSERT_NE(nullptr, workingSet->get_working_set_object());
+	EXPECT_EQ(VirtualTerminalObjectType::WorkingSet, workingSet->get_working_set_object()->get_object_type());
+}
 
 TEST_F(VirtualTerminalServerOpenInputTest, DisablingTheOpenInputIsRefused)
 {

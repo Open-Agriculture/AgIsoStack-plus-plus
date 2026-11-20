@@ -389,6 +389,24 @@ TEST(VirtualTerminalServerTest, WorkingSetSpecialControlsReadsEachLanguagePairOn
 	EXPECT_EQ("DE", codes[1].countryCode);
 }
 
+TEST(VirtualTerminalServerTest, ObjectOfAnotherTypeDoesNotReplaceAnObject)
+{
+	// Container 1 (10x10), then a Number Variable with the same ID
+	std::vector<std::uint8_t> pool = { 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Container), 0x0A, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::NumberVariable), 0x2A, 0x00, 0x00, 0x00 };
+
+	VirtualTerminalServerManagedWorkingSet workingSet;
+	EXPECT_FALSE(workingSet.parse_iop_into_objects(pool.data(), static_cast<std::uint32_t>(pool.size())));
+	EXPECT_EQ(1u, workingSet.get_object_pool_faulting_object_id());
+	ASSERT_NE(nullptr, workingSet.get_object_by_id(1));
+	EXPECT_EQ(VirtualTerminalObjectType::Container, workingSet.get_object_by_id(1)->get_object_type());
+
+	// A Container with the same ID still replaces it
+	std::vector<std::uint8_t> container = { 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Container), 0x14, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x00 };
+	EXPECT_TRUE(workingSet.parse_iop_into_objects(container.data(), static_cast<std::uint32_t>(container.size())));
+	ASSERT_NE(nullptr, workingSet.get_object_by_id(1));
+	EXPECT_EQ(20u, workingSet.get_object_by_id(1)->get_width());
+}
+
 TEST(VirtualTerminalServerTest, LookingUpAnUnknownObjectDoesNotAddItToTheObjectTree)
 {
 	VirtualTerminalServerManagedWorkingSet workingSet;
