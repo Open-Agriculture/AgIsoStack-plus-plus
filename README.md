@@ -76,7 +76,7 @@ find_package(Threads)
 target_link_libraries(<your target> PRIVATE isobus::Isobus isobus::HardwareIntegration isobus::Utility Threads::Threads)
 ```
 
-A CAN driver is picked for your OS by default (SocketCAN on Linux, PEAK PCAN-Basic on Windows, MacCAN PCAN on macOS). Choose another with `-DCAN_DRIVER=<driver>`, or several with `-DCAN_DRIVER="<driver1>;<driver2>"`. The [installation guide](https://agisostack-plus-plus.readthedocs.io/en/latest/Installation.html) also covers git submodules, and the [ESP32 PlatformIO tutorial](https://agisostack-plus-plus.readthedocs.io/en/latest/Tutorials/ESP32%20PlatformIO.html) covers microcontrollers.
+A CAN driver is picked for your OS by default (SocketCAN on Linux, PEAK PCAN-Basic on Windows, MacCAN PCAN on macOS). Choose another with `-DCAN_DRIVER=<driver>`, or several with `-DCAN_DRIVER="<driver1>;<driver2>"`. The [installation guide](https://agisostack-plus-plus.readthedocs.io/en/latest/Installation.html) also covers git submodules, and the [ESP32 PlatformIO](https://agisostack-plus-plus.readthedocs.io/en/latest/Tutorials/ESP32%20PlatformIO.html) and [Teensy and Arduino PlatformIO](https://agisostack-plus-plus.readthedocs.io/en/latest/Tutorials/Teensy%20and%20Arduino%20PlatformIO.html) tutorials cover microcontrollers.
 
 ### Building the examples and tests
 
