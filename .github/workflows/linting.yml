@@ -15,6 +15,24 @@ jobs:
           # as their licenses may not allow us to modify them, such as if they are LGPL licensed.
           # The exclude-regex option can be used to exclude these files from the style check:
           exclude-regex: ^.*(PCANBasic\.h|libusb\.h|InnoMakerUsb2CanLib\.h|arduino_example\.ino|imxrt_flexcan\.hpp|kinetis_flexcan\.hpp)$
+  clang-tidy:
+    name: clang-tidy style
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # The changed lines are determined against the base branch
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: 3.11
+      - name: Install clang-tidy
+        run: pip install clang-tidy==22.1.8
+      - name: Generate compilation database
+        run: cmake -S . -B build -DBUILD_EXAMPLES=ON -DBUILD_TESTING=ON -DCAN_DRIVER=SocketCAN -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+      - name: Run clang-tidy on the changed lines
+        run: bash scripts/clang_tidy/run_clang_tidy.sh -p build --base origin/${{ github.base_ref }}
   cmake-format:
     name: cmake-format style
     runs-on: ubuntu-latest
