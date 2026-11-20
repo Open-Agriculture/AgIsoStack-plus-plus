@@ -276,7 +276,7 @@ namespace isobus
 		/// If you get `false` as a return value, either the DTC was already in the target state or the data was not valid
 		/// @param[in] dtc A diagnostic trouble code whose state should be altered
 		/// @param[in] active Sets if the DTC is currently active or not
-		/// @returns True if the DTC was added/removed from the list, false if DTC was not valid or target state is invalid
+		/// @returns True if the DTC was added/removed from the list or the lamp of an active DTC changed, false if DTC was not valid or target state is invalid
 		bool set_diagnostic_trouble_code_active(const DiagnosticTroubleCode &dtc, bool active);
 
 		/// @brief Returns if a DTC is active

@@ -204,6 +204,11 @@ namespace isobus
 	void DiagnosticProtocol::clear_active_diagnostic_trouble_codes()
 	{
 		LOCK_GUARD(Mutex, dtcMutex);
+
+		if (!activeDTCList.empty())
+		{
+			noFaultsDM1Pending = true;
+		}
 		inactiveDTCList.insert(std::end(inactiveDTCList), std::begin(activeDTCList), std::end(activeDTCList));
 		activeDTCList.clear();
 
@@ -278,8 +283,8 @@ namespace isobus
 			}
 			else
 			{
-				// Already active!
-				retVal = false;
+				retVal = (activeLocation->lampState != dtc.lampState);
+				activeLocation->lampState = dtc.lampState;
 			}
 		}
 		else
@@ -720,11 +725,6 @@ namespace isobus
 					                                                        buffer.data(),
 					                                                        CAN_DATA_LENGTH,
 					                                                        myControlFunction);
-
-					if (retVal)
-					{
-						noFaultsDM1Pending = false;
-					}
 				}
 				else
 				{
@@ -747,6 +747,11 @@ namespace isobus
 					                                                        buffer.data(),
 					                                                        payloadSize,
 					                                                        myControlFunction);
+				}
+
+				if (retVal)
+				{
+					noFaultsDM1Pending = false;
 				}
 			}
 		}
@@ -1075,6 +1080,11 @@ namespace isobus
 									{
 										inactiveDTCList.push_back(*dtc);
 										activeDTCList.erase(dtc);
+
+										if (activeDTCList.empty())
+										{
+											noFaultsDM1Pending = true;
+										}
 										wasDTCCleared = true;
 										tempDM22Data.nack = false;
 

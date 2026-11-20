@@ -1765,6 +1765,16 @@ public:
 		EXPECT_TRUE(protocol->set_diagnostic_trouble_code_active(dtc, false));
 	}
 
+	void expect_dm1_with_no_faults()
+	{
+		ASSERT_TRUE(read_frame_with_pgn(0xFECA));
+		const std::array<std::uint8_t, 6> expectedPayload = { 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00 };
+		for (std::size_t i = 0; i < expectedPayload.size(); i++)
+		{
+			EXPECT_EQ(expectedPayload[i], receivedFrame.data[i]);
+		}
+	}
+
 	VirtualCANPlugin testPlugin;
 	std::shared_ptr<InternalControlFunction> internalECU;
 	std::shared_ptr<PartneredControlFunction> partneredECU;
@@ -1806,12 +1816,19 @@ TEST_F(DiagnosticProtocolTroubleCodeTest, OccurrenceCountStopsAt126)
 	EXPECT_EQ(0x7E, receivedFrame.data[5]);
 }
 
-TEST_F(DiagnosticProtocolTroubleCodeTest, ActivatingDtcWithDifferentLampIsRejectedAsDuplicate)
+TEST_F(DiagnosticProtocolTroubleCodeTest, ActivatingActiveDtcWithNewLampUpdatesTheLamp)
 {
 	DiagnosticProtocol::DiagnosticTroubleCode amberDtc(1234, DiagnosticProtocol::FailureModeIdentifier::ConditionExists, DiagnosticProtocol::LampStatus::AmberWarningLampSolid);
+	DiagnosticProtocol::DiagnosticTroubleCode redDtc(1234, DiagnosticProtocol::FailureModeIdentifier::ConditionExists, DiagnosticProtocol::LampStatus::RedStopLampSolid);
+	protocol->set_j1939_mode(true);
 
 	EXPECT_TRUE(protocol->set_diagnostic_trouble_code_active(amberDtc, true));
-	EXPECT_FALSE(protocol->set_diagnostic_trouble_code_active(dtc, true));
+	EXPECT_TRUE(protocol->set_diagnostic_trouble_code_active(redDtc, true));
+	EXPECT_FALSE(protocol->set_diagnostic_trouble_code_active(redDtc, true));
+	advance_ms(1001);
+
+	ASSERT_TRUE(read_frame_with_pgn(0xFECA));
+	EXPECT_EQ(0x10, receivedFrame.data[0]);
 }
 
 TEST_F(DiagnosticProtocolTroubleCodeTest, DtcWithDifferentLampIsDeactivatedAsTheSameDtc)
@@ -1830,12 +1847,7 @@ TEST_F(DiagnosticProtocolTroubleCodeTest, DM1WithNoFaultsIsSentWhenLastCodeClear
 
 	advance_ms(1001);
 
-	ASSERT_TRUE(read_frame_with_pgn(0xFECA));
-	const std::array<std::uint8_t, 6> expectedPayload = { 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00 };
-	for (std::size_t i = 0; i < expectedPayload.size(); i++)
-	{
-		EXPECT_EQ(expectedPayload[i], receivedFrame.data[i]);
-	}
+	expect_dm1_with_no_faults();
 }
 
 TEST_F(DiagnosticProtocolTroubleCodeTest, DM1WithNoFaultsIsNotRepeated)
@@ -1875,4 +1887,59 @@ TEST_F(DiagnosticProtocolTroubleCodeTest, ClearingAllCodesSendsOnlyOneDM1WithNoF
 	advance_ms(1001);
 
 	EXPECT_FALSE(read_frame_with_pgn(0xFECA));
+}
+
+TEST_F(DiagnosticProtocolTroubleCodeTest, DM22ClearOfLastCodeSendsDM1WithNoFaults)
+{
+	EXPECT_TRUE(protocol->set_diagnostic_trouble_code_active(dtc, true));
+	advance_ms(1001);
+	drain_frames();
+
+	CANMessageFrame clearRequest = {};
+	clearRequest.dataLength = CAN_DATA_LENGTH;
+	clearRequest.identifier = test_helpers::create_ext_can_id(6, 0xC300, internalECU, partneredECU);
+	clearRequest.data[0] = 0x11;
+	clearRequest.data[1] = 0xFF;
+	clearRequest.data[2] = 0xFF;
+	clearRequest.data[3] = 0xFF;
+	clearRequest.data[4] = 0xFF;
+	clearRequest.data[5] = 0xD2;
+	clearRequest.data[6] = 0x04;
+	clearRequest.data[7] = static_cast<std::uint8_t>(DiagnosticProtocol::FailureModeIdentifier::ConditionExists);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(clearRequest);
+	advance_ms(1001);
+
+	expect_dm1_with_no_faults();
+}
+
+TEST_F(DiagnosticProtocolTroubleCodeTest, ClearingAllCodesWhileSuspendedSendsDM1WithNoFaultsAfterResume)
+{
+	EXPECT_TRUE(protocol->set_diagnostic_trouble_code_active(dtc, true));
+	advance_ms(1001);
+	drain_frames();
+
+	CANMessageFrame suspendRequest = {};
+	suspendRequest.dataLength = CAN_DATA_LENGTH;
+	suspendRequest.identifier = test_helpers::create_ext_can_id_broadcast(6, 0xDF00, partneredECU);
+	suspendRequest.data[0] = 0xFC;
+	suspendRequest.data[1] = 0xFF;
+	suspendRequest.data[2] = 0xFF;
+	suspendRequest.data[3] = 0x03;
+	suspendRequest.data[4] = 0x0A;
+	suspendRequest.data[5] = 0x00;
+	suspendRequest.data[6] = 0xFF;
+	suspendRequest.data[7] = 0xFF;
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(suspendRequest);
+	advance_ms(1);
+	ASSERT_FALSE(protocol->get_broadcast_state());
+
+	protocol->clear_active_diagnostic_trouble_codes();
+	advance_ms(2000);
+	EXPECT_FALSE(read_frame_with_pgn(0xFECA));
+
+	advance_ms(10001);
+	ASSERT_TRUE(protocol->get_broadcast_state());
+	advance_ms(1001);
+
+	expect_dm1_with_no_faults();
 }
