@@ -54,9 +54,7 @@ namespace isobus
 
 	bool DiagnosticProtocol::DiagnosticTroubleCode::operator==(const DiagnosticTroubleCode &obj) const
 	{
-		return ((suspectParameterNumber == obj.suspectParameterNumber) &&
-		        (failureModeIdentifier == obj.failureModeIdentifier) &&
-		        (lampState == obj.lampState));
+		return ((suspectParameterNumber == obj.suspectParameterNumber) && (failureModeIdentifier == obj.failureModeIdentifier));
 	}
 
 	std::uint8_t DiagnosticProtocol::DiagnosticTroubleCode::get_occurrence_count() const
@@ -170,6 +168,7 @@ namespace isobus
 
 		if (broadcastState)
 		{
+			LOCK_GUARD(Mutex, dtcMutex);
 			if (j1939Mode)
 			{
 				if (SystemTiming::time_expired_ms(lastDM1SentTimestamp, DM_MAX_FREQUENCY_MS))
@@ -180,7 +179,7 @@ namespace isobus
 			}
 			else
 			{
-				if ((!activeDTCList.empty()) &&
+				if (((!activeDTCList.empty()) || noFaultsDM1Pending) &&
 				    (SystemTiming::time_expired_ms(lastDM1SentTimestamp, DM_MAX_FREQUENCY_MS)))
 				{
 					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM1));
@@ -205,6 +204,11 @@ namespace isobus
 	void DiagnosticProtocol::clear_active_diagnostic_trouble_codes()
 	{
 		LOCK_GUARD(Mutex, dtcMutex);
+
+		if (!activeDTCList.empty())
+		{
+			noFaultsDM1Pending = true;
+		}
 		inactiveDTCList.insert(std::end(inactiveDTCList), std::begin(activeDTCList), std::end(activeDTCList));
 		activeDTCList.clear();
 
@@ -255,7 +259,12 @@ namespace isobus
 
 				if (inactiveDTCList.end() != inactiveLocation)
 				{
-					inactiveLocation->occurrenceCount++;
+					inactiveLocation->lampState = dtc.lampState;
+					constexpr std::uint8_t MAX_OCCURRENCE_COUNT = 126; // 127 means "not available" in DM1 and DM2
+					if (inactiveLocation->occurrenceCount < MAX_OCCURRENCE_COUNT)
+					{
+						inactiveLocation->occurrenceCount++;
+					}
 					activeDTCList.push_back(*inactiveLocation);
 					inactiveDTCList.erase(inactiveLocation);
 				}
@@ -274,8 +283,8 @@ namespace isobus
 			}
 			else
 			{
-				// Already active!
-				retVal = false;
+				retVal = (activeLocation->lampState != dtc.lampState);
+				activeLocation->lampState = dtc.lampState;
 			}
 		}
 		else
@@ -292,6 +301,11 @@ namespace isobus
 				{
 					inactiveDTCList.push_back(*activeLocation);
 					activeDTCList.erase(activeLocation);
+
+					if (activeDTCList.empty())
+					{
+						noFaultsDM1Pending = true;
+					}
 				}
 			}
 			else
@@ -650,17 +664,17 @@ namespace isobus
 		}
 	}
 
-	bool DiagnosticProtocol::send_diagnostic_message_1() const
+	bool DiagnosticProtocol::send_diagnostic_message_1()
 	{
 		bool retVal = false;
 
 		if (nullptr != myControlFunction)
 		{
 			LOCK_GUARD(Mutex, dtcMutex);
-			std::uint16_t payloadSize = static_cast<std::uint16_t>(activeDTCList.size() * DM_PAYLOAD_BYTES_PER_DTC) + 2; // 2 Bytes (0 and 1) are reserved
 
-			if (payloadSize <= MAX_PAYLOAD_SIZE_BYTES)
+			if (activeDTCList.size() <= ((MAX_PAYLOAD_SIZE_BYTES - 2) / DM_PAYLOAD_BYTES_PER_DTC))
 			{
+				std::uint16_t payloadSize = static_cast<std::uint16_t>(activeDTCList.size() * DM_PAYLOAD_BYTES_PER_DTC) + 2; // 2 Bytes (0 and 1) are reserved
 				std::vector<std::uint8_t> buffer;
 				buffer.resize(payloadSize < CAN_DATA_LENGTH ? CAN_DATA_LENGTH : payloadSize);
 
@@ -734,6 +748,11 @@ namespace isobus
 					                                                        payloadSize,
 					                                                        myControlFunction);
 				}
+
+				if (retVal)
+				{
+					noFaultsDM1Pending = false;
+				}
 			}
 		}
 		return retVal;
@@ -746,10 +765,10 @@ namespace isobus
 		if (nullptr != myControlFunction)
 		{
 			LOCK_GUARD(Mutex, dtcMutex);
-			std::uint16_t payloadSize = static_cast<std::uint8_t>(inactiveDTCList.size() * DM_PAYLOAD_BYTES_PER_DTC) + 2; // 2 Bytes (0 and 1) are reserved or used for lamp + flash
 
-			if (payloadSize <= MAX_PAYLOAD_SIZE_BYTES)
+			if (inactiveDTCList.size() <= ((MAX_PAYLOAD_SIZE_BYTES - 2) / DM_PAYLOAD_BYTES_PER_DTC))
 			{
+				std::uint16_t payloadSize = static_cast<std::uint16_t>(inactiveDTCList.size() * DM_PAYLOAD_BYTES_PER_DTC) + 2; // 2 Bytes (0 and 1) are reserved or used for lamp + flash
 				std::vector<std::uint8_t> buffer;
 				buffer.resize(payloadSize < CAN_DATA_LENGTH ? CAN_DATA_LENGTH : payloadSize);
 
@@ -1061,6 +1080,11 @@ namespace isobus
 									{
 										inactiveDTCList.push_back(*dtc);
 										activeDTCList.erase(dtc);
+
+										if (activeDTCList.empty())
+										{
+											noFaultsDM1Pending = true;
+										}
 										wasDTCCleared = true;
 										tempDM22Data.nack = false;
 
