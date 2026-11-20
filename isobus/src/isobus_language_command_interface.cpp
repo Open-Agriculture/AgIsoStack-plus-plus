@@ -11,6 +11,7 @@
 
 #include "isobus/isobus/can_constants.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
+#include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/can_parameter_group_number_request_protocol.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
@@ -44,6 +45,11 @@ namespace isobus
 			{
 				myControlFunction->get_pgn_request_protocol().lock()->remove_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), on_language_request, this);
 			}
+
+			if (hasAddressClaimedListener)
+			{
+				myControlFunction->get_address_claimed_event_dispatcher().remove_listener(addressClaimedListener);
+			}
 		}
 	}
 
@@ -60,6 +66,22 @@ namespace isobus
 					myControlFunction->get_pgn_request_protocol().lock()->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), on_language_request, this);
 				}
 				initialized = true;
+
+				// A VT reports the selected language, formats and units at power up, once it has claimed its address
+				// (ISO 11783-6:2018 4.6.3, ISO 11783-7:2009 B.21). A new claim after losing the address counts too.
+				if (respondToRequests && sendOnAddressClaim)
+				{
+					addressClaimedListener = myControlFunction->get_address_claimed_event_dispatcher().add_listener([this](const std::uint8_t &) {
+						send_language_command_if_set();
+					});
+					hasAddressClaimedListener = true;
+
+					if (myControlFunction->get_address_valid())
+					{
+						// Initialized after the address was claimed
+						send_language_command_if_set();
+					}
+				}
 			}
 			else
 			{
@@ -69,6 +91,20 @@ namespace isobus
 		else
 		{
 			LOG_WARNING("[VT/TC]: Language command interface has been initialized, but is being initialized again.");
+		}
+	}
+
+	void LanguageCommandInterface::set_send_on_address_claim(bool value)
+	{
+		sendOnAddressClaim = value;
+	}
+
+	void LanguageCommandInterface::send_language_command_if_set()
+	{
+		// Without a language code there is nothing to report yet, and that's not an error at an address claim
+		if (languageCode.length() >= 2)
+		{
+			send_language_command();
 		}
 	}
 
@@ -105,11 +141,13 @@ namespace isobus
 
 	bool LanguageCommandInterface::send_language_command()
 	{
-		if ((languageCode.length() < 2) || (countryCode.length() < 2))
+		if (languageCode.length() < 2)
 		{
-			LOG_ERROR("[VT/TC]: Language command interface is missing language or country code, and will not send a language command.");
+			LOG_ERROR("[VT/TC]: Language command interface is missing a language code, and will not send a language command.");
 			return false;
 		}
+		// The country code is recommended, not required (ISO 11783-6:2018 4.6.3). Without one, bytes 7 and 8 are not available.
+		const bool hasCountryCode = (countryCode.length() >= 2);
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
 			static_cast<std::uint8_t>(languageCode[0]),
 			static_cast<std::uint8_t>(languageCode[1]),
@@ -124,8 +162,8 @@ namespace isobus
 			                          (static_cast<std::uint8_t>(forceUnitSystem) << 2) |
 			                          (static_cast<std::uint8_t>(pressureUnitSystem) << 4) |
 			                          (static_cast<std::uint8_t>(temperatureUnitSystem) << 6)),
-			static_cast<std::uint8_t>(countryCode[0]),
-			static_cast<std::uint8_t>(countryCode[1])
+			hasCountryCode ? static_cast<std::uint8_t>(countryCode[0]) : static_cast<std::uint8_t>(0xFF),
+			hasCountryCode ? static_cast<std::uint8_t>(countryCode[1]) : static_cast<std::uint8_t>(0xFF)
 		};
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand),
 		                                                      buffer.data(),
@@ -141,6 +179,13 @@ namespace isobus
 
 	void LanguageCommandInterface::set_country_code(std::string country)
 	{
+		if (country.empty())
+		{
+			// No country code: the language command is sent with bytes 7 and 8 not available
+			countryCode.clear();
+			return;
+		}
+
 		if (country.length() > 2)
 		{
 			LOG_WARNING("[VT/TC]: Language command country code should not be more than 2 characters! It will be truncated.");
