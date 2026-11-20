@@ -76,32 +76,13 @@ namespace isobus
 			ISO14229_3 = 0x04 ///< ISO 14229-3 (UDS on CAN)
 		};
 
-		/// @brief The approving body of the laboratory that certified the control function (ISO 11783-7:2009, A.29.3)
+		/// @brief The approving body of the laboratory that certified the control function (ISO 11783-7, SPN 4315)
 		enum class CertificationLaboratoryType : std::uint8_t
 		{
 			NonCertifiedLaboratoryOrSelfCertification = 0, ///< Non-certified laboratory, or self-certification
-			EUCertifiedLaboratory = 1, ///< EU certified laboratory
-			NACertifiedLaboratory = 2, ///< NA certified laboratory
-			NotAvailable = 7 ///< Not available (not certified)
-		};
-
-		/// @brief The certification tests a control function can have passed (ISO 11783-7:2009, A.29.5 to A.29.17)
-		enum class CertificationType : std::uint8_t
-		{
-			MinimumECU = 0, ///< Minimum ECU
-			TECUClass1, ///< Tractor ECU class 1
-			TECUClass2, ///< Tractor ECU class 2
-			TECUClass3, ///< Tractor ECU class 3
-			Class3ECU, ///< Class 3 ECU
-			VirtualTerminal, ///< Virtual terminal
-			VTWorkingSetMaster, ///< VT working set master
-			VTWorkingSetMember, ///< VT working set member
-			TaskController, ///< Task controller
-			TCWorkingSetMaster, ///< TC working set master
-			TCWorkingSetMember, ///< TC working set member
-			FileServer, ///< File server
-			GPSReceiver, ///< GPS receiver
-			NumberOfTypes ///< The number of certification types defined
+			AEFCertifiedLaboratory = 1, ///< AEF certified laboratory
+			SelfCertifiedBasedOnExistingCertification = 2, ///< Self-certified based on an existing certification
+			NotAvailable = 3 ///< Not available (not certified)
 		};
 
 		/// @brief The DTC lamp status as defined in J1939-73. Not used when in ISO11783 mode
@@ -354,24 +335,20 @@ namespace isobus
 		/// @returns The additional diagnostic protocols, plus J1939-73 in J1939 mode
 		std::uint8_t get_diagnostic_protocol_identification() const;
 
-		/// @brief Sets the certification data of the "ISOBUS Compliance Certification" message (PGN 0xFD42, ISO 11783-7:2009, B.27)
-		/// @details Until this is called, every field is sent as "not available" and no certification type is set.
+		/// @brief Sets the certification data of the "ISOBUS Compliance Certification" message (PGN 0xFD42, ISO 11783-7)
+		/// @details The message is sent in the format of the 3rd and later editions of ISO 11783-7 (SPN 7446).
+		/// Until this is called, every field is sent as "not available".
 		/// @param[in] year The year of the compliance test protocol the certification test was performed to, 2000 to 2061
-		/// @param[in] revision The revision of that test protocol, 0 for the first revision (no suffix) to 3 for the fourth (suffix C)
+		/// @param[in] revision The revision of that test protocol within the year, 0 to 30
 		/// @param[in] laboratoryType The approving body of the certification laboratory
 		/// @param[in] laboratoryID The manufacturer code of the laboratory, or of this ECU when it is self-certified, 0 to 2047
-		/// @param[in] referenceNumber The certification reference number assigned by the laboratory, 0 to 64255
+		/// @param[in] referenceNumber The certification reference number assigned by the laboratory
 		/// @returns true if the values were set, false if any of them is out of range
 		bool set_compliance_certification(std::uint16_t year,
 		                                  std::uint8_t revision,
 		                                  CertificationLaboratoryType laboratoryType,
 		                                  std::uint16_t laboratoryID,
 		                                  std::uint16_t referenceNumber);
-
-		/// @brief Sets if a certification test of a type was performed, for the "ISOBUS Compliance Certification" message (PGN 0xFD42)
-		/// @param[in] type The certification type
-		/// @param[in] isCertified true if the certification test was performed
-		void set_compliance_certification_type(CertificationType type, bool isCertified);
 
 		/// @brief Adds an ascii string to this internal control function's software ID
 		/// @details Use this to identify the software version of your application.
@@ -585,11 +562,10 @@ namespace isobus
 		std::string productIdentificationModel; ///< The product identification model name for sending the product identification message
 		std::uint8_t additionalDiagnosticProtocols = 0; ///< The diagnostic protocols supported in addition to ISO 11783, see DiagnosticProtocolIdentificationBit
 		std::uint8_t certificationYear = 0x3F; ///< The compliance certification year, as years since 2000, or 0x3F for not available
-		std::uint8_t certificationRevision = 0x07; ///< The compliance certification revision, or 0x07 for not available
+		std::uint8_t certificationRevision = 0x1F; ///< The compliance certification revision, or 0x1F for not available
 		CertificationLaboratoryType certificationLaboratoryType = CertificationLaboratoryType::NotAvailable; ///< The approving body of the certification laboratory
 		std::uint16_t certificationLaboratoryID = 0x7FF; ///< The manufacturer code of the certification laboratory, or 0x7FF for not available
-		std::uint16_t certificationReferenceNumber = 0xFFFF; ///< The certification reference number, or 0xFFFF for not available
-		std::uint16_t certificationTypes = 0; ///< One bit per CertificationType that was certified
+		std::uint16_t certificationReferenceNumber = 0xFFFF; ///< The certification reference number
 		std::uint32_t lastDM1SentTimestamp = 0; ///< A timestamp in milliseconds of the last time a DM1 was sent
 		std::uint32_t lastDM13ReceivedTimestamp = 0; ///< A timestamp in milliseconds when we last got a DM13 message
 		std::uint16_t customDM13SuspensionTime = 0; ///< If using a non-standard DM13 suspension time, this tracks that duration in milliseconds
