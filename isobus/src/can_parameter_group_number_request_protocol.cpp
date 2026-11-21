@@ -173,8 +173,10 @@ namespace isobus
 			{
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::RequestForRepetitionRate):
 				{
-					// Can't send this request to global, and must be 8 bytes. Ignore illegal message formats
-					if ((CAN_DATA_LENGTH == message.get_data_length()) && (nullptr != message.get_destination_control_function()))
+					// Can't send this request to global or from an unknown source, and must be 8 bytes. Ignore illegal message formats
+					if ((CAN_DATA_LENGTH == message.get_data_length()) &&
+					    (nullptr != message.get_destination_control_function()) &&
+					    (nullptr != message.get_source_control_function()))
 					{
 						std::uint32_t requestedPGN = message.get_uint24_at(0);
 						std::uint16_t requestedRate = message.get_uint16_at(3);
@@ -203,7 +205,7 @@ namespace isobus
 					}
 					else
 					{
-						LOG_WARNING("[PR]: Received a malformed or broadcast request for repetition rate message. The message will not be processed.");
+						LOG_WARNING("[PR]: Received a malformed, broadcast or unknown-source request for repetition rate message. The message will not be processed.");
 					}
 				}
 				break;
@@ -228,7 +230,7 @@ namespace isobus
 							if (((pgnRequestCallback.pgn == requestedPGN) ||
 							     (static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::Any) == pgnRequestCallback.pgn)) &&
 							    is_registered(pgnRequestMutex, pgnRequestCallbacks, pgnRequestCallback) &&
-							    (pgnRequestCallback.callbackFunction(requestedPGN, message.get_source_control_function(), shouldAck, ackType, pgnRequestCallback.parent)))
+							    (pgnRequestCallback.callbackFunction(requestedPGN, message.get_source_control_function(), message.get_destination_control_function(), shouldAck, ackType, pgnRequestCallback.parent)))
 							{
 								// If we're here, the callback was able to process the PGN request.
 								anyCallbackProcessed = true;

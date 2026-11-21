@@ -163,7 +163,7 @@ namespace isobus
 		/// if needed.
 		/// In the server role (shouldRespondToRequests), the interface also sends the language command each time
 		/// its control function claims an address, because a VT reports the selected language, formats and units
-		/// at power up (ISO 11783-6:2018, 4.6.3, and ISO 11783-7:2009, B.21). Call set_send_on_address_claim(false)
+		/// at power up (ISO 11783-6:2018, 4.6.5, and ISO 11783-7:2009, B.21). Call set_send_on_address_claim(false)
 		/// before initializing to send it yourself instead.
 		void initialize();
 
@@ -203,7 +203,7 @@ namespace isobus
 		/// @brief Sets the country code specifying the operator's desired language dialect.
 		/// @attention This is meant for servers only
 		/// @note ISO 11783 networks shall use the alpha-2 country codes in accordance with ISO 3166-1.
-		/// ISO 11783-6:2018 4.6.3 recommends that a VT sends one. An empty string clears it, and the language
+		/// ISO 11783-6:2018 4.6.5 recommends that a VT sends one. An empty string clears it, and the language
 		/// command is then sent without a country code (bytes 7 and 8 set to 0xFF).
 		/// @param[in] country The country code to set, or an empty string for none
 		void set_country_code(std::string country);
@@ -337,12 +337,14 @@ namespace isobus
 		/// @brief This is a callback to handle clients requesting the content of our language data for things like VT/TC servers
 		/// @param[in] parameterGroupNumber The PGN to handle in the callback
 		/// @param[in] requestingControlFunction The control function that is requesting the PGN
+		/// @param[in] targetControlFunction Where the request was sent, or nullptr for a global request
 		/// @param[out] acknowledge Tells the stack if we want to send an ACK or NACK
 		/// @param[out] acknowledgeType Tells the stack exactly how we want to do an ACK
 		/// @param[in] parentPointer A generic context pointer to locate the specific instance of this class we want
 		/// @returns `true` if the message was handled, otherwise `false`
 		static bool on_language_request(std::uint32_t parameterGroupNumber,
 		                                std::shared_ptr<ControlFunction> requestingControlFunction,
+		                                std::shared_ptr<ControlFunction> targetControlFunction,
 		                                bool &acknowledge,
 		                                AcknowledgementType &acknowledgeType,
 		                                void *parentPointer);

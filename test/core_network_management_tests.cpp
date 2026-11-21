@@ -75,13 +75,13 @@ protected:
 		CANNetworkManager::CANNetwork.remove_control_function_status_change_callback(removing_state_callback);
 	}
 
-	static bool later_pgn_request_callback(std::uint32_t, std::shared_ptr<ControlFunction>, bool &, AcknowledgementType &, void *)
+	static bool later_pgn_request_callback(std::uint32_t, std::shared_ptr<ControlFunction>, std::shared_ptr<ControlFunction>, bool &, AcknowledgementType &, void *)
 	{
 		runningTest->laterCallbackHits++;
 		return false;
 	}
 
-	static bool reregistering_pgn_request_callback(std::uint32_t, std::shared_ptr<ControlFunction>, bool &, AcknowledgementType &, void *parent)
+	static bool reregistering_pgn_request_callback(std::uint32_t, std::shared_ptr<ControlFunction>, std::shared_ptr<ControlFunction>, bool &, AcknowledgementType &, void *parent)
 	{
 		auto protocol = static_cast<ParameterGroupNumberRequestProtocol *>(parent);
 		protocol->register_pgn_request_callback(0xFF02, later_pgn_request_callback, nullptr);
@@ -89,7 +89,7 @@ protected:
 		return false;
 	}
 
-	static bool deactivating_pgn_request_callback(std::uint32_t, std::shared_ptr<ControlFunction>, bool &, AcknowledgementType &, void *)
+	static bool deactivating_pgn_request_callback(std::uint32_t, std::shared_ptr<ControlFunction>, std::shared_ptr<ControlFunction>, bool &, AcknowledgementType &, void *)
 	{
 		// Destroys its ParameterGroupNumberRequestProtocol, which removes that protocol's network manager callbacks
 		CANNetworkManager::CANNetwork.deactivate_control_function(runningTest->otherInternalControlFunction);
@@ -134,7 +134,7 @@ protected:
 		}
 	}
 
-	static bool self_deactivating_pgn_request_callback(std::uint32_t, std::shared_ptr<ControlFunction>, bool &shouldAck, AcknowledgementType &ackType, void *)
+	static bool self_deactivating_pgn_request_callback(std::uint32_t, std::shared_ptr<ControlFunction>, std::shared_ptr<ControlFunction>, bool &shouldAck, AcknowledgementType &ackType, void *)
 	{
 		// Destroys the ParameterGroupNumberRequestProtocol that is running this callback, which then sends the ACK
 		CANNetworkManager::CANNetwork.deactivate_control_function(runningTest->selfDeactivatingInternalControlFunction);
@@ -143,7 +143,7 @@ protected:
 		return true;
 	}
 
-	static bool counting_pgn_request_callback(std::uint32_t, std::shared_ptr<ControlFunction>, bool &, AcknowledgementType &, void *)
+	static bool counting_pgn_request_callback(std::uint32_t, std::shared_ptr<ControlFunction>, std::shared_ptr<ControlFunction>, bool &, AcknowledgementType &, void *)
 	{
 		runningTest->standaloneRequestHits++;
 		return false;
@@ -1645,4 +1645,46 @@ TEST_F(CoreTest, AddressClaimedListenerDoesNotRunForAControlFunctionDeactivatedB
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(first);
 	CANHardwareInterface::stop();
+}
+
+static std::vector<std::shared_ptr<ControlFunction>> requestDestinations;
+
+static bool record_request_destination(std::uint32_t, std::shared_ptr<ControlFunction>, std::shared_ptr<ControlFunction> destination, bool &, AcknowledgementType &, void *)
+{
+	requestDestinations.push_back(destination);
+	return true;
+}
+
+TEST_F(CoreTest, PgnRequestCallbackIsToldWhereTheRequestWasSent)
+{
+	requestDestinations.clear();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+	auto internalECU = test_helpers::claim_internal_control_function(0xEE, 0, time_source);
+	auto requester = test_helpers::force_claim_partnered_control_function(0xEF, 0);
+	CANHardwareInterface::stop();
+	auto protocol = internalECU->get_pgn_request_protocol().lock();
+	ASSERT_NE(nullptr, protocol);
+
+	EXPECT_TRUE(protocol->register_pgn_request_callback(0xFF03, record_request_destination, nullptr));
+	EXPECT_FALSE(protocol->register_pgn_request_callback(0xFF03, record_request_destination, nullptr)); // Already registered
+	EXPECT_EQ(1u, protocol->get_number_registered_pgn_request_callbacks());
+
+	// A destination-specific request, then a global one
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_pgn_request(0xFF03, requester, internalECU));
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_pgn_request(0xFF03, requester, nullptr));
+	CANNetworkManager::CANNetwork.update();
+
+	ASSERT_EQ(2u, requestDestinations.size());
+	EXPECT_EQ(internalECU, requestDestinations.at(0));
+	EXPECT_EQ(nullptr, requestDestinations.at(1));
+
+	EXPECT_TRUE(protocol->remove_pgn_request_callback(0xFF03, record_request_destination, nullptr));
+	EXPECT_FALSE(protocol->remove_pgn_request_callback(0xFF03, record_request_destination, nullptr));
+	EXPECT_EQ(0u, protocol->get_number_registered_pgn_request_callbacks());
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(requester);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+	CANHardwareInterface::set_number_of_can_channels(0);
 }
