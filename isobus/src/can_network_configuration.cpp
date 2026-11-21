@@ -70,7 +70,11 @@ namespace isobus
 
 	void CANNetworkConfiguration::set_max_extended_transport_protocol_receive_size(std::uint32_t bytes)
 	{
-		maxExtendedTransportProtocolReceiveSize = (bytes > MAX_EXTENDED_TRANSPORT_PROTOCOL_MESSAGE_SIZE) ? MAX_EXTENDED_TRANSPORT_PROTOCOL_MESSAGE_SIZE : bytes;
+		maxExtendedTransportProtocolReceiveSize = bytes;
+		if (bytes > MAX_EXTENDED_TRANSPORT_PROTOCOL_MESSAGE_SIZE)
+		{
+			maxExtendedTransportProtocolReceiveSize = MAX_EXTENDED_TRANSPORT_PROTOCOL_MESSAGE_SIZE;
+		}
 	}
 
 	std::uint32_t CANNetworkConfiguration::get_max_extended_transport_protocol_receive_size() const

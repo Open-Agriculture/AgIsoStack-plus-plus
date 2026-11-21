@@ -23,6 +23,8 @@ namespace isobus
 	class CANNetworkConfiguration
 	{
 	public:
+		static constexpr std::uint32_t MAX_EXTENDED_TRANSPORT_PROTOCOL_MESSAGE_SIZE = 117440505; ///< The most ETP can carry (ISO 11783-3:2026, 5.10.5.2)
+
 		/// @brief The constructor for the configuration object
 		CANNetworkConfiguration() = default;
 
@@ -94,20 +96,21 @@ namespace isobus
 		/// @returns The number of packets per CTS packet for TP sessions.
 		std::uint8_t get_number_of_packets_per_cts_message() const;
 
-		/// @brief Sets the largest message this control function accepts over the extended transport protocol (ETP)
+		/// @brief Sets the largest message the network manager accepts over the extended transport protocol (ETP)
 		/// @details The receiver allocates the whole message when the Request To Send arrives, before any data,
 		/// so a larger RTS is aborted. The default is the most ETP can carry, 117 440 505 bytes. On a target with
 		/// little memory, set the largest message the application expects, for example the object pool size of a VT server.
+		/// The limit is per message: with several ETP sessions at once (see set_max_number_transport_protocol_sessions()),
+		/// the receiver can allocate up to that many times this size.
 		/// @param[in] bytes The largest message size in bytes, at most 117 440 505
 		void set_max_extended_transport_protocol_receive_size(std::uint32_t bytes);
 
-		/// @brief Returns the largest message this control function accepts over the extended transport protocol (ETP)
+		/// @brief Returns the largest message the network manager accepts over the extended transport protocol (ETP)
 		/// @returns The largest message size in bytes
 		std::uint32_t get_max_extended_transport_protocol_receive_size() const;
 
 	private:
 		static constexpr std::uint8_t DEFAULT_BAM_PACKET_DELAY_TIME_MS = 50; ///< The default time between BAM frames, as defined by J1939
-		static constexpr std::uint32_t MAX_EXTENDED_TRANSPORT_PROTOCOL_MESSAGE_SIZE = 117440505; ///< The most ETP can carry (ISO 11783-3:2026, 5.10.5.2)
 
 		std::uint32_t maxNumberTransportProtocolSessions = 4; ///< The max number of TP sessions allowed
 		std::uint32_t minimumTimeBetweenTransportProtocolBAMFrames = DEFAULT_BAM_PACKET_DELAY_TIME_MS; ///< The configurable time between BAM frames
