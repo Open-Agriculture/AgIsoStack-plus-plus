@@ -515,11 +515,13 @@ namespace isobus
 		/// @brief Handles PGN requests for the diagnostic protocol
 		/// @param[in] parameterGroupNumber The PGN being requested
 		/// @param[in] requestingControlFunction The control function that is requesting the PGN
+		/// @param[in] destinationControlFunction Where the request was sent, nullptr for a global request
 		/// @param[out] acknowledge Tells the PGN request protocol if it should respond to the request
 		/// @param[out] acknowledgementType The type of acknowledgement to send to the requestor
 		/// @returns true if any callback was able to handle the PGN request
 		bool process_parameter_group_number_request(std::uint32_t parameterGroupNumber,
 		                                            std::shared_ptr<ControlFunction> requestingControlFunction,
+		                                            std::shared_ptr<ControlFunction> destinationControlFunction,
 		                                            bool &acknowledge,
 		                                            AcknowledgementType &acknowledgementType);
 
@@ -531,12 +533,14 @@ namespace isobus
 		// @brief Handles PGN requests for the diagnostic protocol
 		/// @param[in] parameterGroupNumber The PGN being requested
 		/// @param[in] requestingControlFunction The control function that is requesting the PGN
+		/// @param[in] destinationControlFunction Where the request was sent, nullptr for a global request
 		/// @param[out] acknowledge Tells the PGN request protocol if it should respond to the request
 		/// @param[out] acknowledgementType The type of acknowledgement to send to the requestor
 		/// @param[in] parentPointer Generic context variable, usually a pointer to the class that the callback was registered for
 		/// @returns true if any callback was able to handle the PGN request
 		static bool process_parameter_group_number_request(std::uint32_t parameterGroupNumber,
 		                                                   std::shared_ptr<ControlFunction> requestingControlFunction,
+		                                                   std::shared_ptr<ControlFunction> destinationControlFunction,
 		                                                   bool &acknowledge,
 		                                                   AcknowledgementType &acknowledgementType,
 		                                                   void *parentPointer);
