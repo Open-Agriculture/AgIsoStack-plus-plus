@@ -40,6 +40,7 @@ namespace isobus
 		ISOBUSComplianceCertification = 0xFD42,
 		MachineSelectedSpeedCommand = 0xFD43,
 		WorkingSetMaster = 0xFE0D,
+		ResponseForRepetitionRate = 0xFE0E,
 		LanguageCommand = 0xFE0F,
 		MaintainPower = 0xFE47,
 		WheelBasedSpeedAndDistance = 0xFE48,

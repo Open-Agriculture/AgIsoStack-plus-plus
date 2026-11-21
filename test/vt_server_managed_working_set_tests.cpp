@@ -259,6 +259,10 @@ TEST(VirtualTerminalServerTest, ObjectThatRunsPastTheEndOfTheTransferIsRejected)
 		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::ExtendedInputAttributes), 0x00, 0x01 },
 		// Extended Input Attributes code plane of 2 character ranges with only 1 present
 		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::ExtendedInputAttributes), 0x00, 0x01, 0x00, 0x02, 0x41, 0x00, 0x4F, 0x00 },
+		// Data Mask with no macro count byte
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::DataMask), 0x00, 0xFF, 0xFF, 0x00 },
+		// Working Set with no language count byte
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSet), 0x00, 0x01, 0xE8, 0x03, 0x00, 0x00 },
 	};
 
 	for (std::size_t i = 0; i < truncatedObjects.size(); i++)
@@ -297,6 +301,10 @@ TEST(VirtualTerminalServerTest, ObjectThatEndsTheTransferIsAccepted)
 		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::PictureGraphic), 0x0A, 0x00, 0x00, 0x00, 0x01, 0x00, eightBitColour, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
 		// Extended Input Attributes of 2 code planes and 3 character ranges
 		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::ExtendedInputAttributes), 0x00, 0x02, 0x00, 0x02, 0x41, 0x00, 0x4F, 0x00, 0x61, 0x00, 0x6F, 0x00, 0x01, 0x01, 0x12, 0xAB, 0x1F, 0xAB },
+		// Data Mask without objects and macros
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::DataMask), 0x00, 0xFF, 0xFF, 0x00, 0x00 },
+		// Working Set with one object and without macros and languages
+		{ 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSet), 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0xE8, 0x03, 0x00, 0x00, 0x00, 0x00 },
 	};
 
 	for (std::size_t i = 0; i < objects.size(); i++)
@@ -379,6 +387,24 @@ TEST(VirtualTerminalServerTest, WorkingSetSpecialControlsReadsEachLanguagePairOn
 	EXPECT_EQ("US", codes[0].countryCode);
 	EXPECT_EQ("de", codes[1].languageCode);
 	EXPECT_EQ("DE", codes[1].countryCode);
+}
+
+TEST(VirtualTerminalServerTest, ObjectOfAnotherTypeDoesNotReplaceAnObject)
+{
+	// Container 1 (10x10), then a Number Variable with the same ID
+	std::vector<std::uint8_t> pool = { 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Container), 0x0A, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::NumberVariable), 0x2A, 0x00, 0x00, 0x00 };
+
+	VirtualTerminalServerManagedWorkingSet workingSet;
+	EXPECT_FALSE(workingSet.parse_iop_into_objects(pool.data(), static_cast<std::uint32_t>(pool.size())));
+	EXPECT_EQ(1u, workingSet.get_object_pool_faulting_object_id());
+	ASSERT_NE(nullptr, workingSet.get_object_by_id(1));
+	EXPECT_EQ(VirtualTerminalObjectType::Container, workingSet.get_object_by_id(1)->get_object_type());
+
+	// A Container with the same ID still replaces it
+	std::vector<std::uint8_t> container = { 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Container), 0x14, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x00 };
+	EXPECT_TRUE(workingSet.parse_iop_into_objects(container.data(), static_cast<std::uint32_t>(container.size())));
+	ASSERT_NE(nullptr, workingSet.get_object_by_id(1));
+	EXPECT_EQ(20u, workingSet.get_object_by_id(1)->get_width());
 }
 
 TEST(VirtualTerminalServerTest, LookingUpAnUnknownObjectDoesNotAddItToTheObjectTree)
