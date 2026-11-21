@@ -122,6 +122,7 @@ namespace isobus
 		/// @returns True if the request was serviced, otherwise false.
 		static bool process_request_for_time_date(std::uint32_t parameterGroupNumber,
 		                                          std::shared_ptr<ControlFunction> requestingControlFunction,
+		                                          std::shared_ptr<ControlFunction> targetControlFunction,
 		                                          bool &acknowledge,
 		                                          AcknowledgementType &acknowledgeType,
 		                                          void *parentPointer);

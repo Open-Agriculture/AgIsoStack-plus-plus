@@ -343,6 +343,7 @@ namespace isobus
 		/// @returns `true` if the message was handled, otherwise `false`
 		static bool on_language_request(std::uint32_t parameterGroupNumber,
 		                                std::shared_ptr<ControlFunction> requestingControlFunction,
+		                                std::shared_ptr<ControlFunction> targetControlFunction,
 		                                bool &acknowledge,
 		                                AcknowledgementType &acknowledgeType,
 		                                void *parentPointer);

@@ -61,21 +61,14 @@ namespace isobus
 	                                          bool successful,
 	                                          void *parentPointer);
 	/// @brief A callback for handling a PGN request
+	/// @details The target is where the request was sent, and nullptr for a global request. A reply that needs the transport
+	/// protocol goes to the global address (BAM) for a global request, and to the requester for a destination-specific one (ISO 11783-3).
 	using PGNRequestCallback = bool (*)(std::uint32_t parameterGroupNumber,
 	                                    std::shared_ptr<ControlFunction> requestingControlFunction,
+	                                    std::shared_ptr<ControlFunction> targetControlFunction,
 	                                    bool &acknowledge,
 	                                    AcknowledgementType &acknowledgeType,
 	                                    void *parentPointer);
-	/// @brief A callback for handling a PGN request, which is also told where the request was sent
-	/// @details A reply that needs the transport protocol goes to the global address (BAM) for a global request,
-	/// and to the requester for a destination-specific one (ISO 11783-3), so a callback that replies with
-	/// more than 8 bytes needs to know which it was. The destination is nullptr for a global request.
-	using PGNRequestCallbackWithDestination = bool (*)(std::uint32_t parameterGroupNumber,
-	                                                   std::shared_ptr<ControlFunction> requestingControlFunction,
-	                                                   std::shared_ptr<ControlFunction> destinationControlFunction,
-	                                                   bool &acknowledge,
-	                                                   AcknowledgementType &acknowledgeType,
-	                                                   void *parentPointer);
 	/// @brief A callback for handling a request for repetition rate for a specific PGN
 	using PGNRequestForRepetitionRateCallback = bool (*)(std::uint32_t parameterGroupNumber,
 	                                                     std::shared_ptr<ControlFunction> requestingControlFunction,

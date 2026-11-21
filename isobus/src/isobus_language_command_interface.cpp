@@ -414,6 +414,7 @@ namespace isobus
 
 	bool LanguageCommandInterface::on_language_request(std::uint32_t parameterGroupNumber,
 	                                                   std::shared_ptr<ControlFunction>,
+	                                                   std::shared_ptr<ControlFunction>,
 	                                                   bool &acknowledge,
 	                                                   AcknowledgementType &acknowledgeType,
 	                                                   void *parentPointer)
