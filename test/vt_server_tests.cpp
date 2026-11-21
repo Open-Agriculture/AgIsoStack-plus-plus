@@ -96,7 +96,7 @@ public:
 
 	std::vector<std::array<std::uint8_t, 7>> get_versions(NAME) override
 	{
-		return {};
+		return versions;
 	}
 
 	std::vector<std::array<std::uint8_t, 32>> get_extended_versions(NAME) override
@@ -121,6 +121,15 @@ public:
 		if (saveSucceeds)
 		{
 			storedVersion.push_back(objectPool);
+
+			// A version stored again moves to the end, as get_versions() lists them in the order they were stored
+			if (versionLabel.size() == VERSION_LABEL_SIZE)
+			{
+				std::array<std::uint8_t, VERSION_LABEL_SIZE> label;
+				std::copy(versionLabel.begin(), versionLabel.end(), label.begin());
+				versions.erase(std::remove(versions.begin(), versions.end(), label), versions.end());
+				versions.push_back(label);
+			}
 		}
 		return saveSucceeds;
 	}
@@ -130,6 +139,13 @@ public:
 		lastVersionLabel = versionLabel;
 		deletedVersionLabels.push_back(versionLabel);
 		storedVersion.clear();
+		if (deleteSucceeds)
+		{
+			versions.erase(std::remove_if(versions.begin(), versions.end(), [&versionLabel](const std::array<std::uint8_t, VERSION_LABEL_SIZE> &label) {
+				               return std::equal(label.begin(), label.end(), versionLabel.begin(), versionLabel.end());
+			               }),
+			               versions.end());
+		}
 		return deleteSucceeds;
 	}
 
@@ -260,8 +276,10 @@ public:
 	bool deleteSucceeds = true;
 	std::uint8_t deletedAllVersionsLabelLength = 0;
 	std::vector<std::array<std::uint8_t, 32>> extendedVersions;
+	static constexpr std::size_t VERSION_LABEL_SIZE = 7;
 	std::vector<std::uint8_t> lastVersionLabel;
 	std::vector<std::vector<std::uint8_t>> storedVersion;
+	std::vector<std::array<std::uint8_t, VERSION_LABEL_SIZE>> versions; ///< The 7 byte labels stored, in the order they were stored
 	std::vector<std::vector<std::uint8_t>> deletedVersionLabels;
 	std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> shutDownWorkingSets;
 	std::vector<UnexpectedShutdownReason> shutdownReasons;
@@ -1949,7 +1967,9 @@ TEST_F(VirtualTerminalServerBusTest, DeleteVersionWildcardDeletesAllVersionsOnly
 
 	ASSERT_TRUE(foundVersion5Response);
 	EXPECT_EQ(0, version5DeletedAllLength);
-	EXPECT_EQ(32U, version5Label.size());
+	// Before VT version 6 "*" is not a wildcard, and a label can't contain it (ISO 11783-6:2018 E.1), so it is not correct
+	EXPECT_TRUE(version5Label.empty());
+	EXPECT_EQ(0x02, version5Frame.data[5]);
 	ASSERT_TRUE(foundVersion6Response);
 	EXPECT_EQ(0x00, version6Frame.data[5]);
 	EXPECT_EQ(32, version6DeletedAllLength);
@@ -2812,6 +2832,62 @@ TEST_F(VirtualTerminalServerMaskChangeMacroTest, ChangeSoftKeyMaskUsesTheVisibil
 	// shows Data Mask 1001 with Soft Key Mask 2001. Then Soft Key Mask 2000 is hidden and 2001 shown, because Data Mask 1000
 	// was on the display when the command came.
 	EXPECT_EQ((std::vector<std::uint16_t>{ 10, 12, 13, 16, 17, 18 }), macrosThatRan);
+}
+
+TEST_F(VirtualTerminalServerBusTest, VersionCommandsCheckTheLabelAndUseTheLastStoredVersionForABlankLabel)
+{
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_from_client(internalECU, client, { 0x11, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 });
+	testPlugin.clear_queue();
+
+	const std::vector<std::uint8_t> storedLabel = { 'A', 'B', '-', '1', '2', '_', '3' };
+	CANMessageFrame response = {};
+	const auto errorCodeOf = [&](std::uint8_t function) {
+		return poll_for_response(*server, testPlugin, function, response) ? static_cast<int>(response.data[5]) : -1;
+	};
+
+	// ISO 11783-6:2018 E.4: a blank label overwrites the last stored version, and is an error when there is none
+	receive_from_client(internalECU, client, { 0xD0, ' ', ' ', ' ', ' ', ' ', ' ', ' ' });
+	const int blankStoreWithoutAVersion = errorCodeOf(0xD0);
+
+	// E.1: '*' and '>' can't be used in a version label (ISO 11783-06-001 Test #5, 5y)
+	receive_from_client(internalECU, client, { 0xD0, 'A', 'B', 'C', '1', '2', '*', '>' });
+	const int invalidStore = errorCodeOf(0xD0);
+	const auto deletesAfterInvalidStore = server->deletedVersionLabels.size();
+
+	receive_from_client(internalECU, client, { 0xD0, 'A', 'B', '-', '1', '2', '_', '3' });
+	const int store = errorCodeOf(0xD0);
+
+	// The blank label now overwrites AB-12_3 (5t), instead of storing a second version with a blank label
+	server->lastVersionLabel.clear();
+	receive_from_client(internalECU, client, { 0xD0, ' ', ' ', ' ', ' ', ' ', ' ', ' ' });
+	const int blankStore = errorCodeOf(0xD0);
+	const auto blankStoreLabel = server->lastVersionLabel;
+
+	// E.6: a blank label loads the last stored version
+	server->lastVersionLabel.clear();
+	receive_from_client(internalECU, client, { 0xD1, ' ', ' ', ' ', ' ', ' ', ' ', ' ' });
+	poll_for_response(*server, testPlugin, 0xD1, response);
+	const auto blankLoadLabel = server->lastVersionLabel;
+
+	// E.8: an invalid label is not correct, and a blank one deletes the last stored version
+	receive_from_client(internalECU, client, { 0xD2, 'A', 'B', ':', '1', '2', ' ', ' ' });
+	const int invalidDelete = errorCodeOf(0xD2);
+	server->lastVersionLabel.clear();
+	receive_from_client(internalECU, client, { 0xD2, ' ', ' ', ' ', ' ', ' ', ' ', ' ' });
+	const int blankDelete = errorCodeOf(0xD2);
+	const auto blankDeleteLabel = server->lastVersionLabel;
+
+	EXPECT_EQ(0x02, blankStoreWithoutAVersion); // Version label is not correct
+	EXPECT_EQ(0x02, invalidStore);
+	EXPECT_EQ(0U, deletesAfterInvalidStore); // Nothing was stored or replaced
+	EXPECT_EQ(0x00, store);
+	EXPECT_EQ(0x00, blankStore);
+	EXPECT_EQ(storedLabel, blankStoreLabel);
+	EXPECT_EQ(storedLabel, blankLoadLabel);
+	EXPECT_EQ(0x02, invalidDelete); // Version label is not correct or unknown
+	EXPECT_EQ(0x00, blankDelete);
+	EXPECT_EQ(storedLabel, blankDeleteLabel);
 }
 
 TEST_F(VirtualTerminalServerMessagingTest, MacroWithMoreThan255CommandsRunsAllOfThem)

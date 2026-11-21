@@ -16,6 +16,7 @@
 #include "isobus/utility/to_string.hpp"
 
 #include <algorithm>
+#include <cstring>
 #include <iomanip>
 #include <limits>
 #include <set>
@@ -234,6 +235,27 @@ namespace isobus
 		}
 		buffer.resize(std::max<std::size_t>(buffer.size(), CAN_DATA_LENGTH), 0xFF);
 		return buffer;
+	}
+
+	/// @brief Checks the characters of a version label (ISO 11783-6:2018, E.1)
+	/// @details Labels use visible characters of font type 0 (ISO 8859-1), padded with trailing blanks,
+	/// and none of the characters that can't be used in a file name.
+	/// @param label The version label to check.
+	/// @returns true if every character may be used in a version label, otherwise false.
+	static bool is_version_label_valid(const std::vector<std::uint8_t> &label)
+	{
+		return std::all_of(label.begin(), label.end(), [](std::uint8_t character) {
+			const bool isVisible = (character >= 0x20) && ((character < 0x7F) || (character >= 0xA0));
+			return isVisible && (nullptr == std::strchr("\\\"'`/:*<>|?", character));
+		});
+	}
+
+	/// @brief Checks if a version label contains no string, only blanks (ISO 11783-6:2018, E.4 to E.8)
+	/// @param label The version label to check.
+	/// @returns true if every character is a blank, otherwise false.
+	static bool is_version_label_blank(const std::vector<std::uint8_t> &label)
+	{
+		return std::all_of(label.begin(), label.end(), [](std::uint8_t character) { return ' ' == character; });
 	}
 
 	/// @brief Reads the version label that follows the function code of a version command.
@@ -950,7 +972,26 @@ namespace isobus
 			case Function::ExtendedLoadVersionCommand:
 			{
 				const bool isExtended = (Function::ExtendedLoadVersionCommand == function);
-				const auto versionLabel = get_version_label(data, isExtended ? EXTENDED_VERSION_LABEL_LENGTH : VERSION_LABEL_LENGTH);
+				const std::uint8_t versionLabelLength = isExtended ? EXTENDED_VERSION_LABEL_LENGTH : VERSION_LABEL_LENGTH;
+				auto versionLabel = get_version_label(data, versionLabelLength);
+
+				// A blank label loads the last stored version (ISO 11783-6:2018, E.6)
+				if ((!versionLabel.empty()) && is_version_label_blank(versionLabel))
+				{
+					versionLabel = get_last_stored_version_label(message.get_source_control_function()->get_NAME(), versionLabelLength);
+
+					if (versionLabel.empty())
+					{
+						send_load_version_response(function, get_bit(static_cast<std::uint8_t>(LoadVersionErrorBit::VersionLabelNotCorrectOrUnknown)), managedWorkingSet->get_control_function());
+						LOG_WARNING("[VT Server]: Client %u load version with a blank label, but it has no stored version", managedWorkingSet->get_control_function()->get_address());
+					}
+				}
+				else if ((!versionLabel.empty()) && (!is_version_label_valid(versionLabel)))
+				{
+					send_load_version_response(function, get_bit(static_cast<std::uint8_t>(LoadVersionErrorBit::VersionLabelNotCorrectOrUnknown)), managedWorkingSet->get_control_function());
+					LOG_WARNING("[VT Server]: Client %u load version with a label that has characters a label can't use", managedWorkingSet->get_control_function()->get_address());
+					versionLabel.clear();
+				}
 
 				if (!versionLabel.empty())
 				{
@@ -976,31 +1017,59 @@ namespace isobus
 			case Function::StoreVersionCommand:
 			case Function::ExtendedStoreVersionCommand:
 			{
-				const auto versionLabel = get_version_label(data, (Function::ExtendedStoreVersionCommand == function) ? EXTENDED_VERSION_LABEL_LENGTH : VERSION_LABEL_LENGTH);
+				const std::uint8_t versionLabelLength = (Function::ExtendedStoreVersionCommand == function) ? EXTENDED_VERSION_LABEL_LENGTH : VERSION_LABEL_LENGTH;
+				const NAME clientNAME = message.get_source_control_function()->get_NAME();
+				auto versionLabel = get_version_label(data, versionLabelLength);
 
 				if ((!versionLabel.empty()) && managedWorkingSet->get_any_object_pools())
 				{
-					std::ostringstream nameString;
-					nameString << std::hex << std::setfill('0') << std::setw(16) << managedWorkingSet->get_control_function()->get_NAME().get_full_name();
-					bool allPoolsSaved = true;
+					std::uint8_t errorBitfield = 0;
 
-					// A Store replaces the version with the same label, and save_version() appends, so the label is emptied first.
-					// The result is not checked, as nothing may be stored under the label yet
-					delete_version(versionLabel, message.get_source_control_function()->get_NAME());
-
-					for (std::size_t i = 0; i < managedWorkingSet->get_number_iop_files(); i++)
+					if (is_version_label_blank(versionLabel))
 					{
-						bool didSave = save_version(managedWorkingSet->get_iop_raw_data(i), versionLabel, message.get_source_control_function()->get_NAME());
-
-						if (didSave)
+						// A blank label overwrites the last stored version, and is an error if there is none (ISO 11783-6:2018, E.4)
+						versionLabel = get_last_stored_version_label(clientNAME, versionLabelLength);
+						if (versionLabel.empty())
 						{
-							LOG_INFO("[VT Server]: Object pool " + isobus::to_string(i) + " for NAME " + nameString.str() + " was stored.");
+							errorBitfield = get_bit(static_cast<std::uint8_t>(StoreVersionErrorBit::VersionLabelNotCorrect));
+							LOG_WARNING("[VT Server]: Client %u store version with a blank label, but it has no stored version to overwrite", managedWorkingSet->get_control_function()->get_address());
 						}
-						else
+					}
+					else if (!is_version_label_valid(versionLabel))
+					{
+						errorBitfield = get_bit(static_cast<std::uint8_t>(StoreVersionErrorBit::VersionLabelNotCorrect));
+						LOG_WARNING("[VT Server]: Client %u store version with a label that has characters a label can't use", managedWorkingSet->get_control_function()->get_address());
+					}
+
+					if (0 == errorBitfield)
+					{
+						std::ostringstream nameString;
+						nameString << std::hex << std::setfill('0') << std::setw(16) << managedWorkingSet->get_control_function()->get_NAME().get_full_name();
+						bool allPoolsSaved = true;
+
+						// A Store replaces the version with the same label, and save_version() appends, so the label is emptied first.
+						// The result is not checked, as nothing may be stored under the label yet
+						delete_version(versionLabel, clientNAME);
+
+						for (std::size_t i = 0; i < managedWorkingSet->get_number_iop_files(); i++)
 						{
-							LOG_ERROR("[VT Server]: Object pool " + isobus::to_string(i) + " for NAME " + nameString.str() + " could not be stored.");
-							allPoolsSaved = false;
-							break;
+							bool didSave = save_version(managedWorkingSet->get_iop_raw_data(i), versionLabel, clientNAME);
+
+							if (didSave)
+							{
+								LOG_INFO("[VT Server]: Object pool " + isobus::to_string(i) + " for NAME " + nameString.str() + " was stored.");
+							}
+							else
+							{
+								LOG_ERROR("[VT Server]: Object pool " + isobus::to_string(i) + " for NAME " + nameString.str() + " could not be stored.");
+								allPoolsSaved = false;
+								break;
+							}
+						}
+
+						if (!allPoolsSaved)
+						{
+							errorBitfield = get_bit(static_cast<std::uint8_t>(StoreVersionErrorBit::AnyOtherError));
 						}
 					}
 
@@ -1010,14 +1079,7 @@ namespace isobus
 					buffer[2] = 0xFF; // Reserved
 					buffer[3] = 0xFF; // Reserved
 					buffer[4] = 0xFF; // Reserved
-					if (allPoolsSaved)
-					{
-						buffer[5] = 0; // No error
-					}
-					else
-					{
-						buffer[5] = get_bit(static_cast<std::uint8_t>(StoreVersionErrorBit::AnyOtherError));
-					}
+					buffer[5] = errorBitfield; // 0 for no error
 					buffer[6] = 0xFF; // Reserved
 					buffer[7] = 0xFF; // Reserved
 					CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
@@ -1039,7 +1101,8 @@ namespace isobus
 			case Function::ExtendedDeleteVersionCommand:
 			{
 				const std::uint8_t versionLabelLength = (Function::ExtendedDeleteVersionCommand == function) ? EXTENDED_VERSION_LABEL_LENGTH : VERSION_LABEL_LENGTH;
-				const auto versionLabel = get_version_label(data, versionLabelLength);
+				const NAME clientNAME = managedWorkingSet->get_control_function()->get_NAME();
+				auto versionLabel = get_version_label(data, versionLabelLength);
 
 				if (!versionLabel.empty())
 				{
@@ -1051,14 +1114,25 @@ namespace isobus
 					  ('*' == versionLabel.front()) &&
 					  std::all_of(versionLabel.begin() + 1, versionLabel.end(), [](std::uint8_t character) { return ' ' == character; });
 
+					if ((!isDeleteAllWildcard) && is_version_label_blank(versionLabel))
+					{
+						// A blank label deletes the last stored version (ISO 11783-6:2018, E.8)
+						versionLabel = get_last_stored_version_label(clientNAME, versionLabelLength);
+					}
+					else if ((!isDeleteAllWildcard) && (!is_version_label_valid(versionLabel)))
+					{
+						LOG_WARNING("[VT Server]: Client %u delete version with a label that has characters a label can't use", managedWorkingSet->get_control_function()->get_address());
+						versionLabel.clear();
+					}
+
 					bool deleted = false;
 					if (isDeleteAllWildcard)
 					{
-						deleted = delete_all_versions(versionLabelLength, managedWorkingSet->get_control_function()->get_NAME());
+						deleted = delete_all_versions(versionLabelLength, clientNAME);
 					}
-					else
+					else if (!versionLabel.empty())
 					{
-						deleted = delete_version(versionLabel, managedWorkingSet->get_control_function()->get_NAME());
+						deleted = delete_version(versionLabel, clientNAME);
 					}
 
 					if (deleted)
@@ -3257,6 +3331,30 @@ namespace isobus
 			                                                        serverInternalControlFunction,
 			                                                        destination,
 			                                                        get_priority());
+		}
+		return retVal;
+	}
+
+	std::vector<std::uint8_t> VirtualTerminalServer::get_last_stored_version_label(NAME clientNAME, std::uint8_t labelLength)
+	{
+		// The application returns the versions in the order they were stored, so the last one is the last stored version
+		std::vector<std::uint8_t> retVal;
+
+		if (VERSION_LABEL_LENGTH == labelLength)
+		{
+			const auto versions = get_versions(clientNAME);
+			if (!versions.empty())
+			{
+				retVal.assign(versions.back().begin(), versions.back().end());
+			}
+		}
+		else
+		{
+			const auto versions = get_extended_versions(clientNAME);
+			if (!versions.empty())
+			{
+				retVal.assign(versions.back().begin(), versions.back().end());
+			}
 		}
 		return retVal;
 	}
