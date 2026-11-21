@@ -54,9 +54,7 @@ namespace isobus
 
 	bool DiagnosticProtocol::DiagnosticTroubleCode::operator==(const DiagnosticTroubleCode &obj) const
 	{
-		return ((suspectParameterNumber == obj.suspectParameterNumber) &&
-		        (failureModeIdentifier == obj.failureModeIdentifier) &&
-		        (lampState == obj.lampState));
+		return ((suspectParameterNumber == obj.suspectParameterNumber) && (failureModeIdentifier == obj.failureModeIdentifier));
 	}
 
 	std::uint8_t DiagnosticProtocol::DiagnosticTroubleCode::get_occurrence_count() const
@@ -114,6 +112,7 @@ namespace isobus
 				requestProtocol->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticProtocolIdentification), process_parameter_group_number_request, this);
 				requestProtocol->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification), process_parameter_group_number_request, this);
 				requestProtocol->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUIdentificationInformation), process_parameter_group_number_request, this);
+				requestProtocol->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ISOBUSComplianceCertification), process_parameter_group_number_request, this);
 			}
 			retVal = true;
 		}
@@ -145,6 +144,7 @@ namespace isobus
 				requestProtocol->remove_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticProtocolIdentification), process_parameter_group_number_request, this);
 				requestProtocol->remove_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification), process_parameter_group_number_request, this);
 				requestProtocol->remove_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUIdentificationInformation), process_parameter_group_number_request, this);
+				requestProtocol->remove_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ISOBUSComplianceCertification), process_parameter_group_number_request, this);
 			}
 			CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage22), process_message, this);
 			CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticMessage13), process_message, this);
@@ -170,6 +170,7 @@ namespace isobus
 
 		if (broadcastState)
 		{
+			LOCK_GUARD(Mutex, dtcMutex);
 			if (j1939Mode)
 			{
 				if (SystemTiming::time_expired_ms(lastDM1SentTimestamp, DM_MAX_FREQUENCY_MS))
@@ -180,7 +181,7 @@ namespace isobus
 			}
 			else
 			{
-				if ((!activeDTCList.empty()) &&
+				if (((!activeDTCList.empty()) || noFaultsDM1Pending) &&
 				    (SystemTiming::time_expired_ms(lastDM1SentTimestamp, DM_MAX_FREQUENCY_MS)))
 				{
 					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::DM1));
@@ -205,6 +206,11 @@ namespace isobus
 	void DiagnosticProtocol::clear_active_diagnostic_trouble_codes()
 	{
 		LOCK_GUARD(Mutex, dtcMutex);
+
+		if (!activeDTCList.empty())
+		{
+			noFaultsDM1Pending = true;
+		}
 		inactiveDTCList.insert(std::end(inactiveDTCList), std::begin(activeDTCList), std::end(activeDTCList));
 		activeDTCList.clear();
 
@@ -255,7 +261,12 @@ namespace isobus
 
 				if (inactiveDTCList.end() != inactiveLocation)
 				{
-					inactiveLocation->occurrenceCount++;
+					inactiveLocation->lampState = dtc.lampState;
+					constexpr std::uint8_t MAX_OCCURRENCE_COUNT = 126; // 127 means "not available" in DM1 and DM2
+					if (inactiveLocation->occurrenceCount < MAX_OCCURRENCE_COUNT)
+					{
+						inactiveLocation->occurrenceCount++;
+					}
 					activeDTCList.push_back(*inactiveLocation);
 					inactiveDTCList.erase(inactiveLocation);
 				}
@@ -274,8 +285,8 @@ namespace isobus
 			}
 			else
 			{
-				// Already active!
-				retVal = false;
+				retVal = (activeLocation->lampState != dtc.lampState);
+				activeLocation->lampState = dtc.lampState;
 			}
 		}
 		else
@@ -292,6 +303,11 @@ namespace isobus
 				{
 					inactiveDTCList.push_back(*activeLocation);
 					activeDTCList.erase(activeLocation);
+
+					if (activeDTCList.empty())
+					{
+						noFaultsDM1Pending = true;
+					}
 				}
 			}
 			else
@@ -346,6 +362,53 @@ namespace isobus
 		if ((value.size() <= PRODUCT_IDENTIFICATION_MAX_STRING_LENGTH) && is_valid_identification_field(value))
 		{
 			productIdentificationModel = value;
+			retVal = true;
+		}
+		return retVal;
+	}
+
+	void DiagnosticProtocol::set_additional_diagnostic_protocols(std::uint8_t protocols)
+	{
+		additionalDiagnosticProtocols = protocols;
+	}
+
+	std::uint8_t DiagnosticProtocol::get_diagnostic_protocol_identification() const
+	{
+		// ISO 11783-12:2019 A.6 lists the protocols supported in addition to ISO 11783
+		std::uint8_t retVal = additionalDiagnosticProtocols;
+
+		if (get_j1939_mode())
+		{
+			retVal |= static_cast<std::uint8_t>(DiagnosticProtocolIdentificationBit::J1939_73);
+		}
+		return retVal;
+	}
+
+	bool DiagnosticProtocol::set_compliance_certification(std::uint16_t year,
+	                                                      std::uint8_t revision,
+	                                                      CertificationLaboratoryType laboratoryType,
+	                                                      std::uint16_t laboratoryID,
+	                                                      std::uint16_t referenceNumber)
+	{
+		// ISO 11783-7: the year has a 2000 offset in 6 bits (SPN 4313), the revision 5 bits (SPN 4314),
+		// the laboratory ID 11 bits (SPN 4316). The reference number uses all 16 bits (SPN 4330).
+		constexpr std::uint16_t CERTIFICATION_YEAR_OFFSET = 2000;
+		constexpr std::uint16_t MAX_CERTIFICATION_YEAR = 2061;
+		constexpr std::uint8_t MAX_CERTIFICATION_REVISION = 30;
+		constexpr std::uint16_t MAX_LABORATORY_ID = 0x7FF;
+		bool retVal = false;
+
+		if ((year >= CERTIFICATION_YEAR_OFFSET) &&
+		    (year <= MAX_CERTIFICATION_YEAR) &&
+		    (revision <= MAX_CERTIFICATION_REVISION) &&
+		    (laboratoryType <= CertificationLaboratoryType::NotAvailable) &&
+		    (laboratoryID <= MAX_LABORATORY_ID))
+		{
+			certificationYear = static_cast<std::uint8_t>(year - CERTIFICATION_YEAR_OFFSET);
+			certificationRevision = revision;
+			certificationLaboratoryType = laboratoryType;
+			certificationLaboratoryID = laboratoryID;
+			certificationReferenceNumber = referenceNumber;
 			retVal = true;
 		}
 		return retVal;
@@ -650,17 +713,17 @@ namespace isobus
 		}
 	}
 
-	bool DiagnosticProtocol::send_diagnostic_message_1() const
+	bool DiagnosticProtocol::send_diagnostic_message_1()
 	{
 		bool retVal = false;
 
 		if (nullptr != myControlFunction)
 		{
 			LOCK_GUARD(Mutex, dtcMutex);
-			std::uint16_t payloadSize = static_cast<std::uint16_t>(activeDTCList.size() * DM_PAYLOAD_BYTES_PER_DTC) + 2; // 2 Bytes (0 and 1) are reserved
 
-			if (payloadSize <= MAX_PAYLOAD_SIZE_BYTES)
+			if (activeDTCList.size() <= ((MAX_PAYLOAD_SIZE_BYTES - 2) / DM_PAYLOAD_BYTES_PER_DTC))
 			{
+				std::uint16_t payloadSize = static_cast<std::uint16_t>(activeDTCList.size() * DM_PAYLOAD_BYTES_PER_DTC) + 2; // 2 Bytes (0 and 1) are reserved
 				std::vector<std::uint8_t> buffer;
 				buffer.resize(payloadSize < CAN_DATA_LENGTH ? CAN_DATA_LENGTH : payloadSize);
 
@@ -734,6 +797,11 @@ namespace isobus
 					                                                        payloadSize,
 					                                                        myControlFunction);
 				}
+
+				if (retVal)
+				{
+					noFaultsDM1Pending = false;
+				}
 			}
 		}
 		return retVal;
@@ -746,10 +814,10 @@ namespace isobus
 		if (nullptr != myControlFunction)
 		{
 			LOCK_GUARD(Mutex, dtcMutex);
-			std::uint16_t payloadSize = static_cast<std::uint8_t>(inactiveDTCList.size() * DM_PAYLOAD_BYTES_PER_DTC) + 2; // 2 Bytes (0 and 1) are reserved or used for lamp + flash
 
-			if (payloadSize <= MAX_PAYLOAD_SIZE_BYTES)
+			if (inactiveDTCList.size() <= ((MAX_PAYLOAD_SIZE_BYTES - 2) / DM_PAYLOAD_BYTES_PER_DTC))
 			{
+				std::uint16_t payloadSize = static_cast<std::uint16_t>(inactiveDTCList.size() * DM_PAYLOAD_BYTES_PER_DTC) + 2; // 2 Bytes (0 and 1) are reserved or used for lamp + flash
 				std::vector<std::uint8_t> buffer;
 				buffer.resize(payloadSize < CAN_DATA_LENGTH ? CAN_DATA_LENGTH : payloadSize);
 
@@ -834,14 +902,47 @@ namespace isobus
 
 		if (nullptr != myControlFunction)
 		{
-			/// Bit 1 = J1939-73, Bit 2 = ISO 14230, Bit 3 = ISO 15765-3, else Reserved
-			constexpr std::uint8_t SUPPORTED_DIAGNOSTIC_PROTOCOLS_BITFIELD = 0x01;
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
 
 			buffer.fill(0xFF); // Reserved bytes
-			buffer[0] = SUPPORTED_DIAGNOSTIC_PROTOCOLS_BITFIELD;
+			buffer[0] = get_diagnostic_protocol_identification();
 
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::DiagnosticProtocolIdentification),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        myControlFunction);
+		}
+		return retVal;
+	}
+
+	bool DiagnosticProtocol::send_compliance_certification() const
+	{
+		bool retVal = false;
+
+		if (nullptr != myControlFunction)
+		{
+			// Layout of the 3rd and later editions of ISO 11783-7 (PGN 64834). The revision (SPN 4314) is in
+			// byte 1 bits 7-8, byte 2 bit 1 and byte 2 bits 4-5, the laboratory type (SPN 4315) in byte 2 bits 2-3.
+			// The certification types in bytes 4 and 5 (SPN 4317 to 4329) are deprecated and sent as 0,
+			// the control function functionalities message (ISO 11783-12) replaces them.
+			constexpr std::uint8_t THIRD_EDITION_MESSAGE_FORMAT = 0x80; // SPN 7446, byte 6 bit 8
+			const auto laboratoryType = static_cast<std::uint8_t>(certificationLaboratoryType) & 0x03;
+
+			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+				static_cast<std::uint8_t>(((certificationRevision & 0x03) << 6) | (certificationYear & 0x3F)),
+				static_cast<std::uint8_t>(((certificationLaboratoryID & 0x07) << 5) |
+				                          (((certificationRevision >> 3) & 0x03) << 3) |
+				                          (laboratoryType << 1) |
+				                          ((certificationRevision >> 2) & 0x01)),
+				static_cast<std::uint8_t>((certificationLaboratoryID >> 3) & 0xFF),
+				0x00,
+				0x00,
+				THIRD_EDITION_MESSAGE_FORMAT,
+				static_cast<std::uint8_t>(certificationReferenceNumber & 0xFF),
+				static_cast<std::uint8_t>((certificationReferenceNumber >> 8) & 0xFF)
+			};
+
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ISOBUSComplianceCertification),
 			                                                        buffer.data(),
 			                                                        CAN_DATA_LENGTH,
 			                                                        myControlFunction);
@@ -1061,6 +1162,11 @@ namespace isobus
 									{
 										inactiveDTCList.push_back(*dtc);
 										activeDTCList.erase(dtc);
+
+										if (activeDTCList.empty())
+										{
+											noFaultsDM1Pending = true;
+										}
 										wasDTCCleared = true;
 										tempDM22Data.nack = false;
 
@@ -1335,6 +1441,13 @@ namespace isobus
 				}
 				break;
 
+				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::ISOBUSComplianceCertification):
+				{
+					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::ComplianceCertification));
+					retVal = true;
+				}
+				break;
+
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::SoftwareIdentification):
 				{
 					pendingRequests[parameterGroupNumber] = replyDestination;
@@ -1430,6 +1543,12 @@ namespace isobus
 				case static_cast<std::uint32_t>(TransmitFlags::SoftwareIdentification):
 				{
 					transmitSuccessful = parent->send_software_identification();
+				}
+				break;
+
+				case static_cast<std::uint32_t>(TransmitFlags::ComplianceCertification):
+				{
+					transmitSuccessful = parent->send_compliance_certification();
 				}
 				break;
 
