@@ -163,7 +163,7 @@ namespace isobus
 		/// if needed.
 		/// In the server role (shouldRespondToRequests), the interface also sends the language command each time
 		/// its control function claims an address, because a VT reports the selected language, formats and units
-		/// at power up (ISO 11783-6:2018, 4.6.3, and ISO 11783-7:2009, B.21). Call set_send_on_address_claim(false)
+		/// at power up (ISO 11783-6:2018, 4.6.5, and ISO 11783-7:2009, B.21). Call set_send_on_address_claim(false)
 		/// before initializing to send it yourself instead.
 		void initialize();
 
@@ -203,7 +203,7 @@ namespace isobus
 		/// @brief Sets the country code specifying the operator's desired language dialect.
 		/// @attention This is meant for servers only
 		/// @note ISO 11783 networks shall use the alpha-2 country codes in accordance with ISO 3166-1.
-		/// ISO 11783-6:2018 4.6.3 recommends that a VT sends one. An empty string clears it, and the language
+		/// ISO 11783-6:2018 4.6.5 recommends that a VT sends one. An empty string clears it, and the language
 		/// command is then sent without a country code (bytes 7 and 8 set to 0xFF).
 		/// @param[in] country The country code to set, or an empty string for none
 		void set_country_code(std::string country);

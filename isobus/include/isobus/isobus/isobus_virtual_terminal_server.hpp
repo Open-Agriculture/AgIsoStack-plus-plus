@@ -205,9 +205,19 @@ namespace isobus
 		/// @returns The number of y pixels (height) of your data key mask render area
 		virtual std::uint16_t get_data_mask_area_size_y_pixels() const = 0;
 
-		/// @brief The interface calls this function when it wants you to discontinue/suspend a working set
-		/// @param[in] workingSetWithError The working set to suspend
-		virtual void suspend_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSetWithError) = 0;
+		/// @brief This function is called from update() when an End of Object Pool message was answered with an error
+		/// @details It follows object_pool_deleted() or object_pool_parse_finished() for that pool. Alert the operator that the working set is suspended, and why.
+		/// It is not called for a pool deleted by a Delete Object Pool command.
+		/// @param[in] workingSet The working set that is suspended
+		/// @param[in] errorCodes Byte 2 of the response: bit 0 = errors in the object pool, bit 1 = the VT ran out of memory, bit 4 = any other error
+		/// @param[in] parentIDOfFaultingObject The parent object ID of the faulty object, or NULL_OBJECT_ID
+		/// @param[in] faultingObjectID The faulty object's ID, or NULL_OBJECT_ID
+		/// @param[in] objectPoolErrorCodes Byte 7 of the response, a bitfield of ObjectPoolErrorBit
+		virtual void suspend_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet,
+		                                 std::uint8_t errorCodes,
+		                                 std::uint16_t parentIDOfFaultingObject,
+		                                 std::uint16_t faultingObjectID,
+		                                 std::uint8_t objectPoolErrorCodes) = 0;
 
 		/// @brief This function is called when the interface needs to know the wide chars you support
 		/// @param[in] codePlane The code plane to inquire about
@@ -223,6 +233,8 @@ namespace isobus
 		                                                             std::vector<std::uint8_t> &wideCharRangeArray) = 0;
 
 		/// @brief This function is called when the interface needs to know what versions of object pools are available for a client.
+		/// @details Return them in the order they were stored, the last stored one last. A version command with a blank label refers
+		/// to the last stored version (ISO 11783-6:2018, E.4 to E.8), and the server takes the last label of this list for it.
 		/// @param[in] clientNAME The client requesting the object pool versions
 		/// @returns A vector of object pool versions available for the client
 		virtual std::vector<std::array<std::uint8_t, 7>> get_versions(NAME clientNAME) = 0;
@@ -230,6 +242,7 @@ namespace isobus
 		/// @brief This function is called when the interface needs to know what extended (32 byte label) versions of object pools are available for a client.
 		/// @details Only the versions stored with a 32 byte label belong here, the 7 byte ones are returned by get_versions().
 		/// Return an empty vector if this VT does not support extended versions (VT version 4 and older).
+		/// As for get_versions(), return them in the order they were stored, the last stored one last.
 		/// @param[in] clientNAME The client requesting the object pool versions
 		/// @returns A vector of extended object pool versions available for the client
 		virtual std::vector<std::array<std::uint8_t, 32>> get_extended_versions(NAME clientNAME) = 0;
@@ -904,6 +917,22 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_enable_disable_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, bool value, std::shared_ptr<ControlFunction> destination) const;
 
+		/// @brief The error response to an End of Object Pool command, which is passed to suspend_working_set() when errorCodes is not 0
+		struct EndOfObjectPoolFailure
+		{
+			std::uint8_t errorCodes; ///< Byte 2 of the response
+			std::uint16_t parentIDOfFaultingObject; ///< Bytes 3 and 4 of the response
+			std::uint16_t faultingObjectID; ///< Bytes 5 and 6 of the response
+			std::uint8_t objectPoolErrorCodes; ///< Byte 7 of the response
+		};
+
+		/// @brief A working set whose object pool was deleted, which update() passes to object_pool_deleted()
+		struct PendingObjectPoolDeletion
+		{
+			std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet; ///< The working set whose pool was deleted
+			EndOfObjectPoolFailure failure; ///< The error response sent because of this deletion, if any
+		};
+
 		/// @brief This message is sent by the VT to a Working Set Master to acknowledge the End of Object Pool message.
 		/// @details When the VT replies with an error of any type
 		/// the VT should delete the object pool from volatile memory storage and inform the operator
@@ -916,13 +945,15 @@ namespace isobus
 		/// @param[in] objectPoolErrorCodes A bitfield of ObjectPoolErrorBit describing the issues with the pool
 		/// @param[in] destination The control function to send the message to
 		/// @param[in] ranOutOfMemory When true, only "VT ran out of memory during transfer" is reported, instead of errors in the object pool
+		/// @param[out] failure When not nullptr, receives the response, so that it can be reported once the application has been told about the pool
 		/// @returns true if the message was sent, otherwise false
 		bool send_end_of_object_pool_response(bool success,
 		                                      std::uint16_t parentIDOfFaultingObject,
 		                                      std::uint16_t faultingObjectID,
 		                                      std::uint8_t objectPoolErrorCodes,
 		                                      std::shared_ptr<ControlFunction> destination,
-		                                      bool ranOutOfMemory = false) const;
+		                                      bool ranOutOfMemory = false,
+		                                      EndOfObjectPoolFailure *failure = nullptr) const;
 
 		/// @brief Sends a response to the execute macro or extended macro command
 		/// @param[in] objectID The object ID for the macro
@@ -1074,6 +1105,13 @@ namespace isobus
 
 		static constexpr std::uint8_t EXTENDED_VERSION_LABEL_LENGTH = 32; ///< The length of an extended object pool version label (VT version 5 and later)
 
+		/// @brief Finds the version a blank version label refers to: the last stored one (ISO 11783-6:2018, E.4 to E.8)
+		/// @details That is the last label that get_versions() or get_extended_versions() returns.
+		/// @param[in] clientNAME The client the version belongs to
+		/// @param[in] labelLength The label length of the command, VERSION_LABEL_LENGTH or EXTENDED_VERSION_LABEL_LENGTH
+		/// @returns The version label, or an empty vector if the client has no stored version of that label length
+		std::vector<std::uint8_t> get_last_stored_version_label(NAME clientNAME, std::uint8_t labelLength);
+
 		/// @brief Sends a response to a load version or extended load version command
 		/// @param[in] function The command being answered, LoadVersionCommand or ExtendedLoadVersionCommand
 		/// @param[in] errorCodes A set of error bits to report to the client. These will be reported from the managed working set's parsing results.
@@ -1130,8 +1168,13 @@ namespace isobus
 		/// @details Waiting here instead of joining the parsing thread right away keeps a long parse from blocking update()
 		void report_shut_down_working_sets();
 
+		/// @brief Passes a failed End of Object Pool response to suspend_working_set(), when there was one
+		/// @param[in] workingSet The working set that the response was sent to
+		/// @param[in] failure The response, which is ignored unless it reported an error
+		void report_suspension(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet, const EndOfObjectPoolFailure &failure);
+
 		std::vector<std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, UnexpectedShutdownReason>> pendingShutdowns; ///< Shut down working sets that the application has not been told about yet
-		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> pendingObjectPoolDeletions; ///< Working sets whose object pool was deleted, which update() passes to object_pool_deleted()
+		std::vector<PendingObjectPoolDeletion> pendingObjectPoolDeletions; ///< Object pool deletions that update() has not passed to object_pool_deleted() yet
 		std::vector<std::pair<std::shared_ptr<ControlFunction>, std::vector<NAME>>> workingSetMembers; ///< The members each working set master announced with Working Set Member messages
 		std::vector<std::shared_ptr<ControlFunction>> announcedWorkingSetMasters; ///< Unmanaged control functions that sent a Working Set Master message, see process_working_set_master_message()
 
