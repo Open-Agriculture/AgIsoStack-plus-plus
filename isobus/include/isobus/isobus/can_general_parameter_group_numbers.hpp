@@ -37,6 +37,7 @@ namespace isobus
 		ProductIdentification = 0xFC8D,
 		ControlFunctionFunctionalities = 0xFC8E,
 		DiagnosticProtocolIdentification = 0xFD32,
+		ISOBUSComplianceCertification = 0xFD42,
 		MachineSelectedSpeedCommand = 0xFD43,
 		WorkingSetMaster = 0xFE0D,
 		ResponseForRepetitionRate = 0xFE0E,
