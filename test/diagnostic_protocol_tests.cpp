@@ -1,3 +1,5 @@
+#include <array>
+
 #include <gtest/gtest.h>
 
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
@@ -705,7 +707,7 @@ TEST_F(DiagnosticProtocolTest, MessageEncoding)
 
 		EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
 		EXPECT_EQ(0x18FD32AA, testFrame.identifier); // BAM from address AA
-		EXPECT_EQ(0x01, testFrame.data[0]); // J1939-73
+		EXPECT_EQ(0x00, testFrame.data[0]); // No protocols in addition to ISO 11783 (ISO 11783-12 A.6)
 		EXPECT_EQ(0xFF, testFrame.data[1]); // Reserved
 		EXPECT_EQ(0xFF, testFrame.data[2]); // Reserved
 		EXPECT_EQ(0xFF, testFrame.data[3]); // Reserved
@@ -1688,4 +1690,339 @@ TEST_F(DiagnosticProtocolTest, ShortIdentificationMessagesAreSentWithEightBytes)
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(TestPartneredECU);
 	CANNetworkManager::CANNetwork.deactivate_control_function(TestInternalECU);
+}
+
+TEST_F(DiagnosticProtocolTest, ComplianceCertificationAndDiagnosticProtocolIdentification)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto TestInternalECU = test_helpers::claim_internal_control_function(0xE0, 0, time_source);
+	auto TestPartneredECU = test_helpers::force_claim_partnered_control_function(0xE1, 0);
+	DiagnosticProtocol protocolUnderTest(TestInternalECU);
+	protocolUnderTest.initialize();
+
+	CANMessageFrame testFrame = {};
+	while (!testPlugin.get_queue_empty())
+	{
+		testPlugin.read_frame(testFrame);
+	}
+
+	// ISO 11783-7, PGN 64834, in the format of the 3rd and later editions. Until the application sets it, every field is "not available"
+	ASSERT_TRUE(request_and_read_single_frame(protocolUnderTest, testPlugin, TestInternalECU, TestPartneredECU, 0xFD42, testFrame, time_source));
+	EXPECT_EQ(CAN_DATA_LENGTH, testFrame.dataLength);
+	EXPECT_EQ(0xFF, testFrame.data[0]); // Year 63 and revision 31: not available
+	EXPECT_EQ(0xFF, testFrame.data[1]); // Laboratory ID 0x7FF and type 3: not available
+	EXPECT_EQ(0xFF, testFrame.data[2]);
+	EXPECT_EQ(0x00, testFrame.data[3]); // Deprecated certification types, sent as 0
+	EXPECT_EQ(0x00, testFrame.data[4]);
+	EXPECT_EQ(0x80, testFrame.data[5]); // SPN 7446: 3rd edition format
+	EXPECT_EQ(0xFF, testFrame.data[6]); // Reference number
+	EXPECT_EQ(0xFF, testFrame.data[7]);
+
+	// 2020 protocol, revision 1, AEF laboratory 0x123, reference number 0x1234
+	EXPECT_TRUE(protocolUnderTest.set_compliance_certification(2020, 1, DiagnosticProtocol::CertificationLaboratoryType::AEFCertifiedLaboratory, 0x123, 0x1234));
+	ASSERT_TRUE(request_and_read_single_frame(protocolUnderTest, testPlugin, TestInternalECU, TestPartneredECU, 0xFD42, testFrame, time_source));
+	EXPECT_EQ(0x54, testFrame.data[0]); // Revision bits 1-2 01, year 20
+	EXPECT_EQ(0x62, testFrame.data[1]); // Laboratory ID LSBits 011, revision bits 4-5 00, type 01, revision bit 3 0
+	EXPECT_EQ(0x24, testFrame.data[2]); // Laboratory ID MSBits
+	EXPECT_EQ(0x00, testFrame.data[3]);
+	EXPECT_EQ(0x00, testFrame.data[4]);
+	EXPECT_EQ(0x80, testFrame.data[5]);
+	EXPECT_EQ(0x34, testFrame.data[6]);
+	EXPECT_EQ(0x12, testFrame.data[7]);
+
+	// Revision 30 (0b11110) uses all three parts of the revision, and the reference number goes up to 65535
+	EXPECT_TRUE(protocolUnderTest.set_compliance_certification(2020, 30, DiagnosticProtocol::CertificationLaboratoryType::SelfCertifiedBasedOnExistingCertification, 0x123, 0xFFFE));
+	ASSERT_TRUE(request_and_read_single_frame(protocolUnderTest, testPlugin, TestInternalECU, TestPartneredECU, 0xFD42, testFrame, time_source));
+	EXPECT_EQ(0x94, testFrame.data[0]); // Revision bits 1-2 10, year 20
+	EXPECT_EQ(0x7D, testFrame.data[1]); // Laboratory ID LSBits 011, revision bits 4-5 11, type 10, revision bit 3 1
+	EXPECT_EQ(0x24, testFrame.data[2]);
+	EXPECT_EQ(0xFE, testFrame.data[6]);
+	EXPECT_EQ(0xFF, testFrame.data[7]);
+
+	// Out of range values are rejected and leave the data unchanged
+	EXPECT_FALSE(protocolUnderTest.set_compliance_certification(1999, 0, DiagnosticProtocol::CertificationLaboratoryType::AEFCertifiedLaboratory, 0x123, 0x1234));
+	EXPECT_FALSE(protocolUnderTest.set_compliance_certification(2062, 0, DiagnosticProtocol::CertificationLaboratoryType::AEFCertifiedLaboratory, 0x123, 0x1234));
+	EXPECT_FALSE(protocolUnderTest.set_compliance_certification(2020, 31, DiagnosticProtocol::CertificationLaboratoryType::AEFCertifiedLaboratory, 0x123, 0x1234));
+	EXPECT_FALSE(protocolUnderTest.set_compliance_certification(2020, 1, static_cast<DiagnosticProtocol::CertificationLaboratoryType>(4), 0x123, 0x1234));
+	EXPECT_FALSE(protocolUnderTest.set_compliance_certification(2020, 1, DiagnosticProtocol::CertificationLaboratoryType::AEFCertifiedLaboratory, 0x800, 0x1234));
+	ASSERT_TRUE(request_and_read_single_frame(protocolUnderTest, testPlugin, TestInternalECU, TestPartneredECU, 0xFD42, testFrame, time_source));
+	EXPECT_EQ(0x94, testFrame.data[0]);
+	EXPECT_EQ(0x7D, testFrame.data[1]);
+	EXPECT_EQ(0xFE, testFrame.data[6]);
+
+	// ISO 11783-12:2019 A.6: only the protocols in addition to ISO 11783
+	EXPECT_EQ(0x00, protocolUnderTest.get_diagnostic_protocol_identification());
+	ASSERT_TRUE(request_and_read_single_frame(protocolUnderTest, testPlugin, TestInternalECU, TestPartneredECU, 0xFD32, testFrame, time_source));
+	EXPECT_EQ(0x00, testFrame.data[0]);
+	protocolUnderTest.set_additional_diagnostic_protocols(static_cast<std::uint8_t>(DiagnosticProtocol::DiagnosticProtocolIdentificationBit::ISO14229_3));
+	ASSERT_TRUE(request_and_read_single_frame(protocolUnderTest, testPlugin, TestInternalECU, TestPartneredECU, 0xFD32, testFrame, time_source));
+	EXPECT_EQ(0x04, testFrame.data[0]);
+	// J1939 mode always reports J1939-73
+	protocolUnderTest.set_j1939_mode(true);
+	EXPECT_EQ(0x05, protocolUnderTest.get_diagnostic_protocol_identification());
+	protocolUnderTest.set_j1939_mode(false);
+
+	protocolUnderTest.terminate();
+	CANHardwareInterface::stop();
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(TestPartneredECU);
+	CANNetworkManager::CANNetwork.deactivate_control_function(TestInternalECU);
+}
+
+class DiagnosticProtocolTroubleCodeTest : public DiagnosticProtocolTest
+{
+public:
+	void SetUp() override
+	{
+		DiagnosticProtocolTest::SetUp();
+		testPlugin.open();
+
+		CANHardwareInterface::set_number_of_can_channels(1);
+		CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+		CANHardwareInterface::start(false);
+
+		internalECU = test_helpers::claim_internal_control_function(0xC0, 0, time_source);
+		partneredECU = test_helpers::force_claim_partnered_control_function(0xC1, 0);
+		protocol.reset(new DiagnosticProtocol(internalECU));
+		protocol->initialize();
+	}
+
+	void TearDown() override
+	{
+		protocol->terminate();
+		DiagnosticProtocolTest::TearDown();
+	}
+
+	void drain_frames()
+	{
+		CANMessageFrame frame = {};
+		while (!testPlugin.get_queue_empty())
+		{
+			testPlugin.read_frame(frame);
+		}
+	}
+
+	bool read_frame_with_pgn(std::uint32_t parameterGroupNumber)
+	{
+		bool found = false;
+		while ((!found) && testPlugin.read_frame(receivedFrame))
+		{
+			found = (parameterGroupNumber == CANIdentifier(receivedFrame.identifier).get_parameter_group_number());
+		}
+		return found;
+	}
+
+	void request_dm2()
+	{
+		drain_frames();
+
+		CANMessageFrame request = {};
+		request.dataLength = 3;
+		request.identifier = test_helpers::create_ext_can_id(6, 0xEA00, internalECU, partneredECU);
+		request.data[0] = 0xCB;
+		request.data[1] = 0xFE;
+		request.data[2] = 0x00;
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(request);
+		advance_ms(5);
+	}
+
+	void advance_ms(std::uint32_t milliseconds)
+	{
+		time_source.update_for_ms(milliseconds);
+		protocol->update();
+		CANNetworkManager::CANNetwork.update();
+		CANHardwareInterface::update();
+	}
+
+	void clear_the_only_active_code()
+	{
+		EXPECT_TRUE(protocol->set_diagnostic_trouble_code_active(dtc, true));
+		advance_ms(1001);
+		drain_frames();
+		EXPECT_TRUE(protocol->set_diagnostic_trouble_code_active(dtc, false));
+	}
+
+	void expect_dm1_with_no_faults()
+	{
+		ASSERT_TRUE(read_frame_with_pgn(0xFECA));
+		const std::array<std::uint8_t, 6> expectedPayload = { 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00 };
+		for (std::size_t i = 0; i < expectedPayload.size(); i++)
+		{
+			EXPECT_EQ(expectedPayload[i], receivedFrame.data[i]);
+		}
+	}
+
+	VirtualCANPlugin testPlugin;
+	std::shared_ptr<InternalControlFunction> internalECU;
+	std::shared_ptr<PartneredControlFunction> partneredECU;
+	std::unique_ptr<DiagnosticProtocol> protocol;
+	CANMessageFrame receivedFrame = {};
+	DiagnosticProtocol::DiagnosticTroubleCode dtc = DiagnosticProtocol::DiagnosticTroubleCode(1234, DiagnosticProtocol::FailureModeIdentifier::ConditionExists, DiagnosticProtocol::LampStatus::None);
+};
+
+TEST_F(DiagnosticProtocolTroubleCodeTest, PreviouslyActiveListOfSixtyFourCodesIsSentWhole)
+{
+	// 64 codes take 256 bytes, one more than a uint8_t holds
+	constexpr std::uint16_t NUMBER_OF_DTCS = 64;
+	for (std::uint16_t i = 0; i < NUMBER_OF_DTCS; i++)
+	{
+		DiagnosticProtocol::DiagnosticTroubleCode code(100 + i, DiagnosticProtocol::FailureModeIdentifier::ConditionExists, DiagnosticProtocol::LampStatus::None);
+		protocol->set_diagnostic_trouble_code_active(code, true);
+		protocol->set_diagnostic_trouble_code_active(code, false);
+	}
+
+	request_dm2();
+
+	ASSERT_TRUE(read_frame_with_pgn(0xEC00));
+	constexpr std::uint16_t EXPECTED_LENGTH = 2 + (4 * NUMBER_OF_DTCS);
+	EXPECT_EQ(EXPECTED_LENGTH & 0xFF, receivedFrame.data[1]);
+	EXPECT_EQ(EXPECTED_LENGTH >> 8, receivedFrame.data[2]);
+}
+
+TEST_F(DiagnosticProtocolTroubleCodeTest, OccurrenceCountStopsAt126)
+{
+	for (std::uint8_t i = 0; i < 130; i++)
+	{
+		protocol->set_diagnostic_trouble_code_active(dtc, true);
+		protocol->set_diagnostic_trouble_code_active(dtc, false);
+	}
+
+	request_dm2();
+
+	ASSERT_TRUE(read_frame_with_pgn(0xFECB));
+	EXPECT_EQ(0x7E, receivedFrame.data[5]);
+}
+
+TEST_F(DiagnosticProtocolTroubleCodeTest, ActivatingActiveDtcWithNewLampUpdatesTheLamp)
+{
+	DiagnosticProtocol::DiagnosticTroubleCode amberDtc(1234, DiagnosticProtocol::FailureModeIdentifier::ConditionExists, DiagnosticProtocol::LampStatus::AmberWarningLampSolid);
+	DiagnosticProtocol::DiagnosticTroubleCode redDtc(1234, DiagnosticProtocol::FailureModeIdentifier::ConditionExists, DiagnosticProtocol::LampStatus::RedStopLampSolid);
+	protocol->set_j1939_mode(true);
+
+	EXPECT_TRUE(protocol->set_diagnostic_trouble_code_active(amberDtc, true));
+	EXPECT_TRUE(protocol->set_diagnostic_trouble_code_active(redDtc, true));
+	EXPECT_FALSE(protocol->set_diagnostic_trouble_code_active(redDtc, true));
+	advance_ms(1001);
+
+	ASSERT_TRUE(read_frame_with_pgn(0xFECA));
+	EXPECT_EQ(0x10, receivedFrame.data[0]);
+}
+
+TEST_F(DiagnosticProtocolTroubleCodeTest, DtcWithDifferentLampIsDeactivatedAsTheSameDtc)
+{
+	DiagnosticProtocol::DiagnosticTroubleCode amberDtc(1234, DiagnosticProtocol::FailureModeIdentifier::ConditionExists, DiagnosticProtocol::LampStatus::AmberWarningLampSolid);
+
+	protocol->set_diagnostic_trouble_code_active(amberDtc, true);
+
+	EXPECT_TRUE(protocol->set_diagnostic_trouble_code_active(dtc, false));
+	EXPECT_FALSE(protocol->get_diagnostic_trouble_code_active(amberDtc));
+}
+
+TEST_F(DiagnosticProtocolTroubleCodeTest, DM1WithNoFaultsIsSentWhenLastCodeClears)
+{
+	clear_the_only_active_code();
+
+	advance_ms(1001);
+
+	expect_dm1_with_no_faults();
+}
+
+TEST_F(DiagnosticProtocolTroubleCodeTest, DM1WithNoFaultsIsNotRepeated)
+{
+	clear_the_only_active_code();
+	advance_ms(1001);
+	drain_frames();
+
+	advance_ms(1001);
+
+	EXPECT_FALSE(read_frame_with_pgn(0xFECA));
+}
+
+TEST_F(DiagnosticProtocolTroubleCodeTest, ReactivatedDtcTakesTheNewLamp)
+{
+	DiagnosticProtocol::DiagnosticTroubleCode amberDtc(1234, DiagnosticProtocol::FailureModeIdentifier::ConditionExists, DiagnosticProtocol::LampStatus::AmberWarningLampSolid);
+	DiagnosticProtocol::DiagnosticTroubleCode redDtc(1234, DiagnosticProtocol::FailureModeIdentifier::ConditionExists, DiagnosticProtocol::LampStatus::RedStopLampSolid);
+	protocol->set_j1939_mode(true);
+
+	protocol->set_diagnostic_trouble_code_active(amberDtc, true);
+	protocol->set_diagnostic_trouble_code_active(amberDtc, false);
+	protocol->set_diagnostic_trouble_code_active(redDtc, true);
+	advance_ms(1001);
+
+	ASSERT_TRUE(read_frame_with_pgn(0xFECA));
+	EXPECT_EQ(0x10, receivedFrame.data[0]);
+}
+
+TEST_F(DiagnosticProtocolTroubleCodeTest, ClearingAllCodesSendsOnlyOneDM1WithNoFaults)
+{
+	clear_the_only_active_code();
+	protocol->clear_active_diagnostic_trouble_codes();
+	advance_ms(1);
+	ASSERT_TRUE(read_frame_with_pgn(0xFECA));
+	drain_frames();
+
+	advance_ms(1001);
+
+	EXPECT_FALSE(read_frame_with_pgn(0xFECA));
+}
+
+TEST_F(DiagnosticProtocolTroubleCodeTest, DM22ClearOfLastCodeSendsDM1WithNoFaults)
+{
+	EXPECT_TRUE(protocol->set_diagnostic_trouble_code_active(dtc, true));
+	advance_ms(1001);
+	drain_frames();
+
+	CANMessageFrame clearRequest = {};
+	clearRequest.dataLength = CAN_DATA_LENGTH;
+	clearRequest.identifier = test_helpers::create_ext_can_id(6, 0xC300, internalECU, partneredECU);
+	clearRequest.data[0] = 0x11;
+	clearRequest.data[1] = 0xFF;
+	clearRequest.data[2] = 0xFF;
+	clearRequest.data[3] = 0xFF;
+	clearRequest.data[4] = 0xFF;
+	clearRequest.data[5] = 0xD2;
+	clearRequest.data[6] = 0x04;
+	clearRequest.data[7] = static_cast<std::uint8_t>(DiagnosticProtocol::FailureModeIdentifier::ConditionExists);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(clearRequest);
+	advance_ms(1001);
+
+	expect_dm1_with_no_faults();
+}
+
+TEST_F(DiagnosticProtocolTroubleCodeTest, ClearingAllCodesWhileSuspendedSendsDM1WithNoFaultsAfterResume)
+{
+	EXPECT_TRUE(protocol->set_diagnostic_trouble_code_active(dtc, true));
+	advance_ms(1001);
+	drain_frames();
+
+	CANMessageFrame suspendRequest = {};
+	suspendRequest.dataLength = CAN_DATA_LENGTH;
+	suspendRequest.identifier = test_helpers::create_ext_can_id_broadcast(6, 0xDF00, partneredECU);
+	suspendRequest.data[0] = 0xFC;
+	suspendRequest.data[1] = 0xFF;
+	suspendRequest.data[2] = 0xFF;
+	suspendRequest.data[3] = 0x03;
+	suspendRequest.data[4] = 0x0A;
+	suspendRequest.data[5] = 0x00;
+	suspendRequest.data[6] = 0xFF;
+	suspendRequest.data[7] = 0xFF;
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(suspendRequest);
+	advance_ms(1);
+	ASSERT_FALSE(protocol->get_broadcast_state());
+
+	protocol->clear_active_diagnostic_trouble_codes();
+	advance_ms(2000);
+	EXPECT_FALSE(read_frame_with_pgn(0xFECA));
+
+	advance_ms(10001);
+	ASSERT_TRUE(protocol->get_broadcast_state());
+	advance_ms(1001);
+
+	expect_dm1_with_no_faults();
 }
