@@ -68,7 +68,7 @@ namespace isobus
 				initialized = true;
 
 				// A VT reports the selected language, formats and units at power up, once it has claimed its address
-				// (ISO 11783-6:2018 4.6.3, ISO 11783-7:2009 B.21). A new claim after losing the address counts too.
+				// (ISO 11783-6:2018 4.6.5, ISO 11783-7:2009 B.21). A new claim after losing the address counts too.
 				if (respondToRequests && sendOnAddressClaim)
 				{
 					addressClaimedListener = myControlFunction->get_address_claimed_event_dispatcher().add_listener([this](const std::uint8_t &) {
@@ -146,7 +146,7 @@ namespace isobus
 			LOG_ERROR("[VT/TC]: Language command interface is missing a language code, and will not send a language command.");
 			return false;
 		}
-		// The country code is recommended, not required (ISO 11783-6:2018 4.6.3). Without one, bytes 7 and 8 are not available.
+		// The country code is recommended, not required (ISO 11783-6:2018 4.6.5). Without one, bytes 7 and 8 are not available.
 		const bool hasCountryCode = (countryCode.length() >= 2);
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
 			static_cast<std::uint8_t>(languageCode[0]),
