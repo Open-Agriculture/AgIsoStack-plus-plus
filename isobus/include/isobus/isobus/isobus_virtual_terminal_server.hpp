@@ -208,7 +208,7 @@ namespace isobus
 		/// @details It follows object_pool_deleted() or object_pool_parse_finished() for that pool. Alert the operator that the working set is suspended, and why.
 		/// It is not called for a pool deleted by a Delete Object Pool command.
 		/// @param[in] workingSet The working set that is suspended
-		/// @param[in] errorCodes Byte 2 of the response: bit 0 = errors in the object pool, bit 1 = the VT ran out of memory
+		/// @param[in] errorCodes Byte 2 of the response: bit 0 = errors in the object pool, bit 1 = the VT ran out of memory, bit 4 = any other error
 		/// @param[in] parentIDOfFaultingObject The parent object ID of the faulty object, or NULL_OBJECT_ID
 		/// @param[in] faultingObjectID The faulty object's ID, or NULL_OBJECT_ID
 		/// @param[in] objectPoolErrorCodes Byte 7 of the response, a bitfield of ObjectPoolErrorBit
