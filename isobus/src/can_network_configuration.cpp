@@ -68,6 +68,16 @@ namespace isobus
 		return numberOfPacketsPerCTSMessage;
 	}
 
+	void CANNetworkConfiguration::set_max_extended_transport_protocol_receive_size(std::uint32_t bytes)
+	{
+		maxExtendedTransportProtocolReceiveSize = (bytes > MAX_EXTENDED_TRANSPORT_PROTOCOL_MESSAGE_SIZE) ? MAX_EXTENDED_TRANSPORT_PROTOCOL_MESSAGE_SIZE : bytes;
+	}
+
+	std::uint32_t CANNetworkConfiguration::get_max_extended_transport_protocol_receive_size() const
+	{
+		return maxExtendedTransportProtocolReceiveSize;
+	}
+
 	void CANNetworkConfiguration::set_number_of_packets_per_etp_cts_message(std::uint8_t numberPackets)
 	{
 		numberOfPacketsPerETPCTSMessage = numberPackets;

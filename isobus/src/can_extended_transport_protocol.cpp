@@ -142,12 +142,14 @@ namespace isobus
 			            parameterGroupNumber);
 			send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, parameterGroupNumber, ConnectionAbortReason::AlreadyInCMSession);
 		}
-		else if (totalMessageSize > MAX_PROTOCOL_DATA_LENGTH)
+		else if ((totalMessageSize > MAX_PROTOCOL_DATA_LENGTH) ||
+		         (totalMessageSize > configuration->get_max_extended_transport_protocol_receive_size()))
 		{
+			// The whole message would be allocated now, before any data is received
 			LOG_WARNING("[ETP]: Replying with abort to Request To Send (RTS) for 0x%05X, message size (%u) is greater than the maximum (%u).",
 			            parameterGroupNumber,
 			            totalMessageSize,
-			            MAX_PROTOCOL_DATA_LENGTH);
+			            configuration->get_max_extended_transport_protocol_receive_size());
 			send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, parameterGroupNumber, ConnectionAbortReason::AnyOtherError);
 		}
 		else
