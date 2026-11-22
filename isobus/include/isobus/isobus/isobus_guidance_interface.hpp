@@ -22,10 +22,13 @@
 #ifndef ISOBUS_GUIDANCE_INTERFACE_HPP
 #define ISOBUS_GUIDANCE_INTERFACE_HPP
 
+#include "isobus/isobus/can_constants.hpp"
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/utility/event_dispatcher.hpp"
 #include "isobus/utility/processing_flags.hpp"
+#include "isobus/utility/thread_synchronization.hpp"
 
+#include <array>
 #include <memory>
 #include <vector>
 
@@ -347,15 +350,18 @@ namespace isobus
 		std::shared_ptr<GuidanceSystemCommand> get_received_guidance_system_command(std::size_t index);
 
 		/// @brief Returns an event dispatcher which you can use to get callbacks when new/updated guidance machine info messages are received.
+		/// @details Listeners are called from update().
 		/// @returns The event publisher for guidance machine info messages
 		EventDispatcher<const std::shared_ptr<GuidanceMachineInfo>, bool> &get_guidance_machine_info_event_publisher();
 
 		/// @brief Returns an event dispatcher which you can use to get callbacks when new/updated guidance system command messages are received.
+		/// @details Listeners are called from update().
 		/// @returns The event publisher for guidance system command messages
 		EventDispatcher<const std::shared_ptr<GuidanceSystemCommand>, bool> &get_guidance_system_command_event_publisher();
 
-		/// @brief Call this cyclically to update the interface. Transmits messages if needed and processes
-		/// timeouts for received messages.
+		/// @brief Call this cyclically to update the interface. Parses the messages received since the last call,
+		/// then processes timeouts for received messages and transmits messages if needed.
+		/// @details Received messages reach the getters and listeners only from here. One that waited in this interface longer than the message timeout is discarded.
 		void update();
 
 	protected:
@@ -368,18 +374,33 @@ namespace isobus
 			NumberOfFlags ///< The number of flags in this enumeration
 		};
 
+		/// @brief A guidance message copied on the CAN thread, for update() to parse
+		struct ReceivedFrame
+		{
+			std::shared_ptr<ControlFunction> source; ///< The control function that sent the message
+			std::uint32_t parameterGroupNumber = 0; ///< The PGN of the message
+			std::array<std::uint8_t, CAN_DATA_LENGTH> data = {}; ///< The message payload
+			std::uint32_t timestamp_ms = 0; ///< When the message was received, in milliseconds
+		};
+
 		/// @brief Processes one flag (which sends the associated message)
 		/// @param[in] flag The flag to process
 		/// @param[in] parentPointer A pointer to the interface instance
 		static void process_flags(std::uint32_t flag, void *parentPointer);
 
-		/// @brief Processes a CAN message
+		/// @brief Copies a received guidance message into receivedFrames for update() to parse
+		/// @details Runs on the thread that calls CANNetworkManager::update().
 		/// @param[in] message The CAN message being received
 		/// @param[in] parentPointer A context variable to find the relevant instance of this class
 		static void process_rx_message(const CANMessage &message, void *parentPointer);
 
+		/// @brief Parses one received message into its record and calls the event listeners
+		/// @param[in] frame The message to parse
+		void process_received_frame(const ReceivedFrame &frame);
+
 		static constexpr std::uint32_t GUIDANCE_MESSAGE_TX_INTERVAL_MS = 100; ///< How often guidance messages are sent, defined in ISO 11783-7
 		static constexpr std::uint32_t GUIDANCE_MESSAGE_TIMEOUT_MS = 150; ///< Amount of time before a guidance message is stale. We currently tolerate 50ms of delay.
+		static constexpr std::size_t RX_QUEUE_CAPACITY = 16; ///< Slots in receivedFrames (15 usable: 0.75 s of both PGNs at 10 Hz), and the most messages one update() parses
 		static constexpr float CURVATURE_COMMAND_OFFSET_INVERSE_KM = 8032.0f; ///< Constant offset for curvature being sent on the bus in km-1
 		static constexpr float CURVATURE_COMMAND_MAX_INVERSE_KM = 8031.75f; ///< The maximum curvature that can be encoded once scaling is applied
 		static constexpr float CURVATURE_COMMAND_RESOLUTION_PER_BIT = 0.25f; ///< The resolution of the message in km-1 per bit
@@ -399,6 +420,7 @@ namespace isobus
 		std::shared_ptr<ControlFunction> destinationControlFunction; ///< The optional destination to which messages will be sent. If nullptr it will be broadcast instead.
 		std::vector<std::shared_ptr<GuidanceMachineInfo>> receivedGuidanceMachineInfoMessages; ///< A list of all received estimated curvatures
 		std::vector<std::shared_ptr<GuidanceSystemCommand>> receivedGuidanceSystemCommandMessages; ///< A list of all received curvature commands and statuses
+		SPSCQueue<ReceivedFrame> receivedFrames{ RX_QUEUE_CAPACITY }; ///< Received messages waiting for update(). Only the CAN thread pushes and only update() pops
 		std::uint32_t guidanceSystemCommandTransmitTimestamp_ms = 0; ///< Timestamp used to know when to transmit the guidance system command message
 		std::uint32_t guidanceMachineInfoTransmitTimestamp_ms = 0; ///< Timestamp used to know when to transmit the guidance machine info message
 		bool initialized = false; ///< Stores if the interface has been initialized

@@ -251,6 +251,9 @@ TEST_F(GuidanceTest, ListenOnlyModeAndDecoding)
 	testFrame.data[7] = 0xFF;
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
+	EXPECT_EQ(false, TestGuidanceInterface::wasGuidanceSystemCommandCallbackHit);
+	EXPECT_EQ(0, interfaceUnderTest.get_number_received_guidance_system_command_sources());
+	interfaceUnderTest.update();
 
 	EXPECT_EQ(false, TestGuidanceInterface::wasGuidanceMachineInfoCallbackHit);
 	EXPECT_EQ(true, TestGuidanceInterface::wasGuidanceSystemCommandCallbackHit);
@@ -279,6 +282,7 @@ TEST_F(GuidanceTest, ListenOnlyModeAndDecoding)
 	testFrame.data[7] = 0xFF;
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
+	interfaceUnderTest.update();
 
 	EXPECT_EQ(true, TestGuidanceInterface::wasGuidanceMachineInfoCallbackHit);
 	EXPECT_EQ(false, TestGuidanceInterface::wasGuidanceSystemCommandCallbackHit);
@@ -310,6 +314,7 @@ TEST_F(GuidanceTest, ListenOnlyModeAndDecoding)
 	testFrame.data[7] = 0xFF;
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
+	interfaceUnderTest.update();
 
 	EXPECT_EQ(1, interfaceUnderTest.get_number_received_guidance_machine_info_message_sources());
 	EXPECT_EQ(1, interfaceUnderTest.get_number_received_guidance_system_command_sources());
@@ -330,6 +335,7 @@ TEST_F(GuidanceTest, ListenOnlyModeAndDecoding)
 	testFrame.data[7] = 0xFF;
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
+	interfaceUnderTest.update();
 
 	EXPECT_EQ(1, interfaceUnderTest.get_number_received_guidance_machine_info_message_sources());
 	EXPECT_EQ(1, interfaceUnderTest.get_number_received_guidance_system_command_sources());
@@ -343,4 +349,41 @@ TEST_F(GuidanceTest, ListenOnlyModeAndDecoding)
 	EXPECT_EQ(0, interfaceUnderTest.get_number_received_guidance_system_command_sources());
 	EXPECT_EQ(nullptr, interfaceUnderTest.get_received_guidance_machine_info(0));
 	EXPECT_EQ(nullptr, interfaceUnderTest.get_received_guidance_system_command(0));
+}
+
+TEST_F(GuidanceTest, DiscardsMessagesThatWaitedOutTheTimeout)
+{
+	TestGuidanceInterface interfaceUnderTest(nullptr, nullptr);
+	interfaceUnderTest.initialize();
+	test_helpers::force_claim_partnered_control_function(0x47, 0);
+	interfaceUnderTest.get_guidance_system_command_event_publisher().add_listener(TestGuidanceInterface::test_guidance_system_command_callback);
+	TestGuidanceInterface::wasGuidanceSystemCommandCallbackHit = false;
+
+	CANMessageFrame testFrame = {};
+	testFrame.identifier = 0xCADFF47;
+	testFrame.isExtendedFrame = true;
+	testFrame.dataLength = 8;
+	testFrame.data[2] = 0xFD; // Intended to steer + reserved bits set to 1
+
+	CANNetworkManager::CANNetwork.update(); // Initializes the network manager, which drops frames until then
+
+	// update() stalls for the full 150 ms timeout, so the message is discarded unparsed
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.update();
+	time_source.simulate_delay_ms(150);
+	interfaceUnderTest.update();
+	EXPECT_FALSE(TestGuidanceInterface::wasGuidanceSystemCommandCallbackHit);
+	EXPECT_EQ(0, interfaceUnderTest.get_number_received_guidance_system_command_sources());
+
+	// One millisecond inside the timeout it is parsed, and the record keeps its receive time
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.update();
+	time_source.simulate_delay_ms(149);
+	interfaceUnderTest.update();
+	EXPECT_TRUE(TestGuidanceInterface::wasGuidanceSystemCommandCallbackHit);
+	EXPECT_EQ(1, interfaceUnderTest.get_number_received_guidance_system_command_sources());
+
+	time_source.simulate_delay_ms(1);
+	interfaceUnderTest.update();
+	EXPECT_EQ(0, interfaceUnderTest.get_number_received_guidance_system_command_sources());
 }
