@@ -1344,6 +1344,37 @@ TEST_F(CoreTest, CommandedAddressOutsideTheValidRangeIsIgnored)
 	CANHardwareInterface::stop();
 }
 
+TEST_F(CoreTest, RequestShorterThanThreeBytesIsIgnored)
+{
+	// A request carries the requested PGN in 3 bytes. A shorter one, such as "cansend can1 18EAFF7F#", used to throw
+	// std::out_of_range from the address claim handling and end the application.
+	start_virtual_can();
+	VirtualCANPlugin plugin;
+	plugin.open();
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x43, 0, time_source);
+	drain_frames(plugin);
+
+	EXPECT_NO_THROW(CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_raw(0x18EAFF7F, {})));
+	EXPECT_NO_THROW(CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_raw(0x18EAFF7F, { 0x00, 0xEE })));
+	EXPECT_NO_THROW(CANNetworkManager::CANNetwork.update());
+	time_source.update_for_ms(500);
+	CANNetworkManager::CANNetwork.update();
+
+	EXPECT_EQ(InternalControlFunction::State::AddressClaimingComplete, internalECU->get_current_state());
+	EXPECT_FALSE(was_address_claim_sent_from(plugin, 0x43));
+
+	// A complete request for the address claim is still answered
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_raw(0x18EAFF7F, { 0x00, 0xEE, 0x00 }));
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(500);
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_TRUE(was_address_claim_sent_from(plugin, 0x43));
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+	CANHardwareInterface::stop();
+}
+
 TEST_F(CoreTest, ReclaimingControlFunctionLosesItsAddressToALowerName)
 {
 	start_virtual_can();
