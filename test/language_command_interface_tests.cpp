@@ -21,6 +21,8 @@
 #include "helpers/control_function_helpers.hpp"
 #include "helpers/test_fixture.hpp"
 
+#include <future>
+
 using namespace isobus;
 
 class LanguageCommandInterfaceTest : public AgIsoStackTestFixture
@@ -339,8 +341,9 @@ TEST_F(LanguageCommandInterfaceTest, SettersAndTransmitting)
 	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::ForceUnits::ImperialUS), (testFrame.data[5] >> 2) & 0x03);
 	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::PressureUnits::ImperialUS), (testFrame.data[5] >> 4) & 0x03);
 	EXPECT_EQ(static_cast<std::uint8_t>(LanguageCommandInterface::TemperatureUnits::ImperialUS), (testFrame.data[5] >> 6) & 0x03);
-	EXPECT_EQ(' ', testFrame.data[6]);
-	EXPECT_EQ(' ', testFrame.data[7]);
+	// An empty country code means none, so bytes 7 and 8 are not available
+	EXPECT_EQ(0xFF, testFrame.data[6]);
+	EXPECT_EQ(0xFF, testFrame.data[7]);
 
 	interfaceUnderTest.set_language_code("ThisIsWayTooLong");
 	interfaceUnderTest.set_country_code("AndShouldBeTruncatedWhenSent");
@@ -374,4 +377,84 @@ TEST_F(LanguageCommandInterfaceTest, SettersAndTransmitting)
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(testECU);
 	CANHardwareInterface::stop();
+}
+
+/// @brief Reads the frames on the bus and returns the last Language Command sent from an address
+static bool read_language_command_from(VirtualCANPlugin &plugin, std::uint8_t sourceAddress, CANMessageFrame &languageCommand)
+{
+	bool found = false;
+	CANMessageFrame frame = {};
+	while (plugin.read_frame(frame))
+	{
+		if ((0x18FE0F00 | sourceAddress) == frame.identifier)
+		{
+			languageCommand = frame;
+			found = true;
+		}
+	}
+	return found;
+}
+
+TEST_F(LanguageCommandInterfaceTest, ServerSendsTheLanguageCommandWhenItHasClaimedAnAddress)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	// Initialized before the address is claimed, as at power up
+	auto serverECU = CANNetworkManager::CANNetwork.create_internal_control_function(test_helpers::find_available_name(0), 0, 0xE7);
+	LanguageCommandInterface serverInterface(serverECU, true);
+	serverInterface.set_language_code("de");
+	serverInterface.set_country_code("DE");
+	serverInterface.initialize();
+
+	CANMessageFrame languageCommand = {};
+	const bool sentBeforeTheClaim = read_language_command_from(testPlugin, 0xE7, languageCommand);
+
+	auto addressClaimed = std::async(std::launch::async, [&serverECU, this]() {
+		while (!serverECU->get_address_valid())
+		{
+			time_source.update_for_ms(100);
+		}
+	});
+	const bool claimed = (std::future_status::timeout != addressClaimed.wait_for(std::chrono::seconds(5)));
+	time_source.update_for_ms(5);
+	const bool sentAfterTheClaim = read_language_command_from(testPlugin, 0xE7, languageCommand);
+
+	// Initialized after the address is claimed: sent right away, unless the application sends it itself
+	LanguageCommandInterface lateInterface(serverECU, true);
+	lateInterface.set_language_code("fr");
+	lateInterface.initialize();
+	time_source.update_for_ms(5);
+	CANMessageFrame lateLanguageCommand = {};
+	const bool lateSent = read_language_command_from(testPlugin, 0xE7, lateLanguageCommand);
+
+	LanguageCommandInterface silentInterface(serverECU, true);
+	silentInterface.set_language_code("it");
+	silentInterface.set_send_on_address_claim(false);
+	silentInterface.initialize();
+	time_source.update_for_ms(5);
+	CANMessageFrame silentLanguageCommand = {};
+	const bool silentSent = read_language_command_from(testPlugin, 0xE7, silentLanguageCommand);
+
+	CANHardwareInterface::stop();
+
+	ASSERT_TRUE(claimed);
+	EXPECT_FALSE(sentBeforeTheClaim);
+	ASSERT_TRUE(sentAfterTheClaim);
+	EXPECT_EQ('d', languageCommand.data[0]);
+	EXPECT_EQ('e', languageCommand.data[1]);
+	EXPECT_EQ('D', languageCommand.data[6]);
+	EXPECT_EQ('E', languageCommand.data[7]);
+	ASSERT_TRUE(lateSent);
+	EXPECT_EQ('f', lateLanguageCommand.data[0]);
+	EXPECT_EQ('r', lateLanguageCommand.data[1]);
+	EXPECT_EQ(0xFF, lateLanguageCommand.data[6]); // No country code set
+	EXPECT_EQ(0xFF, lateLanguageCommand.data[7]);
+	EXPECT_FALSE(silentSent);
+
+	CANNetworkManager::CANNetwork.deactivate_control_function(serverECU);
 }

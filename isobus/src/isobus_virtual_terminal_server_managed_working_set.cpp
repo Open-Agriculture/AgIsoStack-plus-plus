@@ -123,6 +123,17 @@ namespace isobus
 		openForInputObject.store(NULL_OBJECT_ID);
 		set_object_pool_faulting_object_id(NULL_OBJECT_ID);
 		set_object_pool_processing_state(ObjectPoolProcessingThreadState::None);
+		objectPoolTransferDropped = false;
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::set_object_pool_transfer_dropped()
+	{
+		objectPoolTransferDropped = true;
+	}
+
+	bool VirtualTerminalServerManagedWorkingSet::get_object_pool_transfer_dropped() const
+	{
+		return objectPoolTransferDropped;
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::set_object_focus(std::uint16_t objectID)

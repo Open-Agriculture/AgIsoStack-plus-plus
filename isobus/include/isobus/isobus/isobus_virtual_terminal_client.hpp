@@ -926,8 +926,8 @@ namespace isobus
 
 		/// @brief Sends the execute macro command
 		/// @details This command is used to execute a Macro.
-		/// @param[in] objectID The ID of the target object
-		/// @returns true if the message is being sent successfully
+		/// @param[in] objectID The ID of the Macro object, 0 to 255. Larger IDs need send_execute_extended_macro()
+		/// @returns true if the message is being sent successfully, false if the ID does not fit in one byte
 		bool send_execute_macro(std::uint16_t objectID);
 
 		/// @brief Sends the change object label command

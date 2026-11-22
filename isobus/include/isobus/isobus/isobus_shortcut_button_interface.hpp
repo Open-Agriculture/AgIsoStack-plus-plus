@@ -60,6 +60,8 @@ namespace isobus
 	/// The Working Set shall monitor the number of transitions for each ISB server upon receiving first
 	/// the message from a given ISB server. A Working Set shall consider an increase in the transitions
 	/// without detecting a corresponding transition of the Stop all implement operations state as an error and react accordingly.
+	///
+	/// A permit after a stop does not restart an implement. Only the operator can restart it, e.g. with a master ON/OFF switch.
 	class ShortcutButtonInterface
 	{
 	public:
@@ -115,9 +117,11 @@ namespace isobus
 			ISBServerData() = default;
 
 			NAME ISONAME; ///< The ISONAME of the sender, used as a lookup key
-			StopAllImplementOperationsState commandedState; ///< The last state we received from this ISB
+			StopAllImplementOperationsState commandedState = StopAllImplementOperationsState::NotAvailable; ///< The state this ISB commands: as sent, Stop after a missed transition, or NotAvailable after a timeout
+			StopAllImplementOperationsState reportedState = StopAllImplementOperationsState::NotAvailable; ///< The last state this ISB sent, used to check its transition count
 			std::uint32_t messageReceivedTimestamp_ms = 0; ///< Tracks the last time we received a message from this ISB so we can time them out if needed
 			std::uint8_t stopAllImplementOperationsTransitionNumber = 0; ///< Number of transitions from Permit (01) to Stop (00) since power up of the stop all implement operations parameter
+			bool reportedSwitchState = false; ///< Whether this ISB has ever sent a state other than NotAvailable, so its transition count is checked
 		};
 
 		/// @brief Enumerates a set of flags that the interface uses to know if it should transmit a message
@@ -154,7 +158,7 @@ namespace isobus
 		EventDispatcher<StopAllImplementOperationsState> ISBEventDispatcher; ///< Manages callbacks about ISB states
 		ProcessingFlags txFlags; ///< A set of flags to manage retries while sending messages
 		std::uint32_t allImplementsStopOperationsSwitchStateTimestamp_ms = 0; ///< A timestamp to track the need for cyclic transmission of PGN 0xFD02
-		std::uint8_t stopAllImplementOperationsTransitionNumber = 0; ///< A counter used to track our transitions from "stop" to "permit" when acting as a server
+		std::uint8_t stopAllImplementOperationsTransitionNumber = 0; ///< A counter used to track our transitions from Permit to Stop when acting as a server
 		StopAllImplementOperationsState commandedState = StopAllImplementOperationsState::NotAvailable; ///< The state set by the user to transmit if we're acting as a server
 		bool actAsISBServer = false; ///< A setting that enables sending the ISB messages rather than just receiving them
 		bool initialized = false; ///< Stores if the interface has been initialized
