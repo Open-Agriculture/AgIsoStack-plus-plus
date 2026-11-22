@@ -9,6 +9,7 @@
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
+#include "isobus/isobus/isobus_virtual_terminal_base.hpp"
 #include "isobus/isobus/isobus_virtual_terminal_client.hpp"
 #include "isobus/utility/system_timing.hpp"
 
@@ -1240,6 +1241,50 @@ TEST_F(VirtualTerminalTest, SendChangeStringValueRejectsStringOver65535Character
 
 	EXPECT_FALSE(clientUnderTest.send_change_string_value(1234, std::string(65536, 'a')));
 	EXPECT_FALSE(clientUnderTest.send_change_string_value(1234, 4, nullptr));
+}
+
+TEST_F(VirtualTerminalTest, SendDrawPolygonWritesEveryPoint)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+	const std::int16_t xOffsets[] = { 10, -20, 300 };
+	const std::int16_t yOffsets[] = { -1, 2, 0 };
+
+	ASSERT_TRUE(clientUnderTest.send_draw_polygon(1234, 3, xOffsets, yOffsets));
+	const std::vector<std::uint8_t> expected = {
+		static_cast<std::uint8_t>(VirtualTerminalClient::Function::GraphicsContextCommand),
+		0xD2,
+		0x04,
+		static_cast<std::uint8_t>(VirtualTerminalBase::GraphicsContextSubCommandID::DrawPolygon),
+		3,
+		// 10, -1
+		0x0A,
+		0x00,
+		0xFF,
+		0xFF,
+		// -20, 2
+		0xEC,
+		0xFF,
+		0x02,
+		0x00,
+		// 300, 0
+		0x2C,
+		0x01,
+		0x00,
+		0x00
+	};
+	EXPECT_EQ(expected, clientUnderTest.test_wrapper_take_queued_command());
+}
+
+TEST_F(VirtualTerminalTest, SendExecuteMacroSendsAOneByteId)
+{
+	DerivedTestVTClient clientUnderTest(nullptr, nullptr);
+
+	ASSERT_TRUE(clientUnderTest.send_execute_macro(5));
+	const std::vector<std::uint8_t> expected = { static_cast<std::uint8_t>(VirtualTerminalClient::Function::ExecuteMacroCommand), 5, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+	EXPECT_EQ(expected, clientUnderTest.test_wrapper_take_queued_command());
+
+	EXPECT_FALSE(clientUnderTest.send_execute_macro(300));
+	EXPECT_TRUE(clientUnderTest.test_wrapper_take_queued_command().empty());
 }
 
 class CapturingLogger : public CANStackLogger

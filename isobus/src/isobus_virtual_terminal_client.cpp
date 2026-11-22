@@ -747,15 +747,22 @@ namespace isobus
 
 	bool VirtualTerminalClient::send_execute_macro(std::uint16_t objectID)
 	{
-		const std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ExecuteMacroCommand),
-			                                         static_cast<std::uint8_t>(objectID & 0xFF),
-			                                         static_cast<std::uint8_t>(objectID >> 8),
-			                                         0xFF,
-			                                         0xFF,
-			                                         0xFF,
-			                                         0xFF,
-			                                         0xFF };
-		return queue_command(buffer);
+		bool retVal = false;
+
+		// F.48 has one byte for the Macro ID; a larger ID needs the Execute Extended Macro command
+		if (std::numeric_limits<std::uint8_t>::max() >= objectID)
+		{
+			const std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ExecuteMacroCommand),
+				                                         static_cast<std::uint8_t>(objectID),
+				                                         0xFF,
+				                                         0xFF,
+				                                         0xFF,
+				                                         0xFF,
+				                                         0xFF,
+				                                         0xFF };
+			retVal = queue_command(buffer);
+		}
+		return retVal;
 	}
 
 	bool VirtualTerminalClient::send_change_object_label(std::uint16_t objectID, std::uint16_t labelStringObjectID, std::uint8_t fontType, std::uint16_t graphicalDesignatorObjectID)
@@ -1002,7 +1009,7 @@ namespace isobus
 		    (nullptr != listOfYOffsetsRelativeToCursor))
 
 		{
-			const std::uint16_t messageLength = (9 + (4 * numberOfPoints));
+			const std::uint16_t messageLength = (5 + (4 * numberOfPoints));
 			std::vector<std::uint8_t> buffer;
 			buffer.resize(messageLength);
 			buffer[0] = static_cast<std::uint8_t>(Function::GraphicsContextCommand);
@@ -1010,12 +1017,12 @@ namespace isobus
 			buffer[2] = static_cast<std::uint8_t>(objectID >> 8);
 			buffer[3] = static_cast<std::uint8_t>(GraphicsContextSubCommandID::DrawPolygon);
 			buffer[4] = numberOfPoints;
-			for (std::uint16_t i = 0; i < numberOfPoints; i += 4)
+			for (std::uint16_t i = 0; i < numberOfPoints; i++)
 			{
-				buffer[5 + i] = static_cast<std::uint8_t>(listOfXOffsetsRelativeToCursor[0] & 0xFF);
-				buffer[6 + i] = static_cast<std::uint8_t>((listOfXOffsetsRelativeToCursor[0] >> 8) & 0xFF);
-				buffer[7 + i] = static_cast<std::uint8_t>(listOfYOffsetsRelativeToCursor[0] & 0xFF);
-				buffer[8 + i] = static_cast<std::uint8_t>((listOfYOffsetsRelativeToCursor[0] >> 8) & 0xFF);
+				buffer[5 + (4 * i)] = static_cast<std::uint8_t>(listOfXOffsetsRelativeToCursor[i] & 0xFF);
+				buffer[6 + (4 * i)] = static_cast<std::uint8_t>((listOfXOffsetsRelativeToCursor[i] >> 8) & 0xFF);
+				buffer[7 + (4 * i)] = static_cast<std::uint8_t>(listOfYOffsetsRelativeToCursor[i] & 0xFF);
+				buffer[8 + (4 * i)] = static_cast<std::uint8_t>((listOfYOffsetsRelativeToCursor[i] >> 8) & 0xFF);
 			}
 			retVal = queue_command(buffer, true);
 		}
