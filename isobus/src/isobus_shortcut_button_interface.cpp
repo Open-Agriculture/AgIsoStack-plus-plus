@@ -62,6 +62,11 @@ namespace isobus
 		{
 			if (newState != commandedState)
 			{
+				if ((StopAllImplementOperationsState::PermitAllImplementsToOperationOn == commandedState) &&
+				    (StopAllImplementOperationsState::StopImplementOperations == newState))
+				{
+					stopAllImplementOperationsTransitionNumber++;
+				}
 				commandedState = newState;
 
 				if (StopAllImplementOperationsState::StopImplementOperations == newState)
@@ -134,11 +139,6 @@ namespace isobus
 		if (flag == static_cast<std::uint32_t>(TransmitFlags::SendStopAllImplementOperationsSwitchState))
 		{
 			transmitSuccessful = myInterface->send_stop_all_implement_operations_switch_state();
-
-			if (transmitSuccessful)
-			{
-				myInterface->stopAllImplementOperationsTransitionNumber++;
-			}
 		}
 
 		if (!transmitSuccessful)
@@ -160,50 +160,57 @@ namespace isobus
 				auto &messageData = message.get_data();
 				StopAllImplementOperationsState previousState = get_state();
 
+				std::uint8_t newTransitionCount = messageData.at(6);
+				auto newCommandedState = static_cast<StopAllImplementOperationsState>(messageData.at(7) & 0x03);
+
 				if (isobusShorcutButtonList.end() == ISB)
 				{
 					ISBServerData newISB;
 
 					LOG_DEBUG("[ISB]: New ISB detected at address %u", message.get_identifier().get_source_address());
 					newISB.ISONAME = messageNAME;
+					newISB.commandedState = newCommandedState;
 					isobusShorcutButtonList.emplace_back(newISB);
 					ISB = std::prev(isobusShorcutButtonList.end());
 				}
-
-				if (isobusShorcutButtonList.end() != ISB)
+				else
 				{
-					std::uint8_t newTransitionCount = messageData.at(6);
+					bool countChanged = (newTransitionCount != ISB->stopAllImplementOperationsTransitionNumber);
+					bool expectedTransition = (static_cast<std::uint8_t>(ISB->stopAllImplementOperationsTransitionNumber + 1) == newTransitionCount) &&
+					  (StopAllImplementOperationsState::PermitAllImplementsToOperationOn == ISB->reportedState) &&
+					  (StopAllImplementOperationsState::StopImplementOperations == newCommandedState);
 
-					if (((ISB->stopAllImplementOperationsTransitionNumber == 255) &&
-					     (0 != newTransitionCount)) ||
-					    ((ISB->stopAllImplementOperationsTransitionNumber < 255) &&
-					     (newTransitionCount > ISB->stopAllImplementOperationsTransitionNumber + 1)))
+					// A sender that only reports NotAvailable has no switch, and older stack versions raise its count on every send.
+					if (((StopAllImplementOperationsState::NotAvailable != newCommandedState) || ISB->reportedSwitchState) && countChanged && (!expectedTransition))
 					{
-						// A Working Set shall consider an increase in the transitions without detecting a corresponding
-						// transition of the Stop all implement operations state as an error and react accordingly.
 						ISB->commandedState = StopAllImplementOperationsState::StopImplementOperations;
 						LOG_ERROR("[ISB]: Missed an ISB transition from ISB at address %u", message.get_identifier().get_source_address());
 					}
 					else
 					{
-						ISB->commandedState = static_cast<StopAllImplementOperationsState>(messageData.at(7) & 0x03);
+						ISB->commandedState = newCommandedState;
 					}
-					ISB->messageReceivedTimestamp_ms = SystemTiming::get_timestamp_ms();
-					ISB->stopAllImplementOperationsTransitionNumber = messageData.at(6);
+				}
+				ISB->messageReceivedTimestamp_ms = SystemTiming::get_timestamp_ms();
+				ISB->stopAllImplementOperationsTransitionNumber = newTransitionCount;
+				ISB->reportedState = newCommandedState;
+				if (StopAllImplementOperationsState::NotAvailable != newCommandedState)
+				{
+					ISB->reportedSwitchState = true;
+				}
 
-					auto newState = get_state();
-					if (previousState != newState)
+				auto newState = get_state();
+				if (previousState != newState)
+				{
+					if (StopAllImplementOperationsState::StopImplementOperations == newState)
 					{
-						if (StopAllImplementOperationsState::StopImplementOperations == newState)
-						{
-							LOG_ERROR("[ISB]: All implement operations must stop. (ISB at address %u has commanded it)", message.get_identifier().get_source_address());
-						}
-						else
-						{
-							LOG_INFO("[ISB]: Implement operations now permitted.");
-						}
-						ISBEventDispatcher.call(newState);
+						LOG_ERROR("[ISB]: All implement operations must stop. (ISB at address %u has commanded it)", message.get_identifier().get_source_address());
 					}
+					else
+					{
+						LOG_INFO("[ISB]: Implement operations now permitted.");
+					}
+					ISBEventDispatcher.call(newState);
 				}
 			}
 			else
