@@ -62,6 +62,8 @@ namespace isobus
 		{
 			if (newState != commandedState)
 			{
+				// Send a pending retry with the old state first, so a failed Stop is not replaced by the next state.
+				txFlags.process_all_flags();
 				if ((StopAllImplementOperationsState::PermitAllImplementsToOperationOn == commandedState) &&
 				    (StopAllImplementOperationsState::StopImplementOperations == newState))
 				{
@@ -77,7 +79,10 @@ namespace isobus
 				{
 					LOG_INFO("[ISB]: Internal ISB state is now permitted.");
 				}
-				txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendStopAllImplementOperationsSwitchState));
+				if (!send_stop_all_implement_operations_switch_state())
+				{
+					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendStopAllImplementOperationsSwitchState));
+				}
 			}
 		}
 		else
@@ -110,14 +115,26 @@ namespace isobus
 
 	void ShortcutButtonInterface::update()
 	{
-		if (SystemTiming::time_expired_ms(allImplementsStopOperationsSwitchStateTimestamp_ms, TRANSMISSION_RATE_MS))
-		{
-			// Prune old ISBs
-			isobusShorcutButtonList.erase(std::remove_if(isobusShorcutButtonList.begin(), isobusShorcutButtonList.end(), [](const ISBServerData &isb) {
-				                              return SystemTiming::time_expired_ms(isb.messageReceivedTimestamp_ms, TRANSMISSION_TIMEOUT_MS);
-			                              }),
-			                              isobusShorcutButtonList.end());
+		StopAllImplementOperationsState previousState = get_state();
 
+		// Timed-out ISBs stay in the list so their transition count remains the baseline when they come back.
+		for (auto &isb : isobusShorcutButtonList)
+		{
+			if (SystemTiming::time_expired_ms(isb.messageReceivedTimestamp_ms, TRANSMISSION_TIMEOUT_MS))
+			{
+				isb.commandedState = StopAllImplementOperationsState::NotAvailable;
+			}
+		}
+
+		if (previousState != get_state())
+		{
+			LOG_WARNING("[ISB]: An ISB that commanded a stop timed out. Implement operations now permitted.");
+			ISBEventDispatcher.call(get_state());
+		}
+
+		if (actAsISBServer && SystemTiming::time_expired_ms(allImplementsStopOperationsSwitchStateTimestamp_ms, TRANSMISSION_RATE_MS))
+		{
+			allImplementsStopOperationsSwitchStateTimestamp_ms = SystemTiming::get_timestamp_ms();
 			txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendStopAllImplementOperationsSwitchState));
 		}
 		txFlags.process_all_flags();

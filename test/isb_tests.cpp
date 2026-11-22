@@ -43,6 +43,7 @@ static void pump_isb_frames(ShortcutButtonInterface &interfaceUnderTest, test_he
 		while (!observer.get_queue_empty())
 		{
 			observer.read_frame(frame);
+			frame.timestamp_us = timeSource.get_current_time_us();
 			if (0xFD02 == CANIdentifier(frame.identifier).get_parameter_group_number())
 			{
 				isbFrames.push_back(frame);
@@ -229,9 +230,14 @@ TEST_F(IsobusShortcutButtonTest, ShortcutButtonRxTests)
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, interfaceUnderTest.get_state());
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, lastCallbackValue);
 
-	time_source.simulate_delay_ms(3100);
+	time_source.simulate_delay_ms(2999);
+	interfaceUnderTest.update();
+	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::StopImplementOperations, interfaceUnderTest.get_state());
+
+	time_source.simulate_delay_ms(1);
 	interfaceUnderTest.update();
 	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
+	EXPECT_EQ(ShortcutButtonInterface::StopAllImplementOperationsState::PermitAllImplementsToOperationOn, lastCallbackValue);
 	CANHardwareInterface::stop();
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
@@ -412,6 +418,210 @@ TEST_F(IsobusShortcutButtonTest, ShortcutButtonServerCountsPermitToStop)
 	interfaceUnderTest.set_stop_all_implement_operations_state(State::StopImplementOperations);
 	pump_isb_frames(interfaceUnderTest, time_source, serverPlugin, 5, isbFrames);
 	EXPECT_EQ(2, isbFrames.back().data[6]);
+
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+TEST_F(IsobusShortcutButtonTest, ShortcutButtonTimeoutKeepsTheTransitionCount)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x97, 0, time_source);
+	test_helpers::force_claim_partnered_control_function(0x77, 0);
+	// End boilerplate **********************************
+
+	ShortcutButtonInterface interfaceUnderTest(internalECU, false);
+	interfaceUnderTest.initialize();
+	std::vector<State> events;
+	interfaceUnderTest.get_stop_all_implement_operations_state_event_dispatcher().add_listener([&events](State state) {
+		events.push_back(state);
+	});
+
+	receive_isb(0x77, 5, State::PermitAllImplementsToOperationOn);
+	time_source.simulate_delay_ms(3000);
+	interfaceUnderTest.update();
+	EXPECT_EQ(State::PermitAllImplementsToOperationOn, interfaceUnderTest.get_state());
+	EXPECT_TRUE(events.empty());
+
+	receive_isb(0x77, 6, State::PermitAllImplementsToOperationOn);
+	EXPECT_EQ(State::StopImplementOperations, interfaceUnderTest.get_state());
+	EXPECT_EQ(std::vector<State>({ State::StopImplementOperations }), events);
+
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+TEST_F(IsobusShortcutButtonTest, ShortcutButtonClientDoesNotSend)
+{
+	VirtualCANPlugin serverPlugin;
+	serverPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x98, 0, time_source);
+	test_helpers::force_claim_partnered_control_function(0x74, 0);
+
+	time_source.update_for_ms(50);
+
+	CANMessageFrame testFrame = {};
+	while (!serverPlugin.get_queue_empty())
+	{
+		serverPlugin.read_frame(testFrame);
+	}
+	ASSERT_TRUE(serverPlugin.get_queue_empty());
+	ASSERT_TRUE(internalECU->get_address_valid());
+	// End boilerplate **********************************
+
+	ShortcutButtonInterface interfaceUnderTest(internalECU, false);
+	CANNetworkManager::CANNetwork.update();
+	interfaceUnderTest.initialize();
+	std::vector<CANMessageFrame> isbFrames;
+
+	pump_isb_frames(interfaceUnderTest, time_source, serverPlugin, 2500, isbFrames);
+	EXPECT_TRUE(isbFrames.empty());
+
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+TEST_F(IsobusShortcutButtonTest, ShortcutButtonStopThenPermitBeforeUpdateSendsBoth)
+{
+	VirtualCANPlugin serverPlugin;
+	serverPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x98, 0, time_source);
+	test_helpers::force_claim_partnered_control_function(0x74, 0);
+
+	time_source.update_for_ms(50);
+
+	CANMessageFrame testFrame = {};
+	while (!serverPlugin.get_queue_empty())
+	{
+		serverPlugin.read_frame(testFrame);
+	}
+	ASSERT_TRUE(serverPlugin.get_queue_empty());
+	ASSERT_TRUE(internalECU->get_address_valid());
+	// End boilerplate **********************************
+
+	ShortcutButtonInterface interfaceUnderTest(internalECU, true);
+	CANNetworkManager::CANNetwork.update();
+	interfaceUnderTest.initialize();
+	std::vector<CANMessageFrame> isbFrames;
+
+	pump_isb_frames(interfaceUnderTest, time_source, serverPlugin, 5, isbFrames);
+	isbFrames.clear();
+
+	interfaceUnderTest.set_stop_all_implement_operations_state(State::StopImplementOperations);
+	interfaceUnderTest.set_stop_all_implement_operations_state(State::PermitAllImplementsToOperationOn);
+	pump_isb_frames(interfaceUnderTest, time_source, serverPlugin, 5, isbFrames);
+
+	ASSERT_EQ(2U, isbFrames.size());
+	EXPECT_EQ(0xFC, isbFrames.at(0).data[7]);
+	EXPECT_EQ(0xFD, isbFrames.at(1).data[7]);
+
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+TEST_F(IsobusShortcutButtonTest, ShortcutButtonFailedStopIsSentBeforePermit)
+{
+	VirtualCANPlugin serverPlugin;
+	serverPlugin.open();
+
+	auto hardwarePlugin = std::make_shared<VirtualCANPlugin>();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, hardwarePlugin);
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x98, 0, time_source);
+	test_helpers::force_claim_partnered_control_function(0x74, 0);
+
+	time_source.update_for_ms(50);
+
+	CANMessageFrame testFrame = {};
+	while (!serverPlugin.get_queue_empty())
+	{
+		serverPlugin.read_frame(testFrame);
+	}
+	ASSERT_TRUE(serverPlugin.get_queue_empty());
+	ASSERT_TRUE(internalECU->get_address_valid());
+	// End boilerplate **********************************
+
+	ShortcutButtonInterface interfaceUnderTest(internalECU, true);
+	CANNetworkManager::CANNetwork.update();
+	interfaceUnderTest.initialize();
+	std::vector<CANMessageFrame> isbFrames;
+
+	interfaceUnderTest.set_stop_all_implement_operations_state(State::PermitAllImplementsToOperationOn);
+	pump_isb_frames(interfaceUnderTest, time_source, serverPlugin, 5, isbFrames);
+	isbFrames.clear();
+
+	hardwarePlugin->close();
+	interfaceUnderTest.set_stop_all_implement_operations_state(State::StopImplementOperations);
+	hardwarePlugin->open();
+	interfaceUnderTest.set_stop_all_implement_operations_state(State::PermitAllImplementsToOperationOn);
+	pump_isb_frames(interfaceUnderTest, time_source, serverPlugin, 5, isbFrames);
+
+	ASSERT_EQ(2U, isbFrames.size());
+	EXPECT_EQ(0xFC, isbFrames.at(0).data[7]);
+	EXPECT_EQ(1, isbFrames.at(0).data[6]);
+	EXPECT_EQ(0xFD, isbFrames.at(1).data[7]);
+	EXPECT_EQ(1, isbFrames.at(1).data[6]);
+
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+TEST_F(IsobusShortcutButtonTest, ShortcutButtonServerSendsOncePerSecond)
+{
+	VirtualCANPlugin serverPlugin;
+	serverPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x98, 0, time_source);
+	test_helpers::force_claim_partnered_control_function(0x74, 0);
+
+	time_source.update_for_ms(50);
+
+	CANMessageFrame testFrame = {};
+	while (!serverPlugin.get_queue_empty())
+	{
+		serverPlugin.read_frame(testFrame);
+	}
+	ASSERT_TRUE(serverPlugin.get_queue_empty());
+	ASSERT_TRUE(internalECU->get_address_valid());
+	// End boilerplate **********************************
+
+	ShortcutButtonInterface interfaceUnderTest(internalECU, true);
+	CANNetworkManager::CANNetwork.update();
+	interfaceUnderTest.initialize();
+	std::vector<CANMessageFrame> isbFrames;
+
+	pump_isb_frames(interfaceUnderTest, time_source, serverPlugin, 5000, isbFrames);
+	ASSERT_GE(isbFrames.size(), 4U);
+	for (std::size_t i = 1; i < isbFrames.size(); i++)
+	{
+		EXPECT_EQ(1000000U, isbFrames.at(i).timestamp_us - isbFrames.at(i - 1).timestamp_us);
+	}
+
+	const std::uint64_t lastPeriodic_us = isbFrames.back().timestamp_us;
+	isbFrames.clear();
+	interfaceUnderTest.set_stop_all_implement_operations_state(State::PermitAllImplementsToOperationOn);
+	pump_isb_frames(interfaceUnderTest, time_source, serverPlugin, 1000, isbFrames);
+	ASSERT_EQ(2U, isbFrames.size());
+	EXPECT_EQ(1000000U, isbFrames.at(1).timestamp_us - lastPeriodic_us);
 
 	CANHardwareInterface::stop();
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);

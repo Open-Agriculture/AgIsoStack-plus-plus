@@ -117,7 +117,7 @@ namespace isobus
 			ISBServerData() = default;
 
 			NAME ISONAME; ///< The ISONAME of the sender, used as a lookup key
-			StopAllImplementOperationsState commandedState = StopAllImplementOperationsState::NotAvailable; ///< The state this ISB commands: as sent, or Stop after a missed transition
+			StopAllImplementOperationsState commandedState = StopAllImplementOperationsState::NotAvailable; ///< The state this ISB commands: as sent, Stop after a missed transition, or NotAvailable after a timeout
 			StopAllImplementOperationsState reportedState = StopAllImplementOperationsState::NotAvailable; ///< The last state this ISB sent, used to check its transition count
 			std::uint32_t messageReceivedTimestamp_ms = 0; ///< Tracks the last time we received a message from this ISB so we can time them out if needed
 			std::uint8_t stopAllImplementOperationsTransitionNumber = 0; ///< Number of transitions from Permit (01) to Stop (00) since power up of the stop all implement operations parameter
