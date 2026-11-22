@@ -1210,6 +1210,12 @@ namespace isobus
 		switch (value)
 		{
 			case FontSize::Size6x8:
+			{
+				// 6x8 is the default font, so D.7 gives it no bit and every VT has it
+				retVal = true;
+			}
+			break;
+
 			case FontSize::Size8x8:
 			case FontSize::Size8x12:
 			case FontSize::Size12x16:
@@ -1218,7 +1224,7 @@ namespace isobus
 			case FontSize::Size24x32:
 			case FontSize::Size32x32:
 			{
-				retVal = (0 != (smallFontSizesBitfield & (1 << static_cast<std::uint8_t>(value))));
+				retVal = (0 != (smallFontSizesBitfield & (1 << (static_cast<std::uint8_t>(value) - static_cast<std::uint8_t>(FontSize::Size8x8)))));
 			}
 			break;
 
