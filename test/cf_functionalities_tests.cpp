@@ -3,6 +3,7 @@
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/isobus/isobus_functionalities.hpp"
 #include "isobus/utility/system_timing.hpp"
 
@@ -24,6 +25,20 @@ public:
 	{
 		ControlFunctionFunctionalities::get_message_content(messageData);
 	}
+};
+
+class ErrorCountingLogger : public CANStackLogger
+{
+public:
+	void sink_CAN_stack_log(CANStackLogger::LoggingLevel level, const std::string &) override
+	{
+		if (CANStackLogger::LoggingLevel::Error == level)
+		{
+			errors++;
+		}
+	}
+
+	std::uint32_t errors = 0;
 };
 
 class ControlFunctionFunctionalitiesTest : public AgIsoStackTestFixture
@@ -628,4 +643,47 @@ TEST_F(ControlFunctionFunctionalitiesTest, CFFunctionalitiesTest)
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 	CANNetworkManager::CANNetwork.deactivate_control_function(otherECU);
+}
+
+TEST_F(ControlFunctionFunctionalitiesTest, FunctionalitiesNineteenToTwentyEightHaveNoDefaultOptions)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x01, 0, time_source);
+	TestControlFunctionFunctionalities cfFunctionalitiesUnderTest(internalECU);
+
+	using Functionalities = ControlFunctionFunctionalities::Functionalities;
+	const std::vector<std::pair<Functionalities, std::uint8_t>> expectedIds = {
+		{ Functionalities::SequenceControllerServer, 19 },
+		{ Functionalities::SequenceControllerClient, 20 },
+		{ Functionalities::ShortcutButtonServer, 21 },
+		{ Functionalities::ShortcutButtonClient, 22 },
+		{ Functionalities::DiagnosticTool, 23 },
+		{ Functionalities::DataLoggerServer, 24 },
+		{ Functionalities::DataLoggerClient, 25 },
+		{ Functionalities::SystemInformationServer, 26 },
+		{ Functionalities::TaskControllerTramlineServer, 27 },
+		{ Functionalities::TaskControllerTramlineClient, 28 }
+	};
+
+	ErrorCountingLogger logger;
+	CANStackLogger::set_can_stack_logger_sink(&logger);
+
+	for (const auto &expected : expectedIds)
+	{
+		std::vector<std::uint8_t> messageData;
+
+		cfFunctionalitiesUnderTest.set_functionality_is_supported(expected.first, 1, true);
+		cfFunctionalitiesUnderTest.test_wrapper_get_message_content(messageData);
+		// 0xFF, 2 functionalities, then minimum CF and the one under test, each as ID, generation 1, no option bytes
+		EXPECT_EQ((std::vector<std::uint8_t>{ 0xFF, 2, 0, 1, 0, expected.second, 1, 0 }), messageData);
+
+		cfFunctionalitiesUnderTest.set_functionality_is_supported(expected.first, 1, false);
+	}
+
+	// The fixture's TearDown logs through the sink after this local logger is gone
+	CANStackLogger::set_can_stack_logger_sink(&discardingLogger);
+	EXPECT_EQ(0u, logger.errors);
 }

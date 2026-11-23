@@ -52,8 +52,18 @@ namespace isobus
 			TractorImplementManagementClient = 16,
 			FileServer = 17,
 			FileServerClient = 18,
+			SequenceControllerServer = 19,
+			SequenceControllerClient = 20,
+			ShortcutButtonServer = 21,
+			ShortcutButtonClient = 22,
+			DiagnosticTool = 23,
+			DataLoggerServer = 24,
+			DataLoggerClient = 25,
+			SystemInformationServer = 26,
+			TaskControllerTramlineServer = 27,
+			TaskControllerTramlineClient = 28,
 
-			ReservedRangeBegin = 19,
+			ReservedRangeBegin = 29,
 			MaxFunctionalityReserved = 255
 		};
 

@@ -94,3 +94,14 @@ If you want to change the state the interface is sending, simply call :code:`set
 
     If you are using the interface as an ISB server, you should update the interface more frequently than when receiving. A state change is sent as soon as you set it, but the periodic message and any retry of a failed send only go out when :code:`update` is called.
     A rate of 50ms is a reasonable minimum rate.
+
+Reporting ISB support
+^^^^^^^^^^^^^^^^^^^^^
+
+Each control function reports its active functionalities on the bus. If you use the diagnostic protocol, add the ISB server or client functionality to its control function functionalities message.
+
+.. code-block:: c++
+
+    diagnosticProtocol.ControlFunctionFunctionalitiesMessageInterface.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::ShortcutButtonServer, 1, true);
+
+A receiver would use :code:`ShortcutButtonClient` instead.
