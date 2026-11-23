@@ -856,8 +856,21 @@ namespace isobus
 		return retVal;
 	}
 
+	void ControlFunctionFunctionalities::set_reply_destination(std::shared_ptr<ControlFunction> destination)
+	{
+		LOCK_GUARD(Mutex, functionalitiesMutex);
+		replyDestination = destination;
+	}
+
+	std::shared_ptr<ControlFunction> ControlFunctionFunctionalities::get_reply_destination()
+	{
+		LOCK_GUARD(Mutex, functionalitiesMutex);
+		return replyDestination;
+	}
+
 	bool ControlFunctionFunctionalities::pgn_request_handler(std::uint32_t parameterGroupNumber,
-	                                                         std::shared_ptr<ControlFunction>,
+	                                                         std::shared_ptr<ControlFunction> requestingControlFunction,
+	                                                         std::shared_ptr<ControlFunction> destinationControlFunction,
 	                                                         bool &acknowledge,
 	                                                         AcknowledgementType &,
 	                                                         void *parentPointer)
@@ -869,6 +882,9 @@ namespace isobus
 		if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ControlFunctionFunctionalities) == parameterGroupNumber)
 		{
 			acknowledge = false;
+			// ISO 11783-3: a reply that needs the transport protocol goes to the requester of a destination-specific
+			// request, and to the global address (BAM) for a global one
+			targetInterface->set_reply_destination((nullptr != destinationControlFunction) ? requestingControlFunction : nullptr);
 			targetInterface->txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::ControlFunctionFunctionalitiesMessage));
 			retVal = true;
 		}
@@ -883,13 +899,21 @@ namespace isobus
 
 		if (static_cast<std::uint32_t>(TransmitFlags::ControlFunctionFunctionalitiesMessage) == flag)
 		{
+			std::shared_ptr<ControlFunction> destination = targetInterface->get_reply_destination();
+
 			std::vector<std::uint8_t> messageBuffer;
 			targetInterface->get_message_content(messageBuffer);
+
+			// A single frame of this PDU2 message always goes to the global address
+			if (messageBuffer.size() <= CAN_DATA_LENGTH)
+			{
+				destination = nullptr;
+			}
 			transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ControlFunctionFunctionalities),
 			                                                                    messageBuffer.data(),
 			                                                                    messageBuffer.size(),
 			                                                                    targetInterface->myControlFunction,
-			                                                                    nullptr);
+			                                                                    destination);
 		}
 
 		if (!transmitSuccessful)

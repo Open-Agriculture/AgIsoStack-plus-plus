@@ -50,7 +50,7 @@ Once you create the interface, call :code:`initialize` to set up the interface.
 
 With the interface created, you now have two options for getting updates from the interface when ISB events happen.
 
-Option 1: You can register for callbacks from the interface by using its EventDispatcher, and by giving it a function to call when an ISB message is received.
+Option 1: You can register for callbacks from the interface by using its EventDispatcher, and by giving it a function to call when the ISB state of the bus changes, including when an ISB that commanded a stop times out.
 
 .. code-block:: c++
 
@@ -92,5 +92,5 @@ If you want to change the state the interface is sending, simply call :code:`set
 
 .. warning::
 
-    If you are using the interface as an ISB server, you should update the interface more frequently than when receiving, because CAN message transmits will only happen when :code:`update` is called.
+    If you are using the interface as an ISB server, you should update the interface more frequently than when receiving. A state change is sent as soon as you set it, but the periodic message and any retry of a failed send only go out when :code:`update` is called.
     A rate of 50ms is a reasonable minimum rate.

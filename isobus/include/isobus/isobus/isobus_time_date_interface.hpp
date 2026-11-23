@@ -116,12 +116,14 @@ namespace isobus
 		/// @brief Processes a PGN request
 		/// @param[in] parameterGroupNumber The PGN being requested
 		/// @param[in] requestingControlFunction The control function that is requesting the PGN
+		/// @param[in] targetControlFunction Where the request was sent, or nullptr for a global request
 		/// @param[in] acknowledge If the request should be acknowledged (will always be false for this interface)
 		/// @param[in] acknowledgeType How to acknowledge the request (will always be NACK for this interface)
 		/// @param[in] parentPointer A context variable to find the relevant instance of this class
 		/// @returns True if the request was serviced, otherwise false.
 		static bool process_request_for_time_date(std::uint32_t parameterGroupNumber,
 		                                          std::shared_ptr<ControlFunction> requestingControlFunction,
+		                                          std::shared_ptr<ControlFunction> targetControlFunction,
 		                                          bool &acknowledge,
 		                                          AcknowledgementType &acknowledgeType,
 		                                          void *parentPointer);
