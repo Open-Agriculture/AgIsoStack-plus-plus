@@ -19,6 +19,7 @@
 #include "isobus/isobus/isobus_wheel_based_speed.hpp"
 #include "isobus/utility/event_dispatcher.hpp"
 #include "isobus/utility/processing_flags.hpp"
+#include "isobus/utility/thread_synchronization.hpp"
 
 #include <cstdint>
 #include <memory>
@@ -93,7 +94,7 @@ namespace isobus
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these commands. So generally using only index 0 will be acceptable.
 		/// @note It is also possible that this message may not be present, depending on your machine.
-		/// @returns The parsed content of the machine selected speed message
+		/// @returns The parsed content of the machine selected speed message. The returned data does not change afterwards and must be treated as read-only; call this again for newer data.
 		std::shared_ptr<MachineSelectedSpeedData> get_received_machine_selected_speed(std::size_t index);
 
 		/// @brief Returns the content of the wheel-based speed message
@@ -102,7 +103,7 @@ namespace isobus
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these commands. So generally using only index 0 will be acceptable.
 		/// @note It is also possible that this message may not be present, depending on your machine.
-		/// @returns The parsed content of the wheel-based speed message
+		/// @returns The parsed content of the wheel-based speed message. The returned data does not change afterwards and must be treated as read-only; call this again for newer data.
 		std::shared_ptr<WheelBasedMachineSpeedData> get_received_wheel_based_speed(std::size_t index);
 
 		/// @brief Returns the content of the ground-based speed message
@@ -111,7 +112,7 @@ namespace isobus
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these commands. So generally using only index 0 will be acceptable.
 		/// @note It is also possible that this message may not be present, depending on your machine.
-		/// @returns The parsed content of the ground-based speed message
+		/// @returns The parsed content of the ground-based speed message. The returned data does not change afterwards and must be treated as read-only; call this again for newer data.
 		std::shared_ptr<GroundBasedSpeedData> get_received_ground_based_speed(std::size_t index);
 
 		/// @brief Returns the content of the machine selected speed command message
@@ -120,23 +121,23 @@ namespace isobus
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these commands. So generally using only index 0 will be acceptable.
 		/// @note It is also possible that this message may not be present, depending on your machine.
-		/// @returns The parsed content of the machine selected speed command message
+		/// @returns The parsed content of the machine selected speed command message. The returned data does not change afterwards and must be treated as read-only; call this again for newer data.
 		std::shared_ptr<MachineSelectedSpeedCommandData> get_received_machine_selected_speed_command(std::size_t index);
 
 		/// @brief Returns an event dispatcher which you can use to get callbacks when new/updated wheel-based speed messages are received.
-		/// @returns The event publisher for wheel-based speed messages
+		/// @returns The event publisher for wheel-based speed messages. Listeners must treat the received data as read-only.
 		EventDispatcher<const std::shared_ptr<WheelBasedMachineSpeedData>, bool> &get_wheel_based_machine_speed_data_event_publisher();
 
 		/// @brief Returns an event dispatcher which you can use to get callbacks when new/updated machine selected speed messages are received.
-		/// @returns The event publisher for machine selected speed messages
+		/// @returns The event publisher for machine selected speed messages. Listeners must treat the received data as read-only.
 		EventDispatcher<const std::shared_ptr<MachineSelectedSpeedData>, bool> &get_machine_selected_speed_data_event_publisher();
 
 		/// @brief Returns an event dispatcher which you can use to get callbacks when new/updated ground-based speed messages are received.
-		/// @returns The event publisher for ground-based speed messages
+		/// @returns The event publisher for ground-based speed messages. Listeners must treat the received data as read-only.
 		EventDispatcher<const std::shared_ptr<GroundBasedSpeedData>, bool> &get_ground_based_machine_speed_data_event_publisher();
 
 		/// @brief Returns an event dispatcher which you can use to get callbacks when new/updated machine selected speed command messages are received.
-		/// @returns The event publisher for machine selected speed command messages
+		/// @returns The event publisher for machine selected speed command messages. Listeners must treat the received data as read-only.
 		EventDispatcher<const std::shared_ptr<MachineSelectedSpeedCommandData>, bool> &get_machine_selected_speed_command_data_event_publisher();
 
 		/// @brief Call this cyclically to update the interface. Transmits messages if needed and processes
@@ -190,6 +191,7 @@ namespace isobus
 		std::vector<std::shared_ptr<MachineSelectedSpeedData>> receivedMachineSelectedSpeedMessages; ///< A list of all received machine selected speed messages
 		std::vector<std::shared_ptr<GroundBasedSpeedData>> receivedGroundBasedSpeedMessages; ///< A list of all received ground-based speed messages
 		std::vector<std::shared_ptr<MachineSelectedSpeedCommandData>> receivedMachineSelectedSpeedCommandMessages; ///< A list of all received ground-based speed messages
+		mutable Mutex receivedMessagesMutex; ///< Guards the four received message lists, which the CAN thread writes while the application reads them
 		std::uint32_t wheelBasedSpeedTransmitTimestamp_ms = 0; ///< Timestamp used to know when to transmit the wheel-based speed message in milliseconds
 		std::uint32_t machineSelectedSpeedTransmitTimestamp_ms = 0; ///< Timestamp used to know when to transmit the machine selected speed message in milliseconds
 		std::uint32_t groundBasedSpeedTransmitTimestamp_ms = 0; ///< Timestamp used to know when to transmit the ground-based speed message in milliseconds

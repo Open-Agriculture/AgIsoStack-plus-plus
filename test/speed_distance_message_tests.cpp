@@ -9,7 +9,9 @@
 #include "helpers/control_function_helpers.hpp"
 #include "helpers/test_fixture.hpp"
 
+#include <atomic>
 #include <cmath>
+#include <thread>
 
 using namespace isobus;
 
@@ -53,6 +55,11 @@ public:
 	bool test_wrapper_send_machine_selected_speed_command() const
 	{
 		return send_machine_selected_speed_command();
+	}
+
+	static void test_wrapper_process_rx_message(const CANMessage &message, void *parentPointer)
+	{
+		process_rx_message(message, parentPointer);
 	}
 
 	static void test_mss_callback(const std::shared_ptr<MachineSelectedSpeedData>, bool)
@@ -567,3 +574,56 @@ TEST_F(SpeedMessageTest, ListenOnlyModeAndDecoding)
 		EXPECT_EQ(0, interfaceUnderTest.get_number_received_machine_selected_speed_command_sources());
 	}
 }
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+TEST_F(SpeedMessageTest, ReceiveThreadDoesNotRaceUpdate)
+{
+	TestSpeedInterface interfaceUnderTest(nullptr);
+	interfaceUnderTest.initialize();
+	auto sender = test_helpers::force_claim_partnered_control_function(0x46, 0);
+
+	std::atomic<bool> done = { false };
+	std::thread receiver([&interfaceUnderTest, &sender, &done]() {
+		const CANIdentifier mssIdentifier(CANIdentifier::Type::Extended, 0xF022, CANIdentifier::CANPriority::Priority3, 0xFF, 0x46);
+		const CANIdentifier wbsIdentifier(CANIdentifier::Type::Extended, 0xFE48, CANIdentifier::CANPriority::Priority3, 0xFF, 0x46);
+
+		for (std::uint16_t i = 0; i < 500; i++)
+		{
+			const std::uint16_t speed = (0 == (i % 2)) ? 1000 : 2000;
+			const std::vector<std::uint8_t> data = { static_cast<std::uint8_t>(speed & 0xFF), static_cast<std::uint8_t>(speed >> 8), 0, 0, 0, 0, 0, 0 };
+			TestSpeedInterface::test_wrapper_process_rx_message(CANMessage(CANMessage::Type::Receive, mssIdentifier, data, sender, nullptr, 0), &interfaceUnderTest);
+			TestSpeedInterface::test_wrapper_process_rx_message(CANMessage(CANMessage::Type::Receive, wbsIdentifier, data, sender, nullptr, 0), &interfaceUnderTest);
+		}
+		done = true;
+	});
+
+	while (!done)
+	{
+		interfaceUnderTest.update();
+		interfaceUnderTest.get_number_received_machine_selected_speed_sources();
+		interfaceUnderTest.get_number_received_wheel_based_speed_sources();
+		interfaceUnderTest.get_number_received_ground_based_speed_sources();
+		interfaceUnderTest.get_number_received_machine_selected_speed_command_sources();
+		auto mss = interfaceUnderTest.get_received_machine_selected_speed(0);
+		auto wbs = interfaceUnderTest.get_received_wheel_based_speed(0);
+		interfaceUnderTest.get_received_ground_based_speed(0);
+		interfaceUnderTest.get_received_machine_selected_speed_command(0);
+		if (nullptr != mss)
+		{
+			mss->get_machine_speed();
+		}
+		if (nullptr != wbs)
+		{
+			wbs->get_machine_speed();
+		}
+	}
+	receiver.join();
+
+	auto mss = interfaceUnderTest.get_received_machine_selected_speed(0);
+	auto wbs = interfaceUnderTest.get_received_wheel_based_speed(0);
+	ASSERT_NE(nullptr, mss);
+	ASSERT_NE(nullptr, wbs);
+	EXPECT_EQ(2000, mss->get_machine_speed());
+	EXPECT_EQ(2000, wbs->get_machine_speed());
+}
+#endif
