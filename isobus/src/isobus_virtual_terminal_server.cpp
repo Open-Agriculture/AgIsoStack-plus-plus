@@ -335,7 +335,7 @@ namespace isobus
 			                                                                                          store_rx_message,
 			                                                                                          this);
 			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMember),
-			                                                                                          process_rx_message,
+			                                                                                          store_rx_message,
 			                                                                                          this);
 		}
 
@@ -357,7 +357,7 @@ namespace isobus
 			                                                                                       store_rx_message,
 			                                                                                       this);
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMember),
-			                                                                                       process_rx_message,
+			                                                                                       store_rx_message,
 			                                                                                       this);
 			initialized = true;
 		}
@@ -564,6 +564,10 @@ namespace isobus
 	{
 		const auto source = message.get_source_control_function();
 
+		// A new Working Set Master message replaces the old definition, and its member messages follow it (ISO 11783-7 10.2 a and d)
+		forget_working_set_members(source);
+		remove_working_set_member(source->get_NAME());
+
 		// A managed working set master also sends this when another node requests it, which is not a restart
 		if ((nullptr == get_managed_working_set(source)) &&
 		    (announcedWorkingSetMasters.end() == std::find(announcedWorkingSetMasters.begin(), announcedWorkingSetMasters.end(), source)))
@@ -580,6 +584,9 @@ namespace isobus
 			return candidate.first == master;
 		});
 
+		// A control function is a member of one working set only (ISO 11783-7 10.2 d)
+		remove_working_set_member(member, master);
+
 		if (workingSetMembers.end() == members)
 		{
 			workingSetMembers.emplace_back(master, std::vector<NAME>());
@@ -591,6 +598,25 @@ namespace isobus
 		    (members->second.end() == std::find(members->second.begin(), members->second.end(), member)))
 		{
 			members->second.push_back(member);
+		}
+	}
+
+	void VirtualTerminalServer::forget_working_set_members(const std::shared_ptr<ControlFunction> &master)
+	{
+		workingSetMembers.erase(std::remove_if(workingSetMembers.begin(), workingSetMembers.end(), [&master](const std::pair<std::shared_ptr<ControlFunction>, std::vector<NAME>> &candidate) {
+			                        return candidate.first == master;
+		                        }),
+		                        workingSetMembers.end());
+	}
+
+	void VirtualTerminalServer::remove_working_set_member(const NAME &member, const std::shared_ptr<ControlFunction> &exceptMaster)
+	{
+		for (auto &members : workingSetMembers)
+		{
+			if (members.first != exceptMaster)
+			{
+				members.second.erase(std::remove(members.second.begin(), members.second.end(), member), members.second.end());
+			}
 		}
 	}
 
@@ -624,6 +650,7 @@ namespace isobus
 	void VirtualTerminalServer::shut_down_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, UnexpectedShutdownReason reason)
 	{
 		deactivate_working_set(workingSet);
+		forget_working_set_members(workingSet->get_control_function());
 		managedWorkingSetIopLoadStateMap.erase(workingSet);
 		managedWorkingSetList.erase(std::remove(managedWorkingSetList.begin(), managedWorkingSetList.end(), workingSet), managedWorkingSetList.end());
 
@@ -2726,7 +2753,7 @@ namespace isobus
 					                                               buffer.data(),
 					                                               CAN_DATA_LENGTH,
 					                                               serverInternalControlFunction,
-					                                               get_response_destination(message.get_source_control_function()),
+					                                               message.get_source_control_function(),
 					                                               get_priority());
 				}
 			}

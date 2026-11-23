@@ -1138,14 +1138,24 @@ namespace isobus
 		void process_working_set_maintenance_message(const CANMessage &message);
 
 		/// @brief Remembers a Working Set Master message from a control function this server does not manage,
-		/// which a version 2 or prior client has to send before it can be managed
+		/// which a version 2 or prior client has to send before it can be managed.
+		/// It also forgets the members the master announced before, as the member messages after it define the set again (ISO 11783-7 10.2 a and d).
 		/// @param[in] message The Working Set Master message
 		void process_working_set_master_message(const CANMessage &message);
 
 		/// @brief Remembers a member of the working set whose master sent this Working Set Member message.
-		/// Members are kept when the master sends its Working Set Master message again, since it also does that on request.
+		/// A control function is a member of one working set only, so it is removed from any other master's list (ISO 11783-7 10.2 d).
 		/// @param[in] message The Working Set Member message, which carries the NAME of the member
 		void process_working_set_member_message(const CANMessage &message);
+
+		/// @brief Forgets the members a working set master announced, as its next Working Set Master message defines the set again
+		/// @param[in] master The working set master
+		void forget_working_set_members(const std::shared_ptr<ControlFunction> &master);
+
+		/// @brief Removes a NAME from the member lists of the working set masters
+		/// @param[in] member The NAME to remove
+		/// @param[in] exceptMaster A master whose list is left as it is, or nullptr for none
+		void remove_working_set_member(const NAME &member, const std::shared_ptr<ControlFunction> &exceptMaster = nullptr);
 
 		/// @brief Picks the control function to send the response to a command to (ISO 11783-6 Table 1).
 		/// A working set member gets the response itself only if both the working set and this VT are version 4 or later,

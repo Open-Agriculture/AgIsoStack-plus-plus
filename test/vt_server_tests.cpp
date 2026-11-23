@@ -531,7 +531,7 @@ protected:
 		return !is_nacked(server, client, plugin, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
 	}
 
-	static void receive_working_set_member_from_client(std::shared_ptr<ControlFunction> master, std::shared_ptr<ControlFunction> member)
+	void receive_working_set_member_from_client(std::shared_ptr<ControlFunction> master, std::shared_ptr<ControlFunction> member)
 	{
 		const std::uint64_t memberName = member->get_NAME().get_full_name();
 		CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(5,
@@ -546,6 +546,17 @@ protected:
 		                                                                                                               static_cast<std::uint8_t>(memberName >> 48),
 		                                                                                                               static_cast<std::uint8_t>(memberName >> 56) }));
 		CANNetworkManager::CANNetwork.update();
+		serverToDrain->process_rx_messages();
+	}
+
+	void receive_working_set_master_with_members_from_client(std::shared_ptr<ControlFunction> master, std::uint8_t workingSetSize)
+	{
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(5,
+		                                                                                                             static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster),
+		                                                                                                             master,
+		                                                                                                             { workingSetSize, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+		CANNetworkManager::CANNetwork.update();
+		serverToDrain->process_rx_messages();
 	}
 
 	// A master announces one member and starts its working set with the given version, then the member asks for the number of soft keys
@@ -555,7 +566,8 @@ protected:
 	                                                    bool announceMember,
 	                                                    std::uint8_t &masterAddress,
 	                                                    std::uint8_t &memberAddress,
-	                                                    std::uint8_t &destination)
+	                                                    std::uint8_t &destination,
+	                                                    std::function<void(DerivedTestVTServer &, std::shared_ptr<ControlFunction>, std::shared_ptr<ControlFunction>)> beforeRequest = nullptr)
 	{
 		VirtualCANPlugin testPlugin;
 		testPlugin.open();
@@ -575,16 +587,16 @@ protected:
 		serverUnderTest.initialize();
 		serverToDrain = &serverUnderTest;
 
-		CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(5,
-		                                                                                                             static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster),
-		                                                                                                             master,
-		                                                                                                             { 0x02, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
-		CANNetworkManager::CANNetwork.update();
+		receive_working_set_master_with_members_from_client(master, 0x02);
 		if (announceMember)
 		{
 			receive_working_set_member_from_client(master, member);
 		}
 		receive_from_client(internalECU, master, { 0xFF, 0x01, workingSetVersion, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+		if (beforeRequest)
+		{
+			beforeRequest(serverUnderTest, master, member);
+		}
 
 		testPlugin.clear_queue();
 		receive_from_client(internalECU, member, { 0xC2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
@@ -2396,6 +2408,50 @@ TEST_F(VirtualTerminalServerMessagingTest, ResponseGoesToTheSenderWhenNoMasterAn
 	std::uint8_t member = 0;
 	std::uint8_t destination = 0;
 	ASSERT_TRUE(read_soft_keys_response_destination_for_member(0x0E, VirtualTerminalBase::VTVersion::Version3, 3, false, master, member, destination));
+	EXPECT_EQ(member, destination);
+}
+
+// ISO 11783-7 10.2 d: a new Working Set Master message replaces the old definition
+TEST_F(VirtualTerminalServerMessagingTest, ResponseGoesToTheSenderWhenItsMasterRedefinesTheSetWithoutIt)
+{
+	std::uint8_t master = 0;
+	std::uint8_t member = 0;
+	std::uint8_t destination = 0;
+	ASSERT_TRUE(read_soft_keys_response_destination_for_member(0x11, VirtualTerminalBase::VTVersion::Version3, 3, true, master, member, destination, [this](DerivedTestVTServer &, std::shared_ptr<ControlFunction> workingSetMaster, std::shared_ptr<ControlFunction>) {
+		receive_working_set_master_with_members_from_client(workingSetMaster, 0x01);
+	}));
+	EXPECT_EQ(member, destination);
+}
+
+// ISO 11783-7 10.2 d: a control function is a member of one working set only
+TEST_F(VirtualTerminalServerMessagingTest, ResponseGoesToTheNewMasterWhenAMemberMovesToAnotherWorkingSet)
+{
+	std::uint8_t master = 0;
+	std::uint8_t member = 0;
+	std::uint8_t destination = 0;
+	std::uint8_t newMaster = 0;
+	ASSERT_TRUE(read_soft_keys_response_destination_for_member(0x14, VirtualTerminalBase::VTVersion::Version3, 3, true, master, member, destination, [this, &newMaster](DerivedTestVTServer &, std::shared_ptr<ControlFunction>, std::shared_ptr<ControlFunction> workingSetMember) {
+		auto otherMaster = test_helpers::force_claim_partnered_control_function(0x17, 0);
+		newMaster = otherMaster->get_address();
+		receive_working_set_master_with_members_from_client(otherMaster, 0x02);
+		receive_working_set_member_from_client(otherMaster, workingSetMember);
+	}));
+	EXPECT_NE(master, destination);
+	EXPECT_EQ(newMaster, destination);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ResponseGoesToTheSenderWhenItsMasterShutsDown)
+{
+	std::uint8_t master = 0;
+	std::uint8_t member = 0;
+	std::uint8_t destination = 0;
+	std::size_t shutdowns = 0;
+	ASSERT_TRUE(read_soft_keys_response_destination_for_member(0x18, VirtualTerminalBase::VTVersion::Version3, 3, true, master, member, destination, [this, &shutdowns](DerivedTestVTServer &server, std::shared_ptr<ControlFunction>, std::shared_ptr<ControlFunction>) {
+		time_source.simulate_delay_ms(JUST_PAST_MAINTENANCE_TIMEOUT_MS);
+		server.run_update();
+		shutdowns = server.shutdownReasons.size();
+	}));
+	EXPECT_EQ(1U, shutdowns);
 	EXPECT_EQ(member, destination);
 }
 
