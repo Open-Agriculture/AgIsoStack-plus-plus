@@ -502,7 +502,7 @@ namespace isobus
 			std::copy(message.get_data().begin(), message.get_data().end(), frame.data.begin());
 			frame.timestamp_ms = SystemTiming::get_timestamp_ms();
 			// A full queue drops the newest message, as only update() may pop
-			if (false == targetInterface->receivedFrames.push(frame))
+			if (!targetInterface->receivedFrames.push(frame))
 			{
 				targetInterface->droppedFrameCount++;
 			}
