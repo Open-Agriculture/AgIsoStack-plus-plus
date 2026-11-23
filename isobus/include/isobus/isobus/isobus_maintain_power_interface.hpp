@@ -20,6 +20,7 @@
 #include "isobus/isobus/can_message.hpp"
 #include "isobus/utility/event_dispatcher.hpp"
 #include "isobus/utility/processing_flags.hpp"
+#include "isobus/utility/thread_synchronization.hpp"
 
 #include <memory>
 
@@ -219,11 +220,11 @@ namespace isobus
 		/// @brief Returns the content of a received maintain power message
 		/// based on the index of the sender. Use this to read the received messages' content.
 		/// @param[in] index An index of senders of the maintain power message
-		/// @returns A pointer to the maintain power message data, or nullptr if the index is out of range
+		/// @returns A pointer to the maintain power message data, or nullptr if the index is out of range. The returned data does not change afterwards and must be treated as read-only; call this again for newer data.
 		std::shared_ptr<MaintainPowerData> get_received_maintain_power(std::size_t index);
 
 		/// @brief Returns an event dispatcher which you can use to get callbacks when new/updated maintain power messages are received.
-		/// @returns The event publisher for maintain power messages
+		/// @returns The event publisher for maintain power messages. Listeners must treat the received data as read-only.
 		EventDispatcher<const std::shared_ptr<MaintainPowerData>, bool> &get_maintain_power_data_event_publisher();
 
 		/// @brief Returns an event dispatcher which you can use to get callbacks when the key switch transitions from
@@ -283,6 +284,8 @@ namespace isobus
 		std::uint32_t keyOffTimestamp = 0; ///< A timestamp to track when the key is off, used to calculate how many messages to send and when to send them.
 		std::uint32_t maintainPowerTransmitTimestamp_ms = 0; ///< Timestamp used to know when to transmit the maintain power message in milliseconds
 		std::uint32_t maintainPowerTime_ms = 0; ///< The amount of time to ask the TECU to maintain actuator/section power. Will be rounded up to the next 2s mark when sent.
+		bool keySwitchOffSendPending = false; ///< Set by the key switch transition to off, update() sends the maintain power message
+		mutable Mutex receivedMessagesMutex; ///< Guards receivedMaintainPowerMessages and the key switch state, which the CAN thread writes while update() reads them
 		bool initialized = false; ///< Stores if the interface has been initialized
 	};
 } // namespace isobus

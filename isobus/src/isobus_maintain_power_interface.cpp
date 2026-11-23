@@ -48,19 +48,34 @@ namespace isobus
 	{
 		if (initialized)
 		{
-			receivedMaintainPowerMessages.erase(std::remove_if(receivedMaintainPowerMessages.begin(),
-			                                                   receivedMaintainPowerMessages.end(),
-			                                                   [](std::shared_ptr<MaintainPowerData> messageInfo) {
-				                                                   return SystemTiming::time_expired_ms(messageInfo->get_timestamp_ms(), MAINTAIN_POWER_TIMEOUT_MS);
-			                                                   }),
-			                                    receivedMaintainPowerMessages.end());
-			if (SystemTiming::time_expired_ms(maintainPowerTransmitTimestamp_ms, MAINTAIN_POWER_TIMEOUT_MS / 2) &&
-			    (0 != maintainPowerTransmitTimestamp_ms) &&
-			    (SystemTiming::get_time_elapsed_ms(keyOffTimestamp) < maintainPowerTime_ms) &&
-			    (nullptr != maintainPowerTransmitData.get_sender_control_function()))
+			bool sendMaintainPower = false;
+
+			{
+				LOCK_GUARD(Mutex, receivedMessagesMutex);
+				receivedMaintainPowerMessages.erase(std::remove_if(receivedMaintainPowerMessages.begin(),
+				                                                   receivedMaintainPowerMessages.end(),
+				                                                   [](std::shared_ptr<MaintainPowerData> messageInfo) {
+					                                                   return SystemTiming::time_expired_ms(messageInfo->get_timestamp_ms(), MAINTAIN_POWER_TIMEOUT_MS);
+				                                                   }),
+				                                    receivedMaintainPowerMessages.end());
+				if (keySwitchOffSendPending)
+				{
+					keySwitchOffSendPending = false;
+					sendMaintainPower = true;
+				}
+				if (SystemTiming::time_expired_ms(maintainPowerTransmitTimestamp_ms, MAINTAIN_POWER_TIMEOUT_MS / 2) &&
+				    (0 != maintainPowerTransmitTimestamp_ms) &&
+				    (SystemTiming::get_time_elapsed_ms(keyOffTimestamp) < maintainPowerTime_ms) &&
+				    (nullptr != maintainPowerTransmitData.get_sender_control_function()))
+				{
+					maintainPowerTransmitTimestamp_ms = SystemTiming::get_timestamp_ms();
+					sendMaintainPower = true;
+				}
+			}
+
+			if (sendMaintainPower)
 			{
 				txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendMaintainPower));
-				maintainPowerTransmitTimestamp_ms = SystemTiming::get_timestamp_ms();
 			}
 			txFlags.process_all_flags();
 		}
@@ -189,12 +204,15 @@ namespace isobus
 
 	std::size_t MaintainPowerInterface::get_number_received_maintain_power_sources() const
 	{
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
 		return receivedMaintainPowerMessages.size();
 	}
 
 	std::shared_ptr<MaintainPowerInterface::MaintainPowerData> MaintainPowerInterface::get_received_maintain_power(std::size_t index)
 	{
 		std::shared_ptr<MaintainPowerInterface::MaintainPowerData> retVal = nullptr;
+
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
 
 		if (index < receivedMaintainPowerMessages.size())
 		{
@@ -244,6 +262,8 @@ namespace isobus
 		assert(nullptr != parentPointer);
 
 		auto targetInterface = static_cast<MaintainPowerInterface *>(parentPointer);
+		Mutex &receivedMessagesMutex = targetInterface->receivedMessagesMutex;
+		(void)receivedMessagesMutex; // Unused when threads are disabled
 
 		if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::WheelBasedSpeedAndDistance) == message.get_identifier().get_parameter_group_number())
 		{
@@ -255,60 +275,80 @@ namespace isobus
 					// We don't care who's sending this really, we just need to detect a transition from not-off to off.
 					const auto decodedKeySwitchState = static_cast<KeySwitchState>((message.get_uint8_at(7) >> 2) & 0x03);
 
-					switch (decodedKeySwitchState)
+					bool keySwitchTurnedOff = false;
+					// Logged after the lock is released, because a log sink may call back into this interface
+					const char *keySwitchLog = nullptr;
+
 					{
-						case KeySwitchState::Off:
+						LOCK_GUARD(Mutex, receivedMessagesMutex);
+						switch (decodedKeySwitchState)
 						{
-							if (0 != targetInterface->keyNotOffTimestamp)
+							case KeySwitchState::Off:
 							{
-								LOG_INFO("[Maintain Power]: The key switch state has transitioned from NOT OFF to OFF.");
-								targetInterface->keyNotOffTimestamp = 0;
+								if (0 != targetInterface->keyNotOffTimestamp)
+								{
+									keySwitchLog = "[Maintain Power]: The key switch state has transitioned from NOT OFF to OFF.";
+									targetInterface->keyNotOffTimestamp = 0;
 
-								// Send the maintain power message based on the key state transition
-								targetInterface->keyOffTimestamp = SystemTiming::get_timestamp_ms();
-								targetInterface->txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendMaintainPower));
-								targetInterface->maintainPowerTransmitTimestamp_ms = SystemTiming::get_timestamp_ms();
-								targetInterface->keySwitchOffEventPublisher.invoke();
+									// Send the maintain power message based on the key state transition
+									targetInterface->keyOffTimestamp = SystemTiming::get_timestamp_ms();
+									targetInterface->keySwitchOffSendPending = true;
+									targetInterface->maintainPowerTransmitTimestamp_ms = SystemTiming::get_timestamp_ms();
+									keySwitchTurnedOff = true;
+								}
+								else if (0 == targetInterface->keyOffTimestamp)
+								{
+									keySwitchLog = "[Maintain Power]: The key switch state is detected as OFF.";
+									targetInterface->keyOffTimestamp = SystemTiming::get_timestamp_ms();
+								}
 							}
-							else if (0 == targetInterface->keyOffTimestamp)
-							{
-								LOG_INFO("[Maintain Power]: The key switch state is detected as OFF.");
-								targetInterface->keyOffTimestamp = SystemTiming::get_timestamp_ms();
-							}
-						}
-						break;
+							break;
 
-						case KeySwitchState::NotOff:
-						{
-							if (0 != targetInterface->keyOffTimestamp)
+							case KeySwitchState::NotOff:
 							{
-								LOG_INFO("[Maintain Power]: The key switch state has transitioned from OFF to NOT OFF.");
+								if (0 != targetInterface->keyOffTimestamp)
+								{
+									keySwitchLog = "[Maintain Power]: The key switch state has transitioned from OFF to NOT OFF.";
+									targetInterface->keyOffTimestamp = 0;
+									targetInterface->keyNotOffTimestamp = SystemTiming::get_timestamp_ms();
+								}
+								else if (0 == targetInterface->keyNotOffTimestamp)
+								{
+									keySwitchLog = "[Maintain Power]: The key switch state is detected as NOT OFF.";
+									targetInterface->keyNotOffTimestamp = SystemTiming::get_timestamp_ms();
+								}
+								targetInterface->maintainPowerTransmitTimestamp_ms = 0;
+							}
+							break;
+
+							case KeySwitchState::Error:
+							{
 								targetInterface->keyOffTimestamp = 0;
-								targetInterface->keyNotOffTimestamp = SystemTiming::get_timestamp_ms();
+								targetInterface->keyNotOffTimestamp = 0;
+								targetInterface->maintainPowerTransmitTimestamp_ms = 0;
 							}
-							else if (0 == targetInterface->keyNotOffTimestamp)
+							break;
+
+							default:
 							{
-								LOG_INFO("[Maintain Power]: The key switch state is detected as NOT OFF.");
-								targetInterface->keyNotOffTimestamp = SystemTiming::get_timestamp_ms();
+								// The "take no action" state, so we'll ignore it.
 							}
-							targetInterface->maintainPowerTransmitTimestamp_ms = 0;
+							break;
 						}
-						break;
+					}
 
-						case KeySwitchState::Error:
-						{
-							LOG_WARNING("[Maintain Power]: The key switch is in an error state.");
-							targetInterface->keyOffTimestamp = 0;
-							targetInterface->keyNotOffTimestamp = 0;
-							targetInterface->maintainPowerTransmitTimestamp_ms = 0;
-						}
-						break;
+					if (nullptr != keySwitchLog)
+					{
+						LOG_INFO(keySwitchLog);
+					}
+					else if (KeySwitchState::Error == decodedKeySwitchState)
+					{
+						LOG_WARNING("[Maintain Power]: The key switch is in an error state.");
+					}
 
-						default:
-						{
-							// The "take no action" state, so we'll ignore it.
-						}
-						break;
+					if (keySwitchTurnedOff)
+					{
+						targetInterface->keySwitchOffEventPublisher.invoke();
 					}
 				}
 			}
@@ -323,31 +363,45 @@ namespace isobus
 			{
 				if (nullptr != message.get_source_control_function())
 				{
-					auto result = std::find_if(targetInterface->receivedMaintainPowerMessages.cbegin(),
-					                           targetInterface->receivedMaintainPowerMessages.cend(),
-					                           [&message](const std::shared_ptr<MaintainPowerData> &receivedInfo) {
-						                           return (nullptr != receivedInfo) && (receivedInfo->get_sender_control_function() == message.get_source_control_function());
-					                           });
-
-					if (result == targetInterface->receivedMaintainPowerMessages.end())
-					{
-						// There is no existing message object from this control function, so create a new one
-						targetInterface->receivedMaintainPowerMessages.push_back(std::make_shared<MaintainPowerData>(message.get_source_control_function()));
-						result = targetInterface->receivedMaintainPowerMessages.end() - 1;
-					}
-
-					auto &mpMessage = *result;
+					std::shared_ptr<MaintainPowerData> updated;
 					bool changed = false;
 
-					changed |= mpMessage->set_maintain_actuator_power(static_cast<MaintainPowerData::MaintainActuatorPower>((message.get_uint8_at(0) >> 4) & 0x03));
-					changed |= mpMessage->set_maintain_ecu_power(static_cast<MaintainPowerData::MaintainECUPower>((message.get_uint8_at(0) >> 6) & 0x03));
-					changed |= mpMessage->set_implement_in_work_state(static_cast<MaintainPowerData::ImplementInWorkState>(message.get_uint8_at(1) & 0x03));
-					changed |= mpMessage->set_implement_ready_to_work_state(static_cast<MaintainPowerData::ImplementReadyToWorkState>((message.get_uint8_at(1) >> 2) & 0x03));
-					changed |= mpMessage->set_implement_park_state(static_cast<MaintainPowerData::ImplementParkState>((message.get_uint8_at(1) >> 4) & 0x03));
-					changed |= mpMessage->set_implement_transport_state(static_cast<MaintainPowerData::ImplementTransportState>((message.get_uint8_at(1) >> 6) & 0x03));
-					mpMessage->set_timestamp_ms(SystemTiming::get_timestamp_ms());
+					{
+						LOCK_GUARD(Mutex, receivedMessagesMutex);
+						auto result = std::find_if(targetInterface->receivedMaintainPowerMessages.begin(),
+						                           targetInterface->receivedMaintainPowerMessages.end(),
+						                           [&message](const std::shared_ptr<MaintainPowerData> &receivedInfo) {
+							                           return (nullptr != receivedInfo) && (receivedInfo->get_sender_control_function() == message.get_source_control_function());
+						                           });
 
-					targetInterface->maintainPowerDataEventPublisher.call(mpMessage, changed);
+						if (result != targetInterface->receivedMaintainPowerMessages.end())
+						{
+							updated = std::make_shared<MaintainPowerData>(**result);
+						}
+						else
+						{
+							updated = std::make_shared<MaintainPowerData>(message.get_source_control_function());
+						}
+
+						changed |= updated->set_maintain_actuator_power(static_cast<MaintainPowerData::MaintainActuatorPower>((message.get_uint8_at(0) >> 4) & 0x03));
+						changed |= updated->set_maintain_ecu_power(static_cast<MaintainPowerData::MaintainECUPower>((message.get_uint8_at(0) >> 6) & 0x03));
+						changed |= updated->set_implement_in_work_state(static_cast<MaintainPowerData::ImplementInWorkState>(message.get_uint8_at(1) & 0x03));
+						changed |= updated->set_implement_ready_to_work_state(static_cast<MaintainPowerData::ImplementReadyToWorkState>((message.get_uint8_at(1) >> 2) & 0x03));
+						changed |= updated->set_implement_park_state(static_cast<MaintainPowerData::ImplementParkState>((message.get_uint8_at(1) >> 4) & 0x03));
+						changed |= updated->set_implement_transport_state(static_cast<MaintainPowerData::ImplementTransportState>((message.get_uint8_at(1) >> 6) & 0x03));
+						updated->set_timestamp_ms(SystemTiming::get_timestamp_ms());
+
+						if (result != targetInterface->receivedMaintainPowerMessages.end())
+						{
+							*result = updated;
+						}
+						else
+						{
+							targetInterface->receivedMaintainPowerMessages.push_back(updated);
+						}
+					}
+
+					targetInterface->maintainPowerDataEventPublisher.call(updated, changed);
 				}
 			}
 			else
