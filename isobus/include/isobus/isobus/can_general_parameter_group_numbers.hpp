@@ -39,6 +39,7 @@ namespace isobus
 		DiagnosticProtocolIdentification = 0xFD32,
 		ISOBUSComplianceCertification = 0xFD42,
 		MachineSelectedSpeedCommand = 0xFD43,
+		WorkingSetMember = 0xFE0C,
 		WorkingSetMaster = 0xFE0D,
 		ResponseForRepetitionRate = 0xFE0E,
 		LanguageCommand = 0xFE0F,

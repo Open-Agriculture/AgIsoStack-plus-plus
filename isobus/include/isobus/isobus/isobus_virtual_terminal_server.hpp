@@ -20,6 +20,7 @@
 
 #include <deque>
 #include <utility>
+#include <vector>
 
 namespace isobus
 {
@@ -1035,6 +1036,7 @@ namespace isobus
 		void update();
 
 		static constexpr std::uint8_t VERSION_LABEL_LENGTH = 7; ///< The length of a standard object pool version label
+		static constexpr std::size_t MAX_WORKING_SET_MEMBERS = 255; ///< The most members a working set master can announce, its Working Set Master message counts them in one byte
 		static constexpr std::uint32_t WORKING_SET_MAINTENANCE_TIMEOUT_MS = 3000; ///< A working set master has shut down if it sends no Working Set Maintenance message for this long (ISO 11783-6 4.6.9)
 		static constexpr std::uint32_t DEFAULT_MAX_RX_QUEUE_SIZE_BYTES = 524288; ///< The default limit on the bytes of received messages waiting for update(), see set_max_rx_queue_size()
 
@@ -1136,9 +1138,31 @@ namespace isobus
 		void process_working_set_maintenance_message(const CANMessage &message);
 
 		/// @brief Remembers a Working Set Master message from a control function this server does not manage,
-		/// which a version 2 or prior client has to send before it can be managed
+		/// which a version 2 or prior client has to send before it can be managed.
+		/// It also forgets the members the master announced before, as the member messages after it define the set again (ISO 11783-7 10.2 a and d).
 		/// @param[in] message The Working Set Master message
 		void process_working_set_master_message(const CANMessage &message);
+
+		/// @brief Remembers a member of the working set whose master sent this Working Set Member message.
+		/// A control function is a member of one working set only, so it is removed from any other master's list (ISO 11783-7 10.2 d).
+		/// @param[in] message The Working Set Member message, which carries the NAME of the member
+		void process_working_set_member_message(const CANMessage &message);
+
+		/// @brief Forgets the members a working set master announced, as its next Working Set Master message defines the set again
+		/// @param[in] master The working set master
+		void forget_working_set_members(const std::shared_ptr<ControlFunction> &master);
+
+		/// @brief Removes a NAME from the member lists of the working set masters
+		/// @param[in] member The NAME to remove
+		/// @param[in] exceptMaster A master whose list is left as it is, or nullptr for none
+		void remove_working_set_member(const NAME &member, const std::shared_ptr<ControlFunction> &exceptMaster = nullptr);
+
+		/// @brief Picks the control function to send the response to a command to (ISO 11783-6 Table 1).
+		/// A working set member gets the response itself only if both the working set and this VT are version 4 or later,
+		/// otherwise it goes to its working set master.
+		/// @param[in] source The control function that sent the command
+		/// @returns The control function to send the response to
+		std::shared_ptr<ControlFunction> get_response_destination(const std::shared_ptr<ControlFunction> &source) const;
 
 		/// @brief Stops managing a working set whose master shut down unexpectedly (ISO 11783-6 4.6.9),
 		/// and queues it for report_shut_down_working_sets()
@@ -1161,6 +1185,7 @@ namespace isobus
 
 		std::vector<std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, UnexpectedShutdownReason>> pendingShutdowns; ///< Shut down working sets that the application has not been told about yet
 		std::vector<PendingObjectPoolDeletion> pendingObjectPoolDeletions; ///< Object pool deletions that update() has not passed to object_pool_deleted() yet
+		std::vector<std::pair<std::shared_ptr<ControlFunction>, std::vector<NAME>>> workingSetMembers; ///< The members each working set master announced with Working Set Member messages
 		std::vector<std::shared_ptr<ControlFunction>> announcedWorkingSetMasters; ///< Unmanaged control functions that sent a Working Set Master message, see process_working_set_master_message()
 
 		/// @brief A received message and the time it arrived

@@ -334,6 +334,9 @@ namespace isobus
 			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster),
 			                                                                                          store_rx_message,
 			                                                                                          this);
+			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMember),
+			                                                                                          store_rx_message,
+			                                                                                          this);
 		}
 
 		// A shut down working set can still be parsing its object pool, and its thread must not outlive it
@@ -351,6 +354,9 @@ namespace isobus
 			                                                                                       store_rx_message,
 			                                                                                       this);
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster),
+			                                                                                       store_rx_message,
+			                                                                                       this);
+			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMember),
 			                                                                                       store_rx_message,
 			                                                                                       this);
 			initialized = true;
@@ -518,6 +524,7 @@ namespace isobus
 			else
 			{
 				workingSet->set_working_set_maintenance_message_timestamp_ms(rxMessageArrivalTimestamp_ms);
+				workingSet->set_working_set_version(clientVersion);
 			}
 		}
 
@@ -541,6 +548,7 @@ namespace isobus
 				// This CF is trying to initiate communication with us.
 				auto newWorkingSet = std::make_shared<VirtualTerminalServerManagedWorkingSet>(message.get_source_control_function());
 				newWorkingSet->set_working_set_maintenance_message_timestamp_ms(rxMessageArrivalTimestamp_ms);
+				newWorkingSet->set_working_set_version(clientVersion);
 				managedWorkingSetList.emplace_back(newWorkingSet);
 
 				LOG_INFO("[VT Server]: Client %u initiated working set maintenance messages with version %u", newWorkingSet->get_control_function()->get_address(), clientVersion);
@@ -556,6 +564,10 @@ namespace isobus
 	{
 		const auto source = message.get_source_control_function();
 
+		// A new Working Set Master message replaces the old definition, and its member messages follow it (ISO 11783-7 10.2 a and d)
+		forget_working_set_members(source);
+		remove_working_set_member(source->get_NAME());
+
 		// A managed working set master also sends this when another node requests it, which is not a restart
 		if ((nullptr == get_managed_working_set(source)) &&
 		    (announcedWorkingSetMasters.end() == std::find(announcedWorkingSetMasters.begin(), announcedWorkingSetMasters.end(), source)))
@@ -564,9 +576,81 @@ namespace isobus
 		}
 	}
 
+	void VirtualTerminalServer::process_working_set_member_message(const CANMessage &message)
+	{
+		const auto master = message.get_source_control_function();
+		const NAME member(message.get_uint64_at(0));
+		auto members = std::find_if(workingSetMembers.begin(), workingSetMembers.end(), [&master](const std::pair<std::shared_ptr<ControlFunction>, std::vector<NAME>> &candidate) {
+			return candidate.first == master;
+		});
+
+		// A control function is a member of one working set only (ISO 11783-7 10.2 d)
+		remove_working_set_member(member, master);
+
+		if (workingSetMembers.end() == members)
+		{
+			workingSetMembers.emplace_back(master, std::vector<NAME>());
+			members = workingSetMembers.end() - 1;
+		}
+
+		// The Working Set Master message counts the members in one byte
+		if ((members->second.size() < MAX_WORKING_SET_MEMBERS) &&
+		    (members->second.end() == std::find(members->second.begin(), members->second.end(), member)))
+		{
+			members->second.push_back(member);
+		}
+	}
+
+	void VirtualTerminalServer::forget_working_set_members(const std::shared_ptr<ControlFunction> &master)
+	{
+		workingSetMembers.erase(std::remove_if(workingSetMembers.begin(), workingSetMembers.end(), [&master](const std::pair<std::shared_ptr<ControlFunction>, std::vector<NAME>> &candidate) {
+			                        return candidate.first == master;
+		                        }),
+		                        workingSetMembers.end());
+	}
+
+	void VirtualTerminalServer::remove_working_set_member(const NAME &member, const std::shared_ptr<ControlFunction> &exceptMaster)
+	{
+		for (auto &members : workingSetMembers)
+		{
+			if (members.first != exceptMaster)
+			{
+				members.second.erase(std::remove(members.second.begin(), members.second.end(), member), members.second.end());
+			}
+		}
+	}
+
+	std::shared_ptr<ControlFunction> VirtualTerminalServer::get_response_destination(const std::shared_ptr<ControlFunction> &source) const
+	{
+		std::shared_ptr<ControlFunction> retVal = source;
+
+		for (const auto &members : workingSetMembers)
+		{
+			if ((members.first != source) &&
+			    (nullptr != members.first) &&
+			    members.first->get_address_valid() &&
+			    (members.second.end() != std::find(members.second.begin(), members.second.end(), source->get_NAME())))
+			{
+				// The working set version is only known once its master sends maintenance messages, 0xFF is version 2 or prior
+				const auto workingSet = get_managed_working_set(members.first);
+				const bool isWorkingSetVersion4OrLater = (nullptr != workingSet) &&
+				  (4 <= workingSet->get_working_set_version()) &&
+				  (0xFF != workingSet->get_working_set_version());
+
+				if (!isWorkingSetVersion4OrLater || (get_vt_version_byte(get_version()) < 4))
+				{
+					retVal = members.first;
+				}
+				break;
+			}
+		}
+		return retVal;
+	}
+
 	void VirtualTerminalServer::shut_down_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, UnexpectedShutdownReason reason)
 	{
 		deactivate_working_set(workingSet);
+		forget_working_set_members(workingSet->get_control_function());
 		managedWorkingSetIopLoadStateMap.erase(workingSet);
 		managedWorkingSetList.erase(std::remove(managedWorkingSetList.begin(), managedWorkingSetList.end(), workingSet), managedWorkingSetList.end());
 
@@ -797,7 +881,7 @@ namespace isobus
 				                                               buffer.data(),
 				                                               CAN_DATA_LENGTH,
 				                                               serverInternalControlFunction,
-				                                               message.get_source_control_function(),
+				                                               get_response_destination(message.get_source_control_function()),
 				                                               get_priority());
 				retVal = true;
 			}
@@ -819,7 +903,7 @@ namespace isobus
 				                                               buffer.data(),
 				                                               CAN_DATA_LENGTH,
 				                                               serverInternalControlFunction,
-				                                               message.get_source_control_function(),
+				                                               get_response_destination(message.get_source_control_function()),
 				                                               get_priority());
 				retVal = true;
 			}
@@ -840,7 +924,7 @@ namespace isobus
 				                                               buffer.data(),
 				                                               CAN_DATA_LENGTH,
 				                                               serverInternalControlFunction,
-				                                               message.get_source_control_function(),
+				                                               get_response_destination(message.get_source_control_function()),
 				                                               get_priority());
 				retVal = true;
 			}
@@ -861,7 +945,7 @@ namespace isobus
 				                                               buffer.data(),
 				                                               CAN_DATA_LENGTH,
 				                                               serverInternalControlFunction,
-				                                               message.get_source_control_function(),
+				                                               get_response_destination(message.get_source_control_function()),
 				                                               get_priority());
 				retVal = true;
 			}
@@ -894,7 +978,7 @@ namespace isobus
 				                                               buffer.data(),
 				                                               static_cast<std::uint32_t>(buffer.size()),
 				                                               serverInternalControlFunction,
-				                                               message.get_source_control_function(),
+				                                               get_response_destination(message.get_source_control_function()),
 				                                               get_priority());
 				retVal = true;
 			}
@@ -902,7 +986,7 @@ namespace isobus
 
 			case Function::GetWindowMaskDataMessage:
 			{
-				send_get_window_mask_data_response(message.get_source_control_function());
+				send_get_window_mask_data_response(get_response_destination(message.get_source_control_function()));
 				retVal = true;
 			}
 			break;
@@ -2777,6 +2861,10 @@ namespace isobus
 			if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster) == message.get_identifier().get_parameter_group_number())
 			{
 				parentServer->process_working_set_master_message(message);
+			}
+			else if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMember) == message.get_identifier().get_parameter_group_number())
+			{
+				parentServer->process_working_set_member_message(message);
 			}
 			else if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == message.get_identifier().get_parameter_group_number())
 			{
