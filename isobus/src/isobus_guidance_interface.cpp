@@ -414,6 +414,12 @@ namespace isobus
 				}
 			}
 
+			const std::uint32_t droppedFrames = droppedFrameCount.exchange(0);
+			if (0 != droppedFrames)
+			{
+				LOG_WARNING("[Guidance]: Dropped %u received messages, as the queue was full", droppedFrames);
+			}
+
 			receivedGuidanceMachineInfoMessages.erase(std::remove_if(receivedGuidanceMachineInfoMessages.begin(),
 			                                                         receivedGuidanceMachineInfoMessages.end(),
 			                                                         [](std::shared_ptr<GuidanceMachineInfo> guidanceInfo) {
@@ -496,7 +502,10 @@ namespace isobus
 			std::copy(message.get_data().begin(), message.get_data().end(), frame.data.begin());
 			frame.timestamp_ms = SystemTiming::get_timestamp_ms();
 			// A full queue drops the newest message, as only update() may pop
-			targetInterface->receivedFrames.push(frame);
+			if (false == targetInterface->receivedFrames.push(frame))
+			{
+				targetInterface->droppedFrameCount++;
+			}
 		}
 	}
 

@@ -29,6 +29,7 @@
 #include "isobus/utility/thread_synchronization.hpp"
 
 #include <array>
+#include <atomic>
 #include <memory>
 #include <vector>
 
@@ -421,6 +422,7 @@ namespace isobus
 		std::vector<std::shared_ptr<GuidanceMachineInfo>> receivedGuidanceMachineInfoMessages; ///< A list of all received estimated curvatures
 		std::vector<std::shared_ptr<GuidanceSystemCommand>> receivedGuidanceSystemCommandMessages; ///< A list of all received curvature commands and statuses
 		SPSCQueue<ReceivedFrame> receivedFrames{ RX_QUEUE_CAPACITY }; ///< Received messages waiting for update(). Only the CAN thread pushes and only update() pops
+		std::atomic<std::uint32_t> droppedFrameCount{ 0 }; ///< Messages dropped by a full receivedFrames since update() last logged them
 		std::uint32_t guidanceSystemCommandTransmitTimestamp_ms = 0; ///< Timestamp used to know when to transmit the guidance system command message
 		std::uint32_t guidanceMachineInfoTransmitTimestamp_ms = 0; ///< Timestamp used to know when to transmit the guidance machine info message
 		bool initialized = false; ///< Stores if the interface has been initialized
