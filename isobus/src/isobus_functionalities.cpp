@@ -601,6 +601,16 @@ namespace isobus
 			case Functionalities::BasicTractorECUImplementClient:
 			case Functionalities::FileServer:
 			case Functionalities::FileServerClient:
+			case Functionalities::SequenceControllerServer:
+			case Functionalities::SequenceControllerClient:
+			case Functionalities::ShortcutButtonServer:
+			case Functionalities::ShortcutButtonClient:
+			case Functionalities::DiagnosticTool:
+			case Functionalities::DataLoggerServer:
+			case Functionalities::DataLoggerClient:
+			case Functionalities::SystemInformationServer:
+			case Functionalities::TaskControllerTramlineServer:
+			case Functionalities::TaskControllerTramlineClient:
 			{
 				serializedValue.resize(1);
 				serializedValue.at(0) = 0x00; // No options
