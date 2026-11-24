@@ -287,6 +287,7 @@ public:
 	using VirtualTerminalServer::DEFAULT_MAX_RX_QUEUE_SIZE_BYTES;
 	using VirtualTerminalServer::managedWorkingSetList;
 	using VirtualTerminalServer::process_rx_messages;
+	using VirtualTerminalServer::send_capture_screen_response;
 	using VirtualTerminalServer::send_status_message;
 	using VirtualTerminalServer::store_rx_message;
 
@@ -1857,6 +1858,7 @@ TEST_F(VirtualTerminalServerBusTest, LoadVersionOverwritesTheExistingObjectPool)
 	ASSERT_TRUE(foundStatus);
 	EXPECT_EQ(0x81, statusFrame.data[1]);
 	EXPECT_EQ(loadedActiveMask, static_cast<std::uint16_t>(statusFrame.data[2] | (statusFrame.data[3] << 8)));
+	EXPECT_EQ(0xFF, statusFrame.data[7]);
 }
 
 TEST_F(VirtualTerminalServerBusTest, StatusMessageReportsParsingUntilTheLoadVersionResponseIsSent)
@@ -2802,6 +2804,40 @@ TEST_F(VirtualTerminalServerBusTest, AudioCommandsAreForwardedToTheApplication)
 	ASSERT_TRUE(audioSignalAnswered);
 	EXPECT_EQ(0x00, audioSignalResponse.data[1]);
 	ASSERT_TRUE(audioVolumeAnswered);
+}
+
+TEST_F(VirtualTerminalServerBusTest, ScreenCaptureIsAnsweredNotEnabledByDefault)
+{
+	server->version = VirtualTerminalBase::VTVersion::Version6;
+
+	CANMessageFrame response = {};
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x06, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	ASSERT_TRUE(send_and_poll({ 0xC6, 0x00, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }, response));
+	EXPECT_EQ((std::vector<std::uint8_t>{ 0xC6, 0x00, 0x01, 0x01, 0xFF, 0xFF, 0xFF, 0xFF }), payload_of(response));
+
+	ASSERT_TRUE(send_and_poll({ 0xC6, 0xF0, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }, response));
+	EXPECT_EQ((std::vector<std::uint8_t>{ 0xC6, 0xF0, 0x01, 0x01, 0xFF, 0xFF, 0xFF, 0xFF }), payload_of(response));
+}
+
+TEST_F(VirtualTerminalServerBusTest, ScreenCaptureResponseKeepsProprietaryErrorBytes)
+{
+	const std::vector<std::vector<std::uint8_t>> expectedPayloads = {
+		{ 0xC6, 0x00, 0x01, 0x00, 0x34, 0x12, 0xFF, 0xFF },
+		{ 0xC6, 0x00, 0x01, 0x20, 0xFF, 0xFF, 0xFF, 0xFF },
+		{ 0xC6, 0xF0, 0x01, 0x04, 0x34, 0x12, 0xFF, 0xFF },
+		{ 0xC6, 0x00, 0xF0, 0x08, 0x34, 0x12, 0xFF, 0xFF }
+	};
+
+	for (const auto &expected : expectedPayloads)
+	{
+		CANMessageFrame frame = {};
+
+		ASSERT_TRUE(server->send_capture_screen_response(expected[1], expected[2], expected[3], 0x1234, client));
+		ASSERT_TRUE(poll_for_response(*server, testPlugin, 0xC6, frame));
+		EXPECT_EQ(expected, payload_of(frame));
+	}
 }
 
 TEST_F(VirtualTerminalServerBusTest, UnsupportedFunctionSentDestinationSpecificIsAnsweredWithUnsupportedVTFunction)

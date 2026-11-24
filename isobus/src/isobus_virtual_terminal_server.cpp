@@ -419,10 +419,7 @@ namespace isobus
 
 	void VirtualTerminalServer::screen_capture(std::uint8_t item, std::uint8_t path, std::shared_ptr<ControlFunction> requestor)
 	{
-		(void)item;
-		(void)path;
-		(void)requestor;
-		LOG_ERROR("[VT Server]: The Screen Capture command is not implemented");
+		send_capture_screen_response(item, path, static_cast<std::uint8_t>(ScreenCaptureResponseErrorBit::ScreenCaptureNotEnabled), 0xFFFF, requestor);
 	}
 
 	std::uint8_t VirtualTerminalServer::get_user_layout_softkeymask_bg_color() const
@@ -4008,13 +4005,17 @@ namespace isobus
 	bool VirtualTerminalServer::send_capture_screen_response(std::uint8_t item, std::uint8_t path, std::uint8_t errorCode, std::uint16_t imageId, std::shared_ptr<ControlFunction> requestor) const
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
+		// The manufacturer defines these bytes for a proprietary item or path
+		const bool isProprietary = (static_cast<std::uint8_t>(ScreenCaptureItem::ManufacturerProprietary_240) <= item) ||
+		  (static_cast<std::uint8_t>(ScreenCapturePath::ManufacturerProprietary_240) <= path);
+		const std::uint16_t imageField = ((0 == errorCode) || isProprietary) ? imageId : 0xFFFF;
 
 		buffer[0] = static_cast<std::uint8_t>(Function::ScreenCapture);
 		buffer[1] = item;
 		buffer[2] = path;
 		buffer[3] = errorCode;
-		buffer[4] = get_low_byte(imageId);
-		buffer[5] = get_high_byte(imageId);
+		buffer[4] = get_low_byte(imageField);
+		buffer[5] = get_high_byte(imageField);
 		buffer[6] = 0xFF;
 		buffer[7] = 0xFF;
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
