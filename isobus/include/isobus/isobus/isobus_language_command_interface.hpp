@@ -13,6 +13,7 @@
 #include "isobus/isobus/can_callbacks.hpp"
 #include "isobus/isobus/can_message.hpp"
 #include "isobus/utility/event_dispatcher.hpp"
+#include "isobus/utility/thread_synchronization.hpp"
 
 #include <memory>
 #include <string>
@@ -365,6 +366,7 @@ namespace isobus
 		PressureUnits pressureUnitSystem = PressureUnits::Metric; ///< The pressure units that were commanded by the last language command message
 		ForceUnits forceUnitSystem = ForceUnits::Metric; ///< The force units that were commanded by the last language command message
 		UnitSystem genericUnitSystem = UnitSystem::Metric; ///< The "unit system" that was commanded by the last language command message
+		mutable Mutex localizationMutex; ///< Guards the partner and the localization fields, which the CAN thread writes while the application reads or sets them
 		bool initialized = false; ///< Tracks if initialize has been called yet for this interface
 		bool respondToRequests = false; ///< Stores if the class should respond to PGN requests for the language command
 		bool sendOnAddressClaim = true; ///< In the server role, send the language command when the control function claims an address

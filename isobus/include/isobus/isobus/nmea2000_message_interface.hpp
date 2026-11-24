@@ -22,6 +22,7 @@
 #include "isobus/isobus/nmea2000_message_definitions.hpp"
 #include "isobus/utility/event_dispatcher.hpp"
 #include "isobus/utility/processing_flags.hpp"
+#include "isobus/utility/thread_synchronization.hpp"
 
 namespace isobus
 {
@@ -119,7 +120,7 @@ namespace isobus
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these. So generally using only index 0 will be acceptable.
 		/// @note It is also possible that this message may not be present, depending on your machine.
-		/// @returns The content of the COG & SOG message
+		/// @returns The content of the COG & SOG message. The returned data does not change afterwards and must be treated as read-only; call this again for newer data.
 		std::shared_ptr<NMEA2000Messages::CourseOverGroundSpeedOverGroundRapidUpdate> get_received_course_speed_over_ground_message(std::size_t index) const;
 
 		/// @brief Returns the content of the Datum message
@@ -128,7 +129,7 @@ namespace isobus
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these. So generally using only index 0 will be acceptable.
 		/// @note It is also possible that this message may not be present, depending on your machine.
-		/// @returns The content of the Datum message
+		/// @returns The content of the Datum message. The returned data does not change afterwards and must be treated as read-only; call this again for newer data.
 		std::shared_ptr<NMEA2000Messages::Datum> get_received_datum_message(std::size_t index) const;
 
 		/// @brief Returns the content of the GNSS position data message
@@ -137,7 +138,7 @@ namespace isobus
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these. So generally using only index 0 will be acceptable.
 		/// @note It is also possible that this message may not be present, depending on your machine.
-		/// @returns The content of the GNSS position data message
+		/// @returns The content of the GNSS position data message. The returned data does not change afterwards and must be treated as read-only; call this again for newer data.
 		std::shared_ptr<NMEA2000Messages::GNSSPositionData> get_received_gnss_position_data_message(std::size_t index) const;
 
 		/// @brief Returns the content of the position delta high precision rapid update message
@@ -146,7 +147,7 @@ namespace isobus
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these. So generally using only index 0 will be acceptable.
 		/// @note It is also possible that this message may not be present, depending on your machine.
-		/// @returns The content of the position delta high precision rapid update message
+		/// @returns The content of the position delta high precision rapid update message. The returned data does not change afterwards and must be treated as read-only; call this again for newer data.
 		std::shared_ptr<NMEA2000Messages::PositionDeltaHighPrecisionRapidUpdate> get_received_position_delta_high_precision_rapid_update_message(std::size_t index) const;
 
 		/// @brief Returns the content of the position rapid update message
@@ -155,7 +156,7 @@ namespace isobus
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these. So generally using only index 0 will be acceptable.
 		/// @note It is also possible that this message may not be present, depending on your machine.
-		/// @returns The content of the position rapid update message
+		/// @returns The content of the position rapid update message. The returned data does not change afterwards and must be treated as read-only; call this again for newer data.
 		std::shared_ptr<NMEA2000Messages::PositionRapidUpdate> get_received_position_rapid_update_message(std::size_t index) const;
 
 		/// @brief Returns the content of the rate of turn message
@@ -164,7 +165,7 @@ namespace isobus
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these. So generally using only index 0 will be acceptable.
 		/// @note It is also possible that this message may not be present, depending on your machine.
-		/// @returns The content of the rate of turn message
+		/// @returns The content of the rate of turn message. The returned data does not change afterwards and must be treated as read-only; call this again for newer data.
 		std::shared_ptr<NMEA2000Messages::RateOfTurn> get_received_rate_of_turn_message(std::size_t index) const;
 
 		/// @brief Returns the content of the vessel heading message
@@ -173,35 +174,35 @@ namespace isobus
 		/// @note Only one device on the bus will send this normally, but we provide a generic way to get
 		/// an arbitrary number of these. So generally using only index 0 will be acceptable.
 		/// @note It is also possible that this message may not be present, depending on your machine.
-		/// @returns The content of the vessel heading message
+		/// @returns The content of the vessel heading message. The returned data does not change afterwards and must be treated as read-only; call this again for newer data.
 		std::shared_ptr<NMEA2000Messages::VesselHeading> get_received_vessel_heading_message(std::size_t index) const;
 
 		/// @brief Returns an event dispatcher which you can use to get callbacks when new/updated COG & SOG messages are received.
-		/// @returns The event publisher for COG & SOG messages
+		/// @returns The event publisher for COG & SOG messages. Listeners must treat the received data as read-only.
 		EventDispatcher<const std::shared_ptr<NMEA2000Messages::CourseOverGroundSpeedOverGroundRapidUpdate>, bool> &get_course_speed_over_ground_rapid_update_event_publisher();
 
 		/// @brief Returns an event dispatcher which you can use to get callbacks when new/updated datum messages are received.
-		/// @returns The event publisher for datum messages
+		/// @returns The event publisher for datum messages. Listeners must treat the received data as read-only.
 		EventDispatcher<const std::shared_ptr<NMEA2000Messages::Datum>, bool> &get_datum_event_publisher();
 
 		/// @brief Returns an event dispatcher which you can use to get callbacks when new/updated GNSS position data messages are received.
-		/// @returns The event publisher for GNSS position data messages
+		/// @returns The event publisher for GNSS position data messages. Listeners must treat the received data as read-only.
 		EventDispatcher<const std::shared_ptr<NMEA2000Messages::GNSSPositionData>, bool> &get_gnss_position_data_event_publisher();
 
 		/// @brief Returns an event dispatcher which you can use to get callbacks when new/updated position delta high precision rapid update messages are received.
-		/// @returns The event publisher for position delta high precision rapid update messages
+		/// @returns The event publisher for position delta high precision rapid update messages. Listeners must treat the received data as read-only.
 		EventDispatcher<const std::shared_ptr<NMEA2000Messages::PositionDeltaHighPrecisionRapidUpdate>, bool> &get_position_delta_high_precision_rapid_update_event_publisher();
 
 		/// @brief Returns an event dispatcher which you can use to get callbacks when new/updated position rapid update messages are received.
-		/// @returns The event publisher for position rapid update messages
+		/// @returns The event publisher for position rapid update messages. Listeners must treat the received data as read-only.
 		EventDispatcher<const std::shared_ptr<NMEA2000Messages::PositionRapidUpdate>, bool> &get_position_rapid_update_event_publisher();
 
 		/// @brief Returns an event dispatcher which you can use to get callbacks when new/updated rate of turn messages are received.
-		/// @returns The event publisher for rate of turn messages
+		/// @returns The event publisher for rate of turn messages. Listeners must treat the received data as read-only.
 		EventDispatcher<const std::shared_ptr<NMEA2000Messages::RateOfTurn>, bool> &get_rate_of_turn_event_publisher();
 
 		/// @brief Returns an event dispatcher which you can use to get callbacks when new/updated vessel heading messages are received.
-		/// @returns The event publisher for vessel heading messages
+		/// @returns The event publisher for vessel heading messages. Listeners must treat the received data as read-only.
 		EventDispatcher<const std::shared_ptr<NMEA2000Messages::VesselHeading>, bool> &get_vessel_heading_event_publisher();
 
 		/// @brief Returns if the interface has cyclic sending of the course/speed over ground message enabled
@@ -319,6 +320,7 @@ namespace isobus
 		std::vector<std::shared_ptr<NMEA2000Messages::PositionRapidUpdate>> receivedPositionRapidUpdateMessages; ///< Stores all received (and not timed out) sources of the position rapid update message
 		std::vector<std::shared_ptr<NMEA2000Messages::RateOfTurn>> receivedRateOfTurnMessages; ///< Stores all received (and not timed out) sources of the rate of turn message
 		std::vector<std::shared_ptr<NMEA2000Messages::VesselHeading>> receivedVesselHeadingMessages; ///< Stores all received (and not timed out) sources of the vessel heading message
+		mutable Mutex receivedMessagesMutex; ///< Guards the seven received message lists, which the CAN thread writes while the application reads them
 		EventDispatcher<const std::shared_ptr<NMEA2000Messages::CourseOverGroundSpeedOverGroundRapidUpdate>, bool> cogSogEventPublisher; ///< An event dispatcher for notifying when new guidance machine info messages are received
 		EventDispatcher<const std::shared_ptr<NMEA2000Messages::Datum>, bool> datumEventPublisher; ///< An event dispatcher for notifying when new guidance machine info messages are received
 		EventDispatcher<const std::shared_ptr<NMEA2000Messages::GNSSPositionData>, bool> gnssPositionDataEventPublisher; ///< An event dispatcher for notifying when new guidance machine info messages are received

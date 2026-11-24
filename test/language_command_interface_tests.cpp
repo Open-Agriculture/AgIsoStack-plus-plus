@@ -21,7 +21,9 @@
 #include "helpers/control_function_helpers.hpp"
 #include "helpers/test_fixture.hpp"
 
+#include <atomic>
 #include <future>
+#include <thread>
 
 using namespace isobus;
 
@@ -458,3 +460,35 @@ TEST_F(LanguageCommandInterfaceTest, ServerSendsTheLanguageCommandWhenItHasClaim
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(serverECU);
 }
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+TEST_F(LanguageCommandInterfaceTest, ReceiveThreadDoesNotRaceGetters)
+{
+	LanguageCommandInterface interfaceUnderTest(nullptr, nullptr);
+	interfaceUnderTest.initialize();
+
+	std::atomic<bool> done = { false };
+	std::thread receiver([&interfaceUnderTest, &done]() {
+		const CANIdentifier identifier(CANIdentifier::Type::Extended, 0xFE0F, CANIdentifier::CANPriority::PriorityDefault6, 0xFF, 0x81);
+		for (std::uint16_t i = 0; i < 500; i++)
+		{
+			const bool odd = (1 == (i % 2));
+			const std::vector<std::uint8_t> data = { static_cast<std::uint8_t>(odd ? 'd' : 'e'), static_cast<std::uint8_t>(odd ? 'e' : 'n'), 0x0F, 0x04, 0x5A, 0x04, 'U', 'S' };
+			interfaceUnderTest.process_rx_message(CANMessage(CANMessage::Type::Receive, identifier, data, nullptr, nullptr, 0), &interfaceUnderTest);
+		}
+		done = true;
+	});
+
+	while (!done)
+	{
+		interfaceUnderTest.get_language_code();
+		interfaceUnderTest.get_country_code();
+		interfaceUnderTest.get_localization_raw_data();
+		interfaceUnderTest.set_commanded_mass_units(LanguageCommandInterface::MassUnits::Metric);
+	}
+	receiver.join();
+
+	EXPECT_EQ("de", interfaceUnderTest.get_language_code());
+	EXPECT_EQ("US", interfaceUnderTest.get_country_code());
+}
+#endif
