@@ -687,3 +687,53 @@ TEST_F(ControlFunctionFunctionalitiesTest, FunctionalitiesNineteenToTwentyEightH
 	CANStackLogger::set_can_stack_logger_sink(&discardingLogger);
 	EXPECT_EQ(0u, logger.errors);
 }
+
+TEST_F(ControlFunctionFunctionalitiesTest, TramlineClientOptions)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x01, 0, time_source);
+	TestControlFunctionFunctionalities cfFunctionalitiesUnderTest(internalECU);
+
+	using Options = ControlFunctionFunctionalities::TaskControllerTramlineClientOptions;
+	std::vector<std::uint8_t> messageData;
+
+	// Options can't be set before the functionality is supported
+	cfFunctionalitiesUnderTest.set_task_controller_tramline_client_option_state(Options::TramlineControl, true);
+	EXPECT_FALSE(cfFunctionalitiesUnderTest.get_task_controller_tramline_client_option_state(Options::TramlineControl));
+
+	cfFunctionalitiesUnderTest.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::TaskControllerTramlineClient, 1, true);
+	EXPECT_FALSE(cfFunctionalitiesUnderTest.get_task_controller_tramline_client_option_state(Options::TramlineRhythmTransition));
+	EXPECT_FALSE(cfFunctionalitiesUnderTest.get_task_controller_tramline_client_option_state(Options::StorageOfImplementTrackParameters));
+	EXPECT_FALSE(cfFunctionalitiesUnderTest.get_task_controller_tramline_client_option_state(Options::TramlineControl));
+
+	// Each option is its own bit of the option byte (isobus.net functionality 28)
+	const std::vector<std::pair<Options, std::uint8_t>> expectedBits = {
+		{ Options::TramlineRhythmTransition, 0x01 },
+		{ Options::StorageOfImplementTrackParameters, 0x02 },
+		{ Options::TramlineControl, 0x04 }
+	};
+	for (const auto &expected : expectedBits)
+	{
+		cfFunctionalitiesUnderTest.set_task_controller_tramline_client_option_state(expected.first, true);
+		EXPECT_TRUE(cfFunctionalitiesUnderTest.get_task_controller_tramline_client_option_state(expected.first));
+		cfFunctionalitiesUnderTest.test_wrapper_get_message_content(messageData);
+		// 0xFF, 2 functionalities, then minimum CF and TRACK client, each as ID, generation and number of option bytes
+		EXPECT_EQ((std::vector<std::uint8_t>{ 0xFF, 2, 0, 1, 0, 28, 1, 1, expected.second }), messageData);
+		cfFunctionalitiesUnderTest.set_task_controller_tramline_client_option_state(expected.first, false);
+	}
+
+	// All three together, and the reserved bits are never set
+	cfFunctionalitiesUnderTest.set_task_controller_tramline_client_option_state(Options::TramlineRhythmTransition, true);
+	cfFunctionalitiesUnderTest.set_task_controller_tramline_client_option_state(Options::StorageOfImplementTrackParameters, true);
+	cfFunctionalitiesUnderTest.set_task_controller_tramline_client_option_state(Options::TramlineControl, true);
+	cfFunctionalitiesUnderTest.set_task_controller_tramline_client_option_state(Options::Reserved, true);
+	cfFunctionalitiesUnderTest.test_wrapper_get_message_content(messageData);
+	EXPECT_EQ((std::vector<std::uint8_t>{ 0xFF, 2, 0, 1, 0, 28, 1, 1, 0x07 }), messageData);
+	EXPECT_FALSE(cfFunctionalitiesUnderTest.get_task_controller_tramline_client_option_state(Options::Reserved));
+
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
