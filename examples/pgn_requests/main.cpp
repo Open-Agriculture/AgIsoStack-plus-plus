@@ -25,6 +25,7 @@ void signal_handler(int)
 
 bool example_proprietary_a_pgn_request_handler(std::uint32_t parameterGroupNumber,
                                                std::shared_ptr<isobus::ControlFunction>,
+                                               std::shared_ptr<isobus::ControlFunction>,
                                                bool &acknowledge,
                                                isobus::AcknowledgementType &acknowledgeType,
                                                void *)

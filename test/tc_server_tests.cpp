@@ -11,6 +11,7 @@
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/isobus/isobus_device_descriptor_object_pool_helpers.hpp"
 #include "isobus/isobus/isobus_task_controller_server.hpp"
 #include "isobus/utility/system_timing.hpp"
@@ -18,6 +19,9 @@
 #include "helpers/control_function_helpers.hpp"
 #include "helpers/messaging_helpers.hpp"
 #include "helpers/test_fixture.hpp"
+
+#include <chrono>
+#include <future>
 
 using namespace isobus;
 
@@ -284,6 +288,11 @@ public:
 	bool send_status() const
 	{
 		return send_status_message();
+	}
+
+	std::size_t get_number_of_active_clients() const
+	{
+		return activeClients.size();
 	}
 
 	std::vector<std::uint8_t> testStructureLabel;
@@ -1236,6 +1245,59 @@ TEST_F(TaskControllerServerTest, WorkingSetMasterFromUnknownSource)
 	CANHardwareInterface::stop();
 }
 
+TEST_F(TaskControllerServerTest, ShortProcessDataIsIgnored)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0xA6, 0, time_source);
+	auto partnerClient = test_helpers::force_claim_partnered_control_function(0xA7, 0);
+
+	DerivedTcServer server(internalECU,
+	                       4,
+	                       255,
+	                       16,
+	                       TaskControllerOptions()
+	                         .with_documentation()
+	                         .with_implement_section_control());
+	server.initialize();
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(6, 0xFE0D, partnerClient, { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+	testPlugin.clear_queue();
+
+	const std::vector<std::vector<std::uint8_t>> shortPayloads = {
+		{},
+		{ static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::Value) },
+		{ static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::SetValueAndAcknowledge), 0x00, 0x01, 0x00 },
+		{ static_cast<std::uint8_t>(TaskControllerServer::ProcessDataCommands::Acknowledge), 0x00, 0x01, 0x00, 0x00, 0x00, 0x00 },
+	};
+
+	CANMessageFrame testFrame = {};
+	for (const auto &payload : shortPayloads)
+	{
+		CANMessage message(CANMessage::Type::Receive, CANIdentifier(test_helpers::create_ext_can_id(5, 0xCB00, internalECU, partnerClient)), payload, partnerClient, internalECU, 0);
+		server.test_receive_message(message, &server);
+		EXPECT_NO_THROW(server.update());
+		CANNetworkManager::CANNetwork.update();
+		EXPECT_FALSE(readFrameFilterStatus(testPlugin, testFrame, time_source));
+	}
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(5, 0xCB00, internalECU, partnerClient, { 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+	time_source.update_for_ms(1000);
+	EXPECT_TRUE(readFrameFilterStatus(testPlugin, testFrame, time_source));
+	EXPECT_EQ(0x10, testFrame.data[0]);
+
+	CANHardwareInterface::stop();
+}
+
 TEST_F(TaskControllerServerTest, ClientVersionTracking)
 {
 	VirtualCANPlugin testPlugin;
@@ -2077,6 +2139,98 @@ TEST_F(TaskControllerServerTest, B6CommandBusyState_ObjectPoolActivateDeactivate
 	EXPECT_EQ(0x00, testFrame.data[4] & 0x08); // BusyExecutingACommand bit should be clear after completion
 	EXPECT_EQ(0x00, testFrame.data[5]); // Cleared
 	EXPECT_EQ(0x00, testFrame.data[6]); // Cleared
+
+	CANHardwareInterface::stop();
+}
+
+class QueueingTcServer : public DerivedTcServer
+{
+public:
+	using DerivedTcServer::DerivedTcServer;
+
+	void on_client_version_received(std::shared_ptr<ControlFunction> clientControlFunction, std::uint8_t version) override
+	{
+		DerivedTcServer::on_client_version_received(clientControlFunction, version);
+		// Queues a message from another thread while this virtual runs, as the network manager's thread would
+		queuedFromOtherThread = std::async(std::launch::async, [this, clientControlFunction]() {
+			test_receive_message(test_helpers::create_message_broadcast(6, 0xFE0D, clientControlFunction, { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }), this);
+		});
+		queuedWhileVirtualRan = (std::future_status::ready == queuedFromOtherThread.wait_for(std::chrono::seconds(1)));
+	}
+
+	std::future<void> queuedFromOtherThread;
+	bool queuedWhileVirtualRan = false;
+};
+
+TEST_F(TaskControllerServerTest, MessageCanBeQueuedWhileAVirtualRuns)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x98, 0, time_source);
+	auto partnerClient = test_helpers::force_claim_partnered_control_function(0x99, 0);
+
+	QueueingTcServer server(internalECU, 4, 255, 16, TaskControllerOptions());
+	server.initialize();
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(6, 0xFE0D, partnerClient, { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(5, 0xCB00, internalECU, partnerClient, { 0x10, 0x04, 0xFF, 0x1F, 0x00, 0x01, 0x20, 0x10 }));
+	CANNetworkManager::CANNetwork.update();
+	server.update();
+
+	ASSERT_TRUE(server.lastClientVersionReceived);
+	server.queuedFromOtherThread.wait();
+	EXPECT_TRUE(server.queuedWhileVirtualRan);
+
+	server.terminate();
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.deactivate_control_function(partnerClient);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
+class DiscardingLogger : public CANStackLogger
+{
+public:
+	void sink_CAN_stack_log(CANStackLogger::LoggingLevel, const std::string &) override
+	{
+	}
+};
+
+TEST_F(TaskControllerServerTest, IgnoresMessagesWithoutSourceControlFunction)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x9D, 0, time_source);
+
+	DerivedTcServer server(internalECU,
+	                       4,
+	                       255,
+	                       16,
+	                       TaskControllerOptions()
+	                         .with_documentation()
+	                         .with_implement_section_control()
+	                         .with_tc_geo_with_position_based_control());
+	server.initialize();
+
+	// Source control functions are null, as for a client that was pruned while still sending
+	const std::vector<std::uint8_t> workingSetMaster = { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+	CANMessage workingSetMasterMessage(CANMessage::Type::Receive, CANIdentifier(0x18FE0D9E), workingSetMaster, nullptr, nullptr, 0);
+	server.test_receive_message(workingSetMasterMessage, &server);
+
+	// Not checked against the active clients
+	const std::vector<std::uint8_t> measurementCommand = { 0x44, 0x00, 0x8D, 0x00, 0xE8, 0x03, 0x00, 0x00 };
+	CANMessage measurementMessage(CANMessage::Type::Receive, CANIdentifier(0x14CB9D9E), measurementCommand, nullptr, internalECU, 0);
+	server.test_receive_message(measurementMessage, &server);
+
+	// With a sink set, the handlers' log arguments are evaluated, as in an application that logs
+	DiscardingLogger logger;
+	CANStackLogger::set_can_stack_logger_sink(&logger);
+	server.update();
+	CANStackLogger::set_can_stack_logger_sink(nullptr);
+	EXPECT_EQ(0u, server.get_number_of_active_clients());
 
 	CANHardwareInterface::stop();
 }

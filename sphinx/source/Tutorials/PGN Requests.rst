@@ -66,11 +66,14 @@ This will allow you to transmit the requested data in your application.
 Or, you can tell the CAN stack from within your callback to ACK or NACK the request on your behalf. You can even take absolutely no action if you want to.
 
 To do this, create a function that matches the type :code:`PGNRequestCallback`.
+The callback is also told where the request was sent, which is :code:`nullptr` for a global request.
+If your reply is longer than 8 bytes, send it to the global address for a global request, and to the requester otherwise (ISO 11783-3).
 
 .. code-block:: c++
 
     bool example_proprietary_a_pgn_request_handler(std::uint32_t parameterGroupNumber,
                                                    std::shared_ptr<isobus::ControlFunction> requestingControlFunction,
+                                                   std::shared_ptr<isobus::ControlFunction> targetControlFunction,
                                                    bool &acknowledge,
                                                    isobus::AcknowledgementType &acknowledgeType,
                                                    void *)

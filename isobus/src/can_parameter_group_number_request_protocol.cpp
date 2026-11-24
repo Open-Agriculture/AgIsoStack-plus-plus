@@ -18,19 +18,17 @@
 
 namespace isobus
 {
-
 	ParameterGroupNumberRequestProtocol::ParameterGroupNumberRequestProtocol(std::shared_ptr<InternalControlFunction> internalControlFunction) :
 	  myControlFunction(internalControlFunction)
 	{
-		assert(nullptr != myControlFunction && "ParameterGroupNumberRequestProtocol::ParameterGroupNumberRequestProtocol() called with nullptr internalControlFunction");
+		assert(nullptr != internalControlFunction && "ParameterGroupNumberRequestProtocol::ParameterGroupNumberRequestProtocol() called with nullptr internalControlFunction");
 		CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest), process_message, this);
 		CANNetworkManager::CANNetwork.add_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::RequestForRepetitionRate), process_message, this);
 	}
 
 	ParameterGroupNumberRequestProtocol::~ParameterGroupNumberRequestProtocol()
 	{
-		CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest), process_message, this);
-		CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::RequestForRepetitionRate), process_message, this);
+		unregister_from_network();
 	}
 
 	bool ParameterGroupNumberRequestProtocol::request_parameter_group_number(std::uint32_t pgn, std::shared_ptr<InternalControlFunction> source, std::shared_ptr<ControlFunction> destination)
@@ -164,24 +162,35 @@ namespace isobus
 
 	void ParameterGroupNumberRequestProtocol::process_message(const CANMessage &message)
 	{
+		auto internalControlFunction = myControlFunction.lock();
+		// Keeps this protocol alive while a callback deactivates its control function, which resets the protocol
+		const auto keepAlive = (nullptr != internalControlFunction) ? internalControlFunction->get_pgn_request_protocol().lock() : nullptr;
 		if (((nullptr == message.get_destination_control_function()) &&
 		     (BROADCAST_CAN_ADDRESS == message.get_identifier().get_destination_address())) ||
-		    (message.get_destination_control_function() == myControlFunction))
+		    ((nullptr != internalControlFunction) && (message.get_destination_control_function() == internalControlFunction)))
 		{
 			switch (message.get_identifier().get_parameter_group_number())
 			{
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::RequestForRepetitionRate):
 				{
-					// Can't send this request to global, and must be 8 bytes. Ignore illegal message formats
-					if ((CAN_DATA_LENGTH == message.get_data_length()) && (nullptr != message.get_destination_control_function()))
+					// Can't send this request to global or from an unknown source, and must be 8 bytes. Ignore illegal message formats
+					if ((CAN_DATA_LENGTH == message.get_data_length()) &&
+					    (nullptr != message.get_destination_control_function()) &&
+					    (nullptr != message.get_source_control_function()))
 					{
 						std::uint32_t requestedPGN = message.get_uint24_at(0);
 						std::uint16_t requestedRate = message.get_uint16_at(3);
-						LOCK_GUARD(Mutex, pgnRequestMutex);
-						for (const auto &repetitionRateCallback : repetitionRateCallbacks)
+						// Called on a copy, unlocked, so that a callback can register or remove callbacks without deadlocking.
+						std::vector<PGNRequestForRepetitionRateCallbackInfo> callbacksCopy;
+						{
+							LOCK_GUARD(Mutex, pgnRequestMutex);
+							callbacksCopy = repetitionRateCallbacks;
+						}
+						for (const auto &repetitionRateCallback : callbacksCopy)
 						{
 							if (((repetitionRateCallback.pgn == requestedPGN) ||
 							     (static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::Any) == repetitionRateCallback.pgn)) &&
+							    is_registered(pgnRequestMutex, repetitionRateCallbacks, repetitionRateCallback) &&
 							    (repetitionRateCallback.callbackFunction(requestedPGN, message.get_source_control_function(), message.get_destination_control_function(), requestedRate, repetitionRateCallback.parent)))
 							{
 								// If the callback was able to process the PGN request, stop processing more.
@@ -196,7 +205,7 @@ namespace isobus
 					}
 					else
 					{
-						LOG_WARNING("[PR]: Received a malformed or broadcast request for repetition rate message. The message will not be processed.");
+						LOG_WARNING("[PR]: Received a malformed, broadcast or unknown-source request for repetition rate message. The message will not be processed.");
 					}
 				}
 				break;
@@ -211,12 +220,17 @@ namespace isobus
 
 						std::uint32_t requestedPGN = message.get_uint24_at(0);
 
-						LOCK_GUARD(Mutex, pgnRequestMutex);
-						for (const auto &pgnRequestCallback : pgnRequestCallbacks)
+						std::vector<PGNRequestCallbackInfo> callbacksCopy;
+						{
+							LOCK_GUARD(Mutex, pgnRequestMutex);
+							callbacksCopy = pgnRequestCallbacks;
+						}
+						for (const auto &pgnRequestCallback : callbacksCopy)
 						{
 							if (((pgnRequestCallback.pgn == requestedPGN) ||
 							     (static_cast<std::uint32_t>(isobus::CANLibParameterGroupNumber::Any) == pgnRequestCallback.pgn)) &&
-							    (pgnRequestCallback.callbackFunction(requestedPGN, message.get_source_control_function(), shouldAck, ackType, pgnRequestCallback.parent)))
+							    is_registered(pgnRequestMutex, pgnRequestCallbacks, pgnRequestCallback) &&
+							    (pgnRequestCallback.callbackFunction(requestedPGN, message.get_source_control_function(), message.get_destination_control_function(), shouldAck, ackType, pgnRequestCallback.parent)))
 							{
 								// If we're here, the callback was able to process the PGN request.
 								anyCallbackProcessed = true;
@@ -286,10 +300,20 @@ namespace isobus
 			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge),
 			                                                        buffer.data(),
 			                                                        CAN_DATA_LENGTH,
-			                                                        myControlFunction,
+			                                                        myControlFunction.lock(),
 			                                                        nullptr);
 		}
 		return retVal;
+	}
+
+	void ParameterGroupNumberRequestProtocol::unregister_from_network()
+	{
+		if (registeredWithNetwork)
+		{
+			CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest), process_message, this);
+			CANNetworkManager::CANNetwork.remove_protocol_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::RequestForRepetitionRate), process_message, this);
+			registeredWithNetwork = false;
+		}
 	}
 
 } // namespace isobus

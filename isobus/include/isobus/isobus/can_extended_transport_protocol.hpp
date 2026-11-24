@@ -17,6 +17,8 @@
 #include "isobus/isobus/can_transport_protocol_base.hpp"
 #include "isobus/utility/thread_synchronization.hpp"
 
+#include <atomic>
+
 namespace isobus
 {
 	/// @brief A class that handles the ISO11783 extended transport protocol.
@@ -135,7 +137,7 @@ namespace isobus
 			std::uint32_t get_total_number_of_packets() const;
 
 		private:
-			StateMachineState state = StateMachineState::None; ///< The state machine state for this session
+			std::atomic<StateMachineState> state{ StateMachineState::None }; ///< The state machine state for this session, read by update() while the thread that started a transmit sets it
 
 			std::uint32_t lastAcknowledgedPacketNumber = 0; ///< The last acknowledged packet number by the receiver
 			std::uint32_t sequenceNumberOffset = 0; ///< The offset of the sequence number relative to the packet number
@@ -149,7 +151,6 @@ namespace isobus
 		static constexpr std::uint32_t DATA_PACKET_OFFSET_MULTIPLXOR = 0x16; ///< (22) ETP.CM_DPO Multiplexor
 		static constexpr std::uint32_t END_OF_MESSAGE_ACKNOWLEDGE_MULTIPLEXOR = 0x17; ///< (23) TP.CM_EOMA Multiplexor
 		static constexpr std::uint32_t CONNECTION_ABORT_MULTIPLEXOR = 0xFF; ///< (255) Abort multiplexor
-		static constexpr std::uint32_t MAX_PROTOCOL_DATA_LENGTH = 117440505; ///< The max number of bytes that this protocol can transfer
 		static constexpr std::uint16_t T1_TIMEOUT_MS = 750; ///< The t1 timeout as defined by the standard
 		static constexpr std::uint16_t T2_T3_TIMEOUT_MS = 1250; ///< The t2/t3 timeouts as defined by the standard
 		static constexpr std::uint16_t T4_TIMEOUT_MS = 1050; ///< The t4 timeout as defined by the standard

@@ -18,7 +18,9 @@
 #include "isobus/utility/event_dispatcher.hpp"
 #include "isobus/utility/thread_synchronization.hpp"
 
+#include <deque>
 #include <utility>
+#include <vector>
 
 namespace isobus
 {
@@ -28,6 +30,10 @@ namespace isobus
 	/// The information that is shown in display areas are defined by Data Masks, Alarm Masks and Soft Key Masks.
 	/// The data for these masks is contained in object definitions that are loaded into a VT via the ISO 11783 CAN bus, or from non-volatile memory.
 	/// See ISO 11783-6 for the complete definition of this interface, and the objects involved.
+	/// Received commands are queued and processed in update(), so every function you override and every event dispatcher
+	/// is called on the thread that calls update(), except on_rx_messages_pending(). Call process_macro(), the send functions
+	/// and functions that read or change a working set, like set_object_focus() and set_object_open_for_input(), from that thread as well.
+	/// A command is answered only when update() processes it, so call update() often, or wake it up from on_rx_messages_pending().
 	class VirtualTerminalServer : public VirtualTerminalBase
 	{
 	public:
@@ -43,6 +49,8 @@ namespace isobus
 		VirtualTerminalServer(std::shared_ptr<InternalControlFunction> controlFunctionToUse);
 
 		/// @brief Destructor for the VirtualTerminalServer
+		/// @details Stop the CAN hardware interface before destroying the server, so no received message is being queued
+		/// and on_rx_messages_pending() is not running while it is destroyed. CANHardwareInterface::stop() waits for its thread to finish.
 		~VirtualTerminalServer();
 
 		/// @brief Initializes the interface, which registers it with the network manager.
@@ -52,6 +60,18 @@ namespace isobus
 		/// @returns true if initialize has been called on this object, otherwise false
 		bool get_initialized() const;
 
+		/// @brief Sets how many bytes of received messages can wait for update() to process them.
+		/// @details A message is dropped only when the queue already holds at least this many bytes, so a single
+		/// message larger than the limit (like a large object pool transfer) is still queued. A dropped message
+		/// gets no response, except a dropped Object Pool Transfer, which makes the following End of Object Pool
+		/// answer with an error. After a dropped Object Pool Transfer, every message from that client is dropped until update() processes the queue.
+		/// The default is DEFAULT_MAX_RX_QUEUE_SIZE_BYTES, about 3 seconds of a fully loaded bus.
+		/// Lower it on targets with little free memory, raise it if update() can stall for longer or several clients upload at once.
+		/// A limit of 0 drops every message. The limit counts the queue only: while update() processes a batch, a new one can fill up,
+		/// so up to twice the limit can be held.
+		/// @param[in] sizeInBytes The limit in bytes
+		void set_max_rx_queue_size(std::uint32_t sizeInBytes);
+
 		/// @brief Returns the internal control function used by the VT server
 		/// @returns The internal control function used by the VT server
 		std::shared_ptr<InternalControlFunction> get_internal_control_function() const;
@@ -59,6 +79,12 @@ namespace isobus
 		/// @brief Returns a pointer to the currently active working set
 		/// @returns Pointer to the currently active working set, or nullptr if none is active
 		std::shared_ptr<VirtualTerminalServerManagedWorkingSet> get_active_working_set() const;
+
+		/// @brief Checks if an object is shown on the active mask of a working set
+		/// @param[in] workingSet The working set that owns the object
+		/// @param[in] objectID The object to look for
+		/// @returns true if the object is drawn on the working set's active mask or its soft key mask, following object pointers and skipping hidden containers, otherwise false
+		static bool is_shown_on_active_mask(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, std::uint16_t objectID);
 
 		/// @brief The Button Activation message allows the VT to transmit operator selection of a Button object to the Working
 		/// Set Master
@@ -97,6 +123,19 @@ namespace isobus
 		/// @returns True if the message was sent, otherwise false
 		bool send_esc_message(std::uint16_t objectId, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
+		/// @brief Sends the Pointing Event message, when the operator touches a Data Mask outside its Buttons and input fields
+		/// @details The touch state is sent from VT version 4 on, and the parent mask and a transaction number from
+		/// VT version 6 on, see ISO 11783-6 H.6. The transaction number goes up with each message.
+		/// Before VT version 4 the message always means a press, so only a press is sent: a release or a held touch
+		/// sends nothing and returns false.
+		/// @param[in] touchState Released, pressed or still held
+		/// @param[in] xPosition X position in pixels, relative to the top left corner of the Data Mask area
+		/// @param[in] yPosition Y position in pixels, relative to the top left corner of the Data Mask area
+		/// @param[in] parentMaskObjectId Object ID of the touched Data Mask
+		/// @param[in] destination The VT client to send the message to
+		/// @returns True if the message was sent, otherwise false, also for a release or a held touch before VT version 4
+		bool send_pointing_event_message(KeyActivationCode touchState, std::uint16_t xPosition, std::uint16_t yPosition, std::uint16_t parentMaskObjectId, std::shared_ptr<ControlFunction> destination);
+
 		/// @brief The Button Activation message allows the VT to transmit operator selection of a key object to the Working
 		/// Set Master
 		/// @param[in] activationCode 0 for released, 1 for "pressed", 2 for "still held", or 3 for "aborted"
@@ -119,6 +158,7 @@ namespace isobus
 		/// @brief Conditionally executes a macro. If the object passed in is of the specified type, and
 		/// a macro is defined for that object, the macro will be executed if the macro event matches the
 		/// event ID of the macro.
+		/// Call it on the thread that calls update().
 		/// @param[in] object The object to check for a macro (or macros) to execute
 		/// @param[in] macroEvent The event ID of the macro(s) to execute
 		/// @param[in] targetObjectType The type of object that the macro is defined for. Used to validate the object
@@ -165,9 +205,19 @@ namespace isobus
 		/// @returns The number of y pixels (height) of your data key mask render area
 		virtual std::uint16_t get_data_mask_area_size_y_pixels() const = 0;
 
-		/// @brief The interface calls this function when it wants you to discontinue/suspend a working set
-		/// @param[in] workingSetWithError The working set to suspend
-		virtual void suspend_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSetWithError) = 0;
+		/// @brief This function is called from update() when an End of Object Pool message was answered with an error
+		/// @details It follows object_pool_deleted() or object_pool_parse_finished() for that pool. Alert the operator that the working set is suspended, and why.
+		/// It is not called for a pool deleted by a Delete Object Pool command.
+		/// @param[in] workingSet The working set that is suspended
+		/// @param[in] errorCodes Byte 2 of the response: bit 0 = errors in the object pool, bit 1 = the VT ran out of memory, bit 4 = any other error
+		/// @param[in] parentIDOfFaultingObject The parent object ID of the faulty object, or NULL_OBJECT_ID
+		/// @param[in] faultingObjectID The faulty object's ID, or NULL_OBJECT_ID
+		/// @param[in] objectPoolErrorCodes Byte 7 of the response, a bitfield of ObjectPoolErrorBit
+		virtual void suspend_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet,
+		                                 std::uint8_t errorCodes,
+		                                 std::uint16_t parentIDOfFaultingObject,
+		                                 std::uint16_t faultingObjectID,
+		                                 std::uint8_t objectPoolErrorCodes) = 0;
 
 		/// @brief This function is called when the interface needs to know the wide chars you support
 		/// @param[in] codePlane The code plane to inquire about
@@ -183,6 +233,8 @@ namespace isobus
 		                                                             std::vector<std::uint8_t> &wideCharRangeArray) = 0;
 
 		/// @brief This function is called when the interface needs to know what versions of object pools are available for a client.
+		/// @details Return them in the order they were stored, the last stored one last. A version command with a blank label refers
+		/// to the last stored version (ISO 11783-6:2018, E.4 to E.8), and the server takes the last label of this list for it.
 		/// @param[in] clientNAME The client requesting the object pool versions
 		/// @returns A vector of object pool versions available for the client
 		virtual std::vector<std::array<std::uint8_t, 7>> get_versions(NAME clientNAME) = 0;
@@ -190,6 +242,7 @@ namespace isobus
 		/// @brief This function is called when the interface needs to know what extended (32 byte label) versions of object pools are available for a client.
 		/// @details Only the versions stored with a 32 byte label belong here, the 7 byte ones are returned by get_versions().
 		/// Return an empty vector if this VT does not support extended versions (VT version 4 and older).
+		/// As for get_versions(), return them in the order they were stored, the last stored one last.
 		/// @param[in] clientNAME The client requesting the object pool versions
 		/// @returns A vector of extended object pool versions available for the client
 		virtual std::vector<std::array<std::uint8_t, 32>> get_extended_versions(NAME clientNAME) = 0;
@@ -270,8 +323,10 @@ namespace isobus
 		/// @param[in] reason How the unexpected shutdown was detected
 		virtual void handle_unexpected_working_set_shutdown(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, UnexpectedShutdownReason reason) = 0;
 
-		/// @brief Called when a working set sends an ESC command. Close its open input, if any, before returning, and send
-		/// VT Select Input Object as on Cancel, but not the VT ESC message. Can be called from the CAN thread.
+		/// @brief Called when a working set sends an ESC command, or when a command removes, hides or replaces the object open
+		/// for input. Close the open input, if any, before returning, clear it with set_object_open_for_input(NULL_OBJECT_ID),
+		/// and send VT Select Input Object with the object deselected, but not the VT ESC message. If no input is open, send nothing and
+		/// return NULL_OBJECT_ID, the server then deselects the focused object itself.
 		/// @param[in] workingSet The working set that sent the ESC command
 		/// @returns The object ID of the object whose input was aborted, or NULL_OBJECT_ID if no object was open for input
 		virtual std::uint16_t abort_input(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet) = 0;
@@ -296,6 +351,11 @@ namespace isobus
 		/// If you want to override this, you can override this function.
 		/// @returns The bitfield of supported large fonts
 		virtual std::uint8_t get_supported_large_fonts_bitfield() const;
+
+		/// @brief By default, the VT server will report that it supports normal, bold, italic, proportional
+		/// If you want to override this, you can override this function.
+		/// @returns The bitfield of supported font styles
+		virtual std::uint8_t get_supported_font_styles_bitfield() const;
 
 		/// @brief This function is called when the Identify VT version message is received
 		virtual void identify_vt();
@@ -334,11 +394,38 @@ namespace isobus
 		/// @param[in] workingSet The working set that can become active
 		virtual void select_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
 
-		/// @brief This function is called from update() after the server deleted an object pool because delete_object_pool() returned true
-		/// @details Unlike delete_object_pool(), which can run on the CAN thread, this is the place to stop presenting the working set.
+		/// @brief This function is called from update() after the server deleted an object pool, because delete_object_pool() returned true
+		/// or because an Object Pool Transfer of it was dropped (see set_max_rx_queue_size())
+		/// @details This is the place to stop presenting the working set. For a Delete Object Pool command, delete_object_pool() is called before the pool is deleted.
 		/// The active working set is already cleared, and a new object pool from the same client is only answered after this call.
 		/// @param[in] workingSet The working set whose object pool was deleted
 		virtual void object_pool_deleted(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
+
+		/// @brief This function is called when a client sends a valid Control Audio Signal command
+		/// @details Override it to play the tone. The server answers the command as successful in any case.
+		/// An activation count of 0 means the client wants the current audio signal to stop.
+		/// @param[in] activations The number of times the tone shall be played, 0 to stop the current signal
+		/// @param[in] frequencyHz The tone frequency in Hz
+		/// @param[in] onTimeMs How long each tone is played, in ms
+		/// @param[in] offTimeMs The pause between two tones, in ms
+		/// @param[in] source The control function that sent the command
+		virtual void control_audio_signal(std::uint8_t activations,
+		                                  std::uint16_t frequencyHz,
+		                                  std::uint16_t onTimeMs,
+		                                  std::uint16_t offTimeMs,
+		                                  std::shared_ptr<ControlFunction> source);
+
+		/// @brief This function is called when a client sends a Set Audio Volume command
+		/// @details Override it to apply the volume to subsequent audio signals. The server answers the command in any case.
+		/// @param[in] volumePercent The requested volume in percent, 0 to 100. A larger value in the command is passed on as 100.
+		/// @param[in] source The control function that sent the command
+		virtual void set_audio_volume(std::uint8_t volumePercent, std::shared_ptr<ControlFunction> source);
+
+		/// @brief Called when a received message is queued while no other received message was waiting for update()
+		/// @details This is the only function of this class that is called on the thread that receives CAN messages.
+		/// Override it to wake the thread that calls update(), for example by posting an event to it, so commands are answered
+		/// without waiting for the next periodic update(). It must return quickly and must not call into the server.
+		virtual void on_rx_messages_pending();
 
 		//-------------- Callbacks/Event driven interface ---------------------
 
@@ -355,6 +442,8 @@ namespace isobus
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t> &get_on_change_active_softkey_mask_event_dispatcher();
 
 		/// @brief Returns the event dispatcher for when an object is focused
+		/// When the bool is true the working set asked to open the object for input. If you open it, call
+		/// set_object_open_for_input() on the working set, otherwise the server does not know an input is open.
 		/// @returns The event dispatcher for when an object is focused
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, bool> &get_on_focus_object_event_dispatcher();
 
@@ -390,6 +479,14 @@ namespace isobus
 			AnyOtherError = 4
 		};
 
+		/// @brief Enumerates the bit indices of the error fields that can be set in a change end point response
+		enum class ChangeEndPointErrorBit : std::uint8_t
+		{
+			InvalidObjectID = 0,
+			InvalidLineDirection = 1,
+			AnyOtherError = 4
+		};
+
 		/// @brief Enumerates the bit indices of the error fields that can be set in a change fill attributes response
 		enum class ChangeFillAttributesErrorBit : std::uint8_t
 		{
@@ -417,7 +514,7 @@ namespace isobus
 			InvalidObjectID = 0,
 			InvalidListIndex = 1,
 			InvalidNewListItemObjectID = 2,
-			Reserved = 3, ///< Set to zero
+			ValueInUse = 3, ///< Such as: open for input (VT version 4 and 5 only)
 			AnyOtherError = 4
 		};
 
@@ -463,7 +560,7 @@ namespace isobus
 			InvalidObjectID = 1,
 			StringTooLong = 2,
 			AnyOtherError = 3,
-			Reserved = 4 ///< In VT version 4 and 5 this bit was "value in use" but that is now deprecated
+			ValueInUse = 4 ///< Value in use (VT version 4 and 5 only), deprecated from VT version 6 on
 		};
 
 		/// @brief Enumerates the bit indices of the error fields that can be set in a enable/disable object response
@@ -526,6 +623,13 @@ namespace isobus
 			InvalidObjectID = 0,
 			InvalidPointIndex = 1,
 			AnyOtherError = 2
+		};
+
+		/// @brief Enumerates the bit indices of the error fields that can be set in a change polygon scale response
+		enum class ChangePolygonScaleErrorBit : std::uint8_t
+		{
+			InvalidObjectID = 0,
+			AnyOtherError = 4
 		};
 
 		/// @brief Enumerates the bit indices of the error fields that can be set in a delete object pool response
@@ -618,6 +722,13 @@ namespace isobus
 		/// @returns true if the macro was executed, otherwise false
 		bool execute_macro(std::uint16_t objectIDOfMacro, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
 
+		/// @brief Returns the Soft Key Mask of a Data or Alarm Mask
+		/// @details A Soft Key Mask is shown and hidden together with the mask it belongs to (ISO 11783-6:2018, 4.6.18).
+		/// @param[in] mask The Data or Alarm Mask
+		/// @param[in] workingSet The working set that owns the mask
+		/// @returns The Soft Key Mask, or nullptr if the object is no Data or Alarm Mask or has no Soft Key Mask
+		static std::shared_ptr<VTObject> get_soft_key_mask_of(const std::shared_ptr<VTObject> &mask, const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet);
+
 		/// @brief Returns the priority to use, depending on the VT version
 		/// @returns The priority to use, depending on the VT version
 		CANIdentifier::CANPriority get_priority() const;
@@ -642,6 +753,18 @@ namespace isobus
 		/// @param[in] message The CAN message being received
 		/// @param[in] parent A context variable to find the relevant VT server class
 		static void process_rx_message(const CANMessage &message, void *parent);
+
+		/// @brief Copies a received message into the queue that update() processes
+		/// @param[in] message The CAN message being received
+		/// @param[in] parent A context variable to find the relevant VT server class
+		static void store_rx_message(const CANMessage &message, void *parent);
+
+		/// @brief Processes the queued messages in arrival order
+		void process_rx_messages();
+
+		/// @brief Deletes a working set's object pool from volatile memory. update() then reports it with object_pool_deleted().
+		/// @param[in] workingSet The working set whose object pool is deleted
+		void remove_object_pool(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
 
 		/// @brief Sends a message using the acknowledgement PGN
 		/// @param[in] type The type of acknowledgement to send (Ack, vs Nack, etc)
@@ -681,6 +804,13 @@ namespace isobus
 		/// @param[in] destination The control function to send the message to
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_child_location_response(std::uint16_t parentObjectID, std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
+
+		/// @brief Sends a response to a change end point command
+		/// @param[in] objectID The object ID of the output line
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent, otherwise false
+		bool send_change_end_point_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
 		/// @brief Sends a response to a change child position command
 		/// @param[in] parentObjectID The object ID for the parent of the object to move
@@ -735,6 +865,15 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_change_polygon_point_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
 
+		/// @brief Sends a response to a change polygon scale command
+		/// @param[in] objectID The object ID of the output polygon
+		/// @param[in] width The new width attribute from the command
+		/// @param[in] height The new height attribute from the command
+		/// @param[in] errorBitfield An error bitfield
+		/// @param[in] destination The control function to send the message to
+		/// @returns true if the message was sent, otherwise false
+		bool send_change_polygon_scale_response(std::uint16_t objectID, std::uint16_t width, std::uint16_t height, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const;
+
 		/// @brief Sends a response to a change size command
 		/// @param[in] objectID The object ID for the object whose size was meant to be changed
 		/// @param[in] errorBitfield An error bitfield
@@ -778,6 +917,22 @@ namespace isobus
 		/// @returns true if the message was sent, otherwise false
 		bool send_enable_disable_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, bool value, std::shared_ptr<ControlFunction> destination) const;
 
+		/// @brief The error response to an End of Object Pool command, which is passed to suspend_working_set() when errorCodes is not 0
+		struct EndOfObjectPoolFailure
+		{
+			std::uint8_t errorCodes; ///< Byte 2 of the response
+			std::uint16_t parentIDOfFaultingObject; ///< Bytes 3 and 4 of the response
+			std::uint16_t faultingObjectID; ///< Bytes 5 and 6 of the response
+			std::uint8_t objectPoolErrorCodes; ///< Byte 7 of the response
+		};
+
+		/// @brief A working set whose object pool was deleted, which update() passes to object_pool_deleted()
+		struct PendingObjectPoolDeletion
+		{
+			std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet; ///< The working set whose pool was deleted
+			EndOfObjectPoolFailure failure; ///< The error response sent because of this deletion, if any
+		};
+
 		/// @brief This message is sent by the VT to a Working Set Master to acknowledge the End of Object Pool message.
 		/// @details When the VT replies with an error of any type
 		/// the VT should delete the object pool from volatile memory storage and inform the operator
@@ -789,12 +944,16 @@ namespace isobus
 		/// @param[in] faultingObjectID The faulty object's ID or the NULL_OBJECT_ID
 		/// @param[in] objectPoolErrorCodes A bitfield of ObjectPoolErrorBit describing the issues with the pool
 		/// @param[in] destination The control function to send the message to
+		/// @param[in] ranOutOfMemory When true, only "VT ran out of memory during transfer" is reported, instead of errors in the object pool
+		/// @param[out] failure When not nullptr, receives the response, so that it can be reported once the application has been told about the pool
 		/// @returns true if the message was sent, otherwise false
 		bool send_end_of_object_pool_response(bool success,
 		                                      std::uint16_t parentIDOfFaultingObject,
 		                                      std::uint16_t faultingObjectID,
 		                                      std::uint8_t objectPoolErrorCodes,
-		                                      std::shared_ptr<ControlFunction> destination) const;
+		                                      std::shared_ptr<ControlFunction> destination,
+		                                      bool ranOutOfMemory = false,
+		                                      EndOfObjectPoolFailure *failure = nullptr) const;
 
 		/// @brief Sends a response to the execute macro or extended macro command
 		/// @param[in] objectID The object ID for the macro
@@ -877,7 +1036,9 @@ namespace isobus
 		void update();
 
 		static constexpr std::uint8_t VERSION_LABEL_LENGTH = 7; ///< The length of a standard object pool version label
+		static constexpr std::size_t MAX_WORKING_SET_MEMBERS = 255; ///< The most members a working set master can announce, its Working Set Master message counts them in one byte
 		static constexpr std::uint32_t WORKING_SET_MAINTENANCE_TIMEOUT_MS = 3000; ///< A working set master has shut down if it sends no Working Set Maintenance message for this long (ISO 11783-6 4.6.9)
+		static constexpr std::uint32_t DEFAULT_MAX_RX_QUEUE_SIZE_BYTES = 524288; ///< The default limit on the bytes of received messages waiting for update(), see set_max_rx_queue_size()
 
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> onRepaintEventDispatcher; ///< Event dispatcher for repaint events
 		EventDispatcher<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, std::uint16_t, std::uint16_t> onChangeActiveMaskEventDispatcher; ///< Event dispatcher for active data/alarm mask change events
@@ -894,6 +1055,7 @@ namespace isobus
 		std::uint8_t activeWorkingSetMasterAddress = NULL_CAN_ADDRESS; ///< The address of the active working set's master
 		std::uint8_t busyCodesBitfield = 0; ///< The busy codes bitfield
 		std::uint8_t currentCommandFunctionCode = 0; ///< The current command function code being processed
+		std::uint8_t pointingEventTransactionNumber = 0; ///< The TAN of the next Pointing Event message, VT version 6 and later
 		bool initialized = false; ///< True if the server has been initialized, otherwise false
 
 	private:
@@ -923,7 +1085,32 @@ namespace isobus
 			AnyOtherError = 3
 		};
 
+		/// @brief Checks whether a change to an object has to be refused because the operator is editing it (VT version 4 and 5 only)
+		/// @param[in] workingSet The working set that sent the command
+		/// @param[in] objectId The object the command changes
+		/// @param[in] includeReferencedVariable True to also refuse a change to the variable object that the open input references
+		/// @returns true if the change must be answered with the "value in use" error, otherwise false
+		bool is_value_in_use_by_open_input(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, std::uint16_t objectId, bool includeReferencedVariable) const;
+
+		/// @brief Tells the working set that the object open for input or focused was removed from the display
+		/// @details The open input is closed through abort_input() and a VT ESC message is sent for the object it returns, otherwise a focused object is deselected.
+		/// @param[in] workingSet The working set that lost its focus
+		void notify_focus_lost(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
+
+		/// @brief Calls notify_focus_lost() if the object open for input, or else the focused object, is gone, no longer shown on the active mask,
+		/// or replaced by the pool parse that just finished
+		/// @param[in] workingSet The working set to check
+		/// @param[in] poolWasParsed True right after a pool parse, so that an object the parse replaced counts as removed
+		void notify_focus_lost_if_removed(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, bool poolWasParsed = false);
+
 		static constexpr std::uint8_t EXTENDED_VERSION_LABEL_LENGTH = 32; ///< The length of an extended object pool version label (VT version 5 and later)
+
+		/// @brief Finds the version a blank version label refers to: the last stored one (ISO 11783-6:2018, E.4 to E.8)
+		/// @details That is the last label that get_versions() or get_extended_versions() returns.
+		/// @param[in] clientNAME The client the version belongs to
+		/// @param[in] labelLength The label length of the command, VERSION_LABEL_LENGTH or EXTENDED_VERSION_LABEL_LENGTH
+		/// @returns The version label, or an empty vector if the client has no stored version of that label length
+		std::vector<std::uint8_t> get_last_stored_version_label(NAME clientNAME, std::uint8_t labelLength);
 
 		/// @brief Sends a response to a load version or extended load version command
 		/// @param[in] function The command being answered, LoadVersionCommand or ExtendedLoadVersionCommand
@@ -951,9 +1138,31 @@ namespace isobus
 		void process_working_set_maintenance_message(const CANMessage &message);
 
 		/// @brief Remembers a Working Set Master message from a control function this server does not manage,
-		/// which a version 2 or prior client has to send before it can be managed
+		/// which a version 2 or prior client has to send before it can be managed.
+		/// It also forgets the members the master announced before, as the member messages after it define the set again (ISO 11783-7 10.2 a and d).
 		/// @param[in] message The Working Set Master message
 		void process_working_set_master_message(const CANMessage &message);
+
+		/// @brief Remembers a member of the working set whose master sent this Working Set Member message.
+		/// A control function is a member of one working set only, so it is removed from any other master's list (ISO 11783-7 10.2 d).
+		/// @param[in] message The Working Set Member message, which carries the NAME of the member
+		void process_working_set_member_message(const CANMessage &message);
+
+		/// @brief Forgets the members a working set master announced, as its next Working Set Master message defines the set again
+		/// @param[in] master The working set master
+		void forget_working_set_members(const std::shared_ptr<ControlFunction> &master);
+
+		/// @brief Removes a NAME from the member lists of the working set masters
+		/// @param[in] member The NAME to remove
+		/// @param[in] exceptMaster A master whose list is left as it is, or nullptr for none
+		void remove_working_set_member(const NAME &member, const std::shared_ptr<ControlFunction> &exceptMaster = nullptr);
+
+		/// @brief Picks the control function to send the response to a command to (ISO 11783-6 Table 1).
+		/// A working set member gets the response itself only if both the working set and this VT are version 4 or later,
+		/// otherwise it goes to its working set master.
+		/// @param[in] source The control function that sent the command
+		/// @returns The control function to send the response to
+		std::shared_ptr<ControlFunction> get_response_destination(const std::shared_ptr<ControlFunction> &source) const;
 
 		/// @brief Stops managing a working set whose master shut down unexpectedly (ISO 11783-6 4.6.9),
 		/// and queues it for report_shut_down_working_sets()
@@ -966,13 +1175,33 @@ namespace isobus
 		void deactivate_working_set(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet);
 
 		/// @brief Passes each shut down working set whose object pool parsing has finished to handle_unexpected_working_set_shutdown()
-		/// @details Waiting here instead of joining the parsing thread right away keeps a long parse from blocking the CAN thread or update()
+		/// @details Waiting here instead of joining the parsing thread right away keeps a long parse from blocking update()
 		void report_shut_down_working_sets();
 
+		/// @brief Passes a failed End of Object Pool response to suspend_working_set(), when there was one
+		/// @param[in] workingSet The working set that the response was sent to
+		/// @param[in] failure The response, which is ignored unless it reported an error
+		void report_suspension(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet, const EndOfObjectPoolFailure &failure);
+
 		std::vector<std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, UnexpectedShutdownReason>> pendingShutdowns; ///< Shut down working sets that the application has not been told about yet
-		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> pendingObjectPoolDeletions; ///< Working sets whose object pool was deleted, which update() passes to object_pool_deleted()
-		Mutex pendingShutdownsMutex; ///< Protects pendingShutdowns and pendingObjectPoolDeletions, which both the CAN thread and update() use
+		std::vector<PendingObjectPoolDeletion> pendingObjectPoolDeletions; ///< Object pool deletions that update() has not passed to object_pool_deleted() yet
+		std::vector<std::pair<std::shared_ptr<ControlFunction>, std::vector<NAME>>> workingSetMembers; ///< The members each working set master announced with Working Set Member messages
 		std::vector<std::shared_ptr<ControlFunction>> announcedWorkingSetMasters; ///< Unmanaged control functions that sent a Working Set Master message, see process_working_set_master_message()
+
+		/// @brief A received message and the time it arrived
+		struct QueuedMessage
+		{
+			CANMessage message; ///< The received message
+			std::uint32_t arrivalTimestamp_ms; ///< When the message was queued, from SystemTiming
+		};
+
+		std::deque<QueuedMessage> rxMessageQueue; ///< Messages received on the CAN thread that update() has not processed yet
+		Mutex rxMessageQueueMutex; ///< Guards rxMessageQueue, rxMessageQueueSize_bytes, maxRxMessageQueueSize_bytes, droppedRxMessageCount and droppedObjectPoolTransferSources only
+		std::uint32_t rxMessageQueueSize_bytes = 0; ///< Bytes held by rxMessageQueue, counted as sizeof(QueuedMessage) plus the data length
+		std::uint32_t maxRxMessageQueueSize_bytes = DEFAULT_MAX_RX_QUEUE_SIZE_BYTES; ///< Limit on rxMessageQueueSize_bytes, guarded by rxMessageQueueMutex
+		std::uint32_t droppedRxMessageCount = 0; ///< Messages dropped since update() last reported them, guarded by rxMessageQueueMutex
+		std::vector<std::shared_ptr<ControlFunction>> droppedObjectPoolTransferSources; ///< Clients whose Object Pool Transfer was dropped since the last drain, guarded by rxMessageQueueMutex
+		std::uint32_t rxMessageArrivalTimestamp_ms = 0; ///< Arrival time of the message being processed, only used on the thread that calls update()
 	};
 } // namespace isobus
 #endif //ISOBUS_VIRTUAL_TERMINAL_SERVER_HPP

@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <vector>
 
 namespace isobus
 {
@@ -62,6 +63,13 @@ namespace isobus
 		{
 			if (newState != commandedState)
 			{
+				// Send a pending retry with the old state first, so a failed Stop is not replaced by the next state.
+				txFlags.process_all_flags();
+				if ((StopAllImplementOperationsState::PermitAllImplementsToOperationOn == commandedState) &&
+				    (StopAllImplementOperationsState::StopImplementOperations == newState))
+				{
+					stopAllImplementOperationsTransitionNumber++;
+				}
 				commandedState = newState;
 
 				if (StopAllImplementOperationsState::StopImplementOperations == newState)
@@ -72,7 +80,10 @@ namespace isobus
 				{
 					LOG_INFO("[ISB]: Internal ISB state is now permitted.");
 				}
-				txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendStopAllImplementOperationsSwitchState));
+				if (!send_stop_all_implement_operations_switch_state())
+				{
+					txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendStopAllImplementOperationsSwitchState));
+				}
 			}
 		}
 		else
@@ -105,14 +116,41 @@ namespace isobus
 
 	void ShortcutButtonInterface::update()
 	{
-		if (SystemTiming::time_expired_ms(allImplementsStopOperationsSwitchStateTimestamp_ms, TRANSMISSION_RATE_MS))
+		// Taken out before parsing, so messages that arrive while a listener runs wait for the next update() instead of keeping this one going
+		std::vector<ReceivedFrame> frames;
+		ReceivedFrame frame;
+		while (receivedFrames.pop(&frame))
 		{
-			// Prune old ISBs
-			isobusShorcutButtonList.erase(std::remove_if(isobusShorcutButtonList.begin(), isobusShorcutButtonList.end(), [](const ISBServerData &isb) {
-				                              return SystemTiming::time_expired_ms(isb.messageReceivedTimestamp_ms, TRANSMISSION_TIMEOUT_MS);
-			                              }),
-			                              isobusShorcutButtonList.end());
+			frames.push_back(frame);
+		}
+		// Read before the listeners run, so a slow listener can't expire an ISB whose next messages are already queued
+		const std::uint32_t updateTimestamp_ms = SystemTiming::get_timestamp_ms();
+		for (const auto &receivedFrame : frames)
+		{
+			// Parsed even when older than the timeout: a Stop that waited here was still pressed, and the transition count needs every message; the timeout pass below expires it
+			process_received_frame(receivedFrame);
+		}
 
+		StopAllImplementOperationsState previousState = get_state();
+
+		// Timed-out ISBs stay in the list so their transition count remains the baseline when they come back.
+		for (auto &isb : isobusShorcutButtonList)
+		{
+			if (TRANSMISSION_TIMEOUT_MS <= (updateTimestamp_ms - isb.messageReceivedTimestamp_ms))
+			{
+				isb.commandedState = StopAllImplementOperationsState::NotAvailable;
+			}
+		}
+
+		if (previousState != get_state())
+		{
+			LOG_WARNING("[ISB]: An ISB that commanded a stop timed out. Implement operations now permitted.");
+			ISBEventDispatcher.call(get_state());
+		}
+
+		if (actAsISBServer && SystemTiming::time_expired_ms(allImplementsStopOperationsSwitchStateTimestamp_ms, TRANSMISSION_RATE_MS))
+		{
+			allImplementsStopOperationsSwitchStateTimestamp_ms = SystemTiming::get_timestamp_ms();
 			txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::SendStopAllImplementOperationsSwitchState));
 		}
 		txFlags.process_all_flags();
@@ -121,8 +159,27 @@ namespace isobus
 	void ShortcutButtonInterface::process_rx_message(const CANMessage &message, void *parentPointer)
 	{
 		assert(nullptr != parentPointer);
+		auto targetInterface = static_cast<ShortcutButtonInterface *>(parentPointer);
 
-		static_cast<ShortcutButtonInterface *>(parentPointer)->process_message(message);
+		if ((message.get_can_port_index() == targetInterface->sourceControlFunction->get_can_port()) &&
+		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::AllImplementsStopOperationsSwitchState) == message.get_identifier().get_parameter_group_number()))
+		{
+			if (CAN_DATA_LENGTH == message.get_data_length())
+			{
+				ReceivedFrame frame;
+				frame.ISONAME = message.get_source_control_function()->get_NAME();
+				frame.timestamp_ms = SystemTiming::get_timestamp_ms();
+				frame.sourceAddress = message.get_identifier().get_source_address();
+				frame.transitionNumber = message.get_uint8_at(6);
+				frame.state = static_cast<StopAllImplementOperationsState>(message.get_uint8_at(7) & 0x03);
+
+				targetInterface->receivedFrames.push(frame);
+			}
+			else
+			{
+				LOG_WARNING("[ISB]: Received malformed All Implements Stop Operations Switch State. DLC must be 8.");
+			}
+		}
 	}
 
 	void ShortcutButtonInterface::process_flags(std::uint32_t flag, void *parent)
@@ -134,11 +191,6 @@ namespace isobus
 		if (flag == static_cast<std::uint32_t>(TransmitFlags::SendStopAllImplementOperationsSwitchState))
 		{
 			transmitSuccessful = myInterface->send_stop_all_implement_operations_switch_state();
-
-			if (transmitSuccessful)
-			{
-				myInterface->stopAllImplementOperationsTransitionNumber++;
-			}
 		}
 
 		if (!transmitSuccessful)
@@ -147,69 +199,60 @@ namespace isobus
 		}
 	}
 
-	void ShortcutButtonInterface::process_message(const CANMessage &message)
+	void ShortcutButtonInterface::process_received_frame(const ReceivedFrame &frame)
 	{
-		if ((message.get_can_port_index() == sourceControlFunction->get_can_port()) &&
-		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::AllImplementsStopOperationsSwitchState) == message.get_identifier().get_parameter_group_number()))
+		auto matches_isoname = [&frame](const ISBServerData &isb) { return isb.ISONAME == frame.ISONAME; };
+		auto ISB = std::find_if(isobusShorcutButtonList.begin(), isobusShorcutButtonList.end(), matches_isoname);
+		StopAllImplementOperationsState previousState = get_state();
+
+		if (isobusShorcutButtonList.end() == ISB)
 		{
-			if (CAN_DATA_LENGTH == message.get_data_length())
+			ISBServerData newISB;
+
+			LOG_DEBUG("[ISB]: New ISB detected at address %u", frame.sourceAddress);
+			newISB.ISONAME = frame.ISONAME;
+			newISB.commandedState = frame.state;
+			isobusShorcutButtonList.emplace_back(newISB);
+			ISB = std::prev(isobusShorcutButtonList.end());
+		}
+		else
+		{
+			bool countChanged = (frame.transitionNumber != ISB->stopAllImplementOperationsTransitionNumber);
+			bool expectedTransition = (static_cast<std::uint8_t>(ISB->stopAllImplementOperationsTransitionNumber + 1) == frame.transitionNumber) &&
+			  (StopAllImplementOperationsState::PermitAllImplementsToOperationOn == ISB->reportedState) &&
+			  (StopAllImplementOperationsState::StopImplementOperations == frame.state);
+
+			// A sender that only reports NotAvailable has no switch, and older stack versions raise its count on every send.
+			if (((StopAllImplementOperationsState::NotAvailable != frame.state) || ISB->reportedSwitchState) && countChanged && (!expectedTransition))
 			{
-				auto messageNAME = message.get_source_control_function()->get_NAME();
-				auto matches_isoname = [messageNAME](const ISBServerData &isb) { return isb.ISONAME == messageNAME; };
-				auto ISB = std::find_if(isobusShorcutButtonList.begin(), isobusShorcutButtonList.end(), matches_isoname);
-				auto &messageData = message.get_data();
-				StopAllImplementOperationsState previousState = get_state();
-
-				if (isobusShorcutButtonList.end() == ISB)
-				{
-					ISBServerData newISB;
-
-					LOG_DEBUG("[ISB]: New ISB detected at address %u", message.get_identifier().get_source_address());
-					newISB.ISONAME = messageNAME;
-					isobusShorcutButtonList.emplace_back(newISB);
-					ISB = std::prev(isobusShorcutButtonList.end());
-				}
-
-				if (isobusShorcutButtonList.end() != ISB)
-				{
-					std::uint8_t newTransitionCount = messageData.at(6);
-
-					if (((ISB->stopAllImplementOperationsTransitionNumber == 255) &&
-					     (0 != newTransitionCount)) ||
-					    ((ISB->stopAllImplementOperationsTransitionNumber < 255) &&
-					     (newTransitionCount > ISB->stopAllImplementOperationsTransitionNumber + 1)))
-					{
-						// A Working Set shall consider an increase in the transitions without detecting a corresponding
-						// transition of the Stop all implement operations state as an error and react accordingly.
-						ISB->commandedState = StopAllImplementOperationsState::StopImplementOperations;
-						LOG_ERROR("[ISB]: Missed an ISB transition from ISB at address %u", message.get_identifier().get_source_address());
-					}
-					else
-					{
-						ISB->commandedState = static_cast<StopAllImplementOperationsState>(messageData.at(7) & 0x03);
-					}
-					ISB->messageReceivedTimestamp_ms = SystemTiming::get_timestamp_ms();
-					ISB->stopAllImplementOperationsTransitionNumber = messageData.at(6);
-
-					auto newState = get_state();
-					if (previousState != newState)
-					{
-						if (StopAllImplementOperationsState::StopImplementOperations == newState)
-						{
-							LOG_ERROR("[ISB]: All implement operations must stop. (ISB at address %u has commanded it)", message.get_identifier().get_source_address());
-						}
-						else
-						{
-							LOG_INFO("[ISB]: Implement operations now permitted.");
-						}
-						ISBEventDispatcher.call(newState);
-					}
-				}
+				ISB->commandedState = StopAllImplementOperationsState::StopImplementOperations;
+				LOG_ERROR("[ISB]: Missed an ISB transition from ISB at address %u", frame.sourceAddress);
 			}
 			else
 			{
-				LOG_WARNING("[ISB]: Received malformed All Implements Stop Operations Switch State. DLC must be 8.");
+				ISB->commandedState = frame.state;
 			}
+		}
+		ISB->messageReceivedTimestamp_ms = frame.timestamp_ms;
+		ISB->stopAllImplementOperationsTransitionNumber = frame.transitionNumber;
+		ISB->reportedState = frame.state;
+		if (StopAllImplementOperationsState::NotAvailable != frame.state)
+		{
+			ISB->reportedSwitchState = true;
+		}
+
+		auto newState = get_state();
+		if (previousState != newState)
+		{
+			if (StopAllImplementOperationsState::StopImplementOperations == newState)
+			{
+				LOG_ERROR("[ISB]: All implement operations must stop. (ISB at address %u has commanded it)", frame.sourceAddress);
+			}
+			else
+			{
+				LOG_INFO("[ISB]: Implement operations now permitted.");
+			}
+			ISBEventDispatcher.call(newState);
 		}
 	}
 

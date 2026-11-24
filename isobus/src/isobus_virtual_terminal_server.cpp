@@ -16,12 +16,19 @@
 #include "isobus/utility/to_string.hpp"
 
 #include <algorithm>
+#include <cstring>
 #include <iomanip>
 #include <limits>
+#include <set>
 #include <sstream>
+#include <utility>
+#include <vector>
 
 namespace isobus
 {
+	/// @brief How deep macros may nest. The standard sets no limit, but each level takes about 2 KB of stack.
+	constexpr std::uint8_t MAX_NESTED_MACROS = 16;
+
 	/// @brief Extracts the low byte from a 16-bit value.
 	/// @param value The value to extract the low byte from.
 	/// @returns The low byte of the value.
@@ -61,6 +68,152 @@ namespace isobus
 		        (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Fail == state));
 	}
 
+	/// @brief Checks if the Change Child Location and Change Child Position commands can target a parent object of this type.
+	/// @param type The type of the parent object.
+	/// @returns true if the commands are allowed for this object type, otherwise false.
+	static bool can_move_children_of(VirtualTerminalObjectType type)
+	{
+		bool retVal = false;
+
+		switch (type)
+		{
+			case VirtualTerminalObjectType::WorkingSet:
+			case VirtualTerminalObjectType::DataMask:
+			case VirtualTerminalObjectType::AlarmMask:
+			case VirtualTerminalObjectType::Container:
+			case VirtualTerminalObjectType::Key:
+			case VirtualTerminalObjectType::Button:
+			case VirtualTerminalObjectType::WindowMask:
+			case VirtualTerminalObjectType::AuxiliaryFunctionType2:
+			case VirtualTerminalObjectType::AuxiliaryInputType2:
+			{
+				retVal = true;
+			}
+			break;
+
+			default:
+				break;
+		}
+		return retVal;
+	}
+
+	bool VirtualTerminalServer::is_shown_on_active_mask(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, std::uint16_t objectID)
+	{
+		bool found = false;
+		const auto workingSetObject = workingSet->get_working_set_object();
+
+		if ((nullptr != workingSetObject) && (VirtualTerminalObjectType::WorkingSet == workingSetObject->get_object_type()))
+		{
+			std::vector<std::uint16_t> stack;
+			std::set<std::uint16_t> visited;
+			stack.push_back(std::static_pointer_cast<WorkingSet>(workingSetObject)->get_active_mask());
+
+			while ((!stack.empty()) && (!found))
+			{
+				const std::uint16_t id = stack.back();
+				stack.pop_back();
+
+				if ((NULL_OBJECT_ID == id) || (!visited.insert(id).second))
+				{
+					continue;
+				}
+
+				if (objectID == id)
+				{
+					found = true;
+				}
+				else
+				{
+					const auto object = workingSet->get_object_by_id(id);
+
+					if ((nullptr == object) || ((VirtualTerminalObjectType::Container == object->get_object_type()) && std::static_pointer_cast<Container>(object)->get_hidden()))
+					{
+						continue;
+					}
+
+					if (VirtualTerminalObjectType::ObjectPointer == object->get_object_type())
+					{
+						stack.push_back(std::static_pointer_cast<ObjectPointer>(object)->get_value());
+					}
+					else if (VirtualTerminalObjectType::DataMask == object->get_object_type())
+					{
+						stack.push_back(std::static_pointer_cast<DataMask>(object)->get_soft_key_mask());
+					}
+					else if (VirtualTerminalObjectType::AlarmMask == object->get_object_type())
+					{
+						stack.push_back(std::static_pointer_cast<AlarmMask>(object)->get_soft_key_mask());
+					}
+
+					for (std::uint16_t i = 0; i < object->get_number_children(); i++)
+					{
+						stack.push_back(object->get_child_id(i));
+					}
+				}
+			}
+		}
+		return found;
+	}
+
+	bool VirtualTerminalServer::is_value_in_use_by_open_input(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, std::uint16_t objectId, bool includeReferencedVariable) const
+	{
+		bool inUse = false;
+		const auto version = get_version();
+		const std::uint16_t open = workingSet->get_object_open_for_input();
+
+		if ((NULL_OBJECT_ID != open) && ((VTVersion::Version4 == version) || (VTVersion::Version5 == version)))
+		{
+			if (objectId == open)
+			{
+				inUse = true;
+			}
+			else if (includeReferencedVariable)
+			{
+				const auto openObject = workingSet->get_object_by_id(open);
+
+				if ((nullptr != openObject) &&
+				    ((VirtualTerminalObjectType::InputNumber == openObject->get_object_type()) ||
+				     (VirtualTerminalObjectType::InputString == openObject->get_object_type()) ||
+				     (VirtualTerminalObjectType::InputList == openObject->get_object_type())))
+				{
+					inUse = (objectId == std::static_pointer_cast<VTObjectWithVariableReference>(openObject)->get_variable_reference());
+				}
+			}
+		}
+		return inUse;
+	}
+
+	void VirtualTerminalServer::notify_focus_lost(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet)
+	{
+		const std::uint16_t focus = workingSet->get_object_focus();
+		// Only the application knows which input it really closed, and it sends the deselect, so the ESC follows that
+		const std::uint16_t aborted = abort_input(workingSet);
+		workingSet->set_object_focus(NULL_OBJECT_ID);
+
+		if (NULL_OBJECT_ID != aborted)
+		{
+			send_esc_message(aborted, 0, workingSet->get_control_function());
+		}
+		else if (NULL_OBJECT_ID != focus)
+		{
+			send_select_input_object_message(focus, false, false, workingSet->get_control_function());
+		}
+	}
+
+	void VirtualTerminalServer::notify_focus_lost_if_removed(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, bool poolWasParsed)
+	{
+		const std::uint16_t open = workingSet->get_object_open_for_input();
+		const std::uint16_t checked = (NULL_OBJECT_ID != open) ? open : workingSet->get_object_focus();
+
+		// The parse records every object it replaced, and this checks what is open now, as the operator can open another input while it runs
+		if ((NULL_OBJECT_ID != checked) &&
+		    ((poolWasParsed && workingSet->was_object_replaced(checked)) ||
+		     (nullptr == workingSet->get_object_by_id(checked)) ||
+		     (!is_shown_on_active_mask(workingSet, checked))))
+		{
+			notify_focus_lost(workingSet);
+		}
+	}
+
 	/// @brief Builds a get versions or extended get versions response.
 	/// @param function The response function code.
 	/// @param versions The stored version labels, of which only the first 255 fit the one byte count.
@@ -82,6 +235,27 @@ namespace isobus
 		}
 		buffer.resize(std::max<std::size_t>(buffer.size(), CAN_DATA_LENGTH), 0xFF);
 		return buffer;
+	}
+
+	/// @brief Checks the characters of a version label (ISO 11783-6:2018, E.1)
+	/// @details Labels use visible characters of font type 0 (ISO 8859-1), padded with trailing blanks,
+	/// and none of the characters that can't be used in a file name.
+	/// @param label The version label to check.
+	/// @returns true if every character may be used in a version label, otherwise false.
+	static bool is_version_label_valid(const std::vector<std::uint8_t> &label)
+	{
+		return std::all_of(label.begin(), label.end(), [](std::uint8_t character) {
+			const bool isVisible = (character >= 0x20) && ((character < 0x7F) || (character >= 0xA0));
+			return isVisible && (nullptr == std::strchr("\\\"'`/:*<>|?", character));
+		});
+	}
+
+	/// @brief Checks if a version label contains no string, only blanks (ISO 11783-6:2018, E.4 to E.8)
+	/// @param label The version label to check.
+	/// @returns true if every character is a blank, otherwise false.
+	static bool is_version_label_blank(const std::vector<std::uint8_t> &label)
+	{
+		return std::all_of(label.begin(), label.end(), [](std::uint8_t character) { return ' ' == character; });
 	}
 
 	/// @brief Reads the version label that follows the function code of a version command.
@@ -155,15 +329,17 @@ namespace isobus
 		if (initialized)
 		{
 			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-			                                                                                          process_rx_message,
+			                                                                                          store_rx_message,
 			                                                                                          this);
 			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster),
-			                                                                                          process_rx_message,
+			                                                                                          store_rx_message,
+			                                                                                          this);
+			CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMember),
+			                                                                                          store_rx_message,
 			                                                                                          this);
 		}
 
 		// A shut down working set can still be parsing its object pool, and its thread must not outlive it
-		LOCK_GUARD(Mutex, pendingShutdownsMutex);
 		for (const auto &shutDown : pendingShutdowns)
 		{
 			shutDown.first->join_parsing_thread();
@@ -175,10 +351,13 @@ namespace isobus
 		if (!initialized)
 		{
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
-			                                                                                       process_rx_message,
+			                                                                                       store_rx_message,
 			                                                                                       this);
 			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster),
-			                                                                                       process_rx_message,
+			                                                                                       store_rx_message,
+			                                                                                       this);
+			CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMember),
+			                                                                                       store_rx_message,
 			                                                                                       this);
 			initialized = true;
 		}
@@ -219,6 +398,11 @@ namespace isobus
 		return 0x7F;
 	}
 
+	std::uint8_t VirtualTerminalServer::get_supported_font_styles_bitfield() const
+	{
+		return 0x8F;
+	}
+
 	void VirtualTerminalServer::identify_vt()
 	{
 		LOG_ERROR("[VT Server]: The Identify VT command is not implemented");
@@ -248,6 +432,18 @@ namespace isobus
 	}
 
 	void VirtualTerminalServer::object_pool_deleted(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>)
+	{
+	}
+
+	void VirtualTerminalServer::control_audio_signal(std::uint8_t, std::uint16_t, std::uint16_t, std::uint16_t, std::shared_ptr<ControlFunction>)
+	{
+	}
+
+	void VirtualTerminalServer::set_audio_volume(std::uint8_t, std::shared_ptr<ControlFunction>)
+	{
+	}
+
+	void VirtualTerminalServer::on_rx_messages_pending()
 	{
 	}
 
@@ -327,7 +523,8 @@ namespace isobus
 			}
 			else
 			{
-				workingSet->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
+				workingSet->set_working_set_maintenance_message_timestamp_ms(rxMessageArrivalTimestamp_ms);
+				workingSet->set_working_set_version(clientVersion);
 			}
 		}
 
@@ -350,7 +547,8 @@ namespace isobus
 
 				// This CF is trying to initiate communication with us.
 				auto newWorkingSet = std::make_shared<VirtualTerminalServerManagedWorkingSet>(message.get_source_control_function());
-				newWorkingSet->set_working_set_maintenance_message_timestamp_ms(SystemTiming::get_timestamp_ms());
+				newWorkingSet->set_working_set_maintenance_message_timestamp_ms(rxMessageArrivalTimestamp_ms);
+				newWorkingSet->set_working_set_version(clientVersion);
 				managedWorkingSetList.emplace_back(newWorkingSet);
 
 				LOG_INFO("[VT Server]: Client %u initiated working set maintenance messages with version %u", newWorkingSet->get_control_function()->get_address(), clientVersion);
@@ -366,6 +564,10 @@ namespace isobus
 	{
 		const auto source = message.get_source_control_function();
 
+		// A new Working Set Master message replaces the old definition, and its member messages follow it (ISO 11783-7 10.2 a and d)
+		forget_working_set_members(source);
+		remove_working_set_member(source->get_NAME());
+
 		// A managed working set master also sends this when another node requests it, which is not a restart
 		if ((nullptr == get_managed_working_set(source)) &&
 		    (announcedWorkingSetMasters.end() == std::find(announcedWorkingSetMasters.begin(), announcedWorkingSetMasters.end(), source)))
@@ -374,19 +576,92 @@ namespace isobus
 		}
 	}
 
+	void VirtualTerminalServer::process_working_set_member_message(const CANMessage &message)
+	{
+		const auto master = message.get_source_control_function();
+		const NAME member(message.get_uint64_at(0));
+		auto members = std::find_if(workingSetMembers.begin(), workingSetMembers.end(), [&master](const std::pair<std::shared_ptr<ControlFunction>, std::vector<NAME>> &candidate) {
+			return candidate.first == master;
+		});
+
+		// A control function is a member of one working set only (ISO 11783-7 10.2 d)
+		remove_working_set_member(member, master);
+
+		if (workingSetMembers.end() == members)
+		{
+			workingSetMembers.emplace_back(master, std::vector<NAME>());
+			members = workingSetMembers.end() - 1;
+		}
+
+		// The Working Set Master message counts the members in one byte
+		if ((members->second.size() < MAX_WORKING_SET_MEMBERS) &&
+		    (members->second.end() == std::find(members->second.begin(), members->second.end(), member)))
+		{
+			members->second.push_back(member);
+		}
+	}
+
+	void VirtualTerminalServer::forget_working_set_members(const std::shared_ptr<ControlFunction> &master)
+	{
+		workingSetMembers.erase(std::remove_if(workingSetMembers.begin(), workingSetMembers.end(), [&master](const std::pair<std::shared_ptr<ControlFunction>, std::vector<NAME>> &candidate) {
+			                        return candidate.first == master;
+		                        }),
+		                        workingSetMembers.end());
+	}
+
+	void VirtualTerminalServer::remove_working_set_member(const NAME &member, const std::shared_ptr<ControlFunction> &exceptMaster)
+	{
+		for (auto &members : workingSetMembers)
+		{
+			if (members.first != exceptMaster)
+			{
+				members.second.erase(std::remove(members.second.begin(), members.second.end(), member), members.second.end());
+			}
+		}
+	}
+
+	std::shared_ptr<ControlFunction> VirtualTerminalServer::get_response_destination(const std::shared_ptr<ControlFunction> &source) const
+	{
+		std::shared_ptr<ControlFunction> retVal = source;
+
+		for (const auto &members : workingSetMembers)
+		{
+			if ((members.first != source) &&
+			    (nullptr != members.first) &&
+			    members.first->get_address_valid() &&
+			    (members.second.end() != std::find(members.second.begin(), members.second.end(), source->get_NAME())))
+			{
+				// The working set version is only known once its master sends maintenance messages, 0xFF is version 2 or prior
+				const auto workingSet = get_managed_working_set(members.first);
+				const bool isWorkingSetVersion4OrLater = (nullptr != workingSet) &&
+				  (4 <= workingSet->get_working_set_version()) &&
+				  (0xFF != workingSet->get_working_set_version());
+
+				if (!isWorkingSetVersion4OrLater || (get_vt_version_byte(get_version()) < 4))
+				{
+					retVal = members.first;
+				}
+				break;
+			}
+		}
+		return retVal;
+	}
+
 	void VirtualTerminalServer::shut_down_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, UnexpectedShutdownReason reason)
 	{
 		deactivate_working_set(workingSet);
+		forget_working_set_members(workingSet->get_control_function());
 		managedWorkingSetIopLoadStateMap.erase(workingSet);
 		managedWorkingSetList.erase(std::remove(managedWorkingSetList.begin(), managedWorkingSetList.end(), workingSet), managedWorkingSetList.end());
 
-		LOCK_GUARD(Mutex, pendingShutdownsMutex);
 		pendingShutdowns.emplace_back(workingSet, reason);
 	}
 
 	void VirtualTerminalServer::deactivate_working_set(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet)
 	{
+		// The control function stays the same when the master changes its address
 		if ((activeWorkingSet == workingSet) ||
+		    ((nullptr != activeWorkingSet) && (activeWorkingSet->get_control_function() == workingSet->get_control_function())) ||
 		    (workingSet->get_control_function()->get_address() == activeWorkingSetMasterAddress))
 		{
 			activeWorkingSet = nullptr;
@@ -401,17 +676,22 @@ namespace isobus
 		}
 	}
 
+	void VirtualTerminalServer::remove_object_pool(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet)
+	{
+		deactivate_working_set(workingSet);
+		managedWorkingSetIopLoadStateMap.erase(workingSet);
+		workingSet->clear_object_pool_data({});
+		pendingObjectPoolDeletions.push_back({ workingSet, {} });
+	}
+
 	void VirtualTerminalServer::report_shut_down_working_sets()
 	{
 		std::vector<std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, UnexpectedShutdownReason>> parsedWorkingSets;
-		{
-			LOCK_GUARD(Mutex, pendingShutdownsMutex);
-			auto stillParsing = std::stable_partition(pendingShutdowns.begin(), pendingShutdowns.end(), [](const std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, UnexpectedShutdownReason> &shutDown) {
-				return VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Running == shutDown.first->get_object_pool_processing_state();
-			});
-			parsedWorkingSets.assign(stillParsing, pendingShutdowns.end());
-			pendingShutdowns.erase(stillParsing, pendingShutdowns.end());
-		}
+		auto stillParsing = std::stable_partition(pendingShutdowns.begin(), pendingShutdowns.end(), [](const std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, UnexpectedShutdownReason> &shutDown) {
+			return VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Running == shutDown.first->get_object_pool_processing_state();
+		});
+		parsedWorkingSets.assign(stillParsing, pendingShutdowns.end());
+		pendingShutdowns.erase(stillParsing, pendingShutdowns.end());
 
 		for (const auto &shutDown : parsedWorkingSets)
 		{
@@ -419,6 +699,22 @@ namespace isobus
 			shutDown.first->join_parsing_thread();
 			handle_unexpected_working_set_shutdown(shutDown.first, shutDown.second);
 		}
+	}
+
+	void VirtualTerminalServer::report_suspension(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet, const EndOfObjectPoolFailure &failure)
+	{
+		if (0 != failure.errorCodes)
+		{
+			suspend_working_set(workingSet, failure.errorCodes, failure.parentIDOfFaultingObject, failure.faultingObjectID, failure.objectPoolErrorCodes);
+		}
+	}
+
+	/// @brief Counts the macros running on this thread, which the response senders check because a command run from a macro gets no response.
+	/// @returns The count for the calling thread.
+	static std::uint8_t &number_of_running_macros()
+	{
+		static thread_local std::uint8_t count = 0;
+		return count;
 	}
 
 	void VirtualTerminalServer::execute_macro_as_rx_message(const CANMessage &message)
@@ -432,10 +728,24 @@ namespace isobus
 
 	bool VirtualTerminalServer::execute_macro(std::uint16_t objectIDOfMacro, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet)
 	{
+		// Per thread, because a circular reference nests synchronously on one thread.
+		// Objects, not IDs, so that equal IDs in other working sets don't match.
+		static thread_local std::array<const VTObject *, MAX_NESTED_MACROS> runningMacros;
+		std::uint8_t &numberOfRunningMacros = number_of_running_macros();
+
 		auto object = workingSet->get_object_by_id(objectIDOfMacro);
+		const auto runningMacrosEnd = runningMacros.begin() + numberOfRunningMacros;
 		bool retVal = false;
 
-		if ((nullptr != object) && (VirtualTerminalObjectType::Macro == object->get_object_type()))
+		if (runningMacrosEnd != std::find(runningMacros.begin(), runningMacrosEnd, object.get()))
+		{
+			LOG_ERROR("[VT Server]: Macro %u is already running, so it is not run again. The object pool has a circular macro reference.", objectIDOfMacro);
+		}
+		else if (MAX_NESTED_MACROS <= numberOfRunningMacros)
+		{
+			LOG_ERROR("[VT Server]: Macro %u is not run, because %u macros are already nested.", objectIDOfMacro, MAX_NESTED_MACROS);
+		}
+		else if ((nullptr != object) && (VirtualTerminalObjectType::Macro == object->get_object_type()))
 		{
 			auto macro = std::static_pointer_cast<Macro>(object);
 
@@ -443,8 +753,19 @@ namespace isobus
 			{
 				LOG_DEBUG("[VT Server]: Executing macro %u", macro->get_id());
 				retVal = true;
+				runningMacros[numberOfRunningMacros] = macro.get();
+				numberOfRunningMacros++;
+				// Pops on every exit, because a listener may throw and a stuck count would silence all responses.
+				struct PopRunningMacro
+				{
+					void operator()(std::uint8_t *count) const
+					{
+						(*count)--;
+					}
+				};
+				const std::unique_ptr<std::uint8_t, PopRunningMacro> pop(&numberOfRunningMacros);
 
-				for (std::uint8_t j = 0; j < macro->get_number_of_commands(); j++)
+				for (std::uint16_t j = 0; j < macro->get_number_of_commands(); j++)
 				{
 					std::vector<std::uint8_t> commandPacket;
 
@@ -463,6 +784,23 @@ namespace isobus
 			}
 		}
 		return retVal;
+	}
+
+	std::shared_ptr<VTObject> VirtualTerminalServer::get_soft_key_mask_of(const std::shared_ptr<VTObject> &mask, const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet)
+	{
+		std::uint16_t softKeyMaskID = NULL_OBJECT_ID;
+		if (nullptr != mask)
+		{
+			if (VirtualTerminalObjectType::DataMask == mask->get_object_type())
+			{
+				softKeyMaskID = std::static_pointer_cast<DataMask>(mask)->get_soft_key_mask();
+			}
+			else if (VirtualTerminalObjectType::AlarmMask == mask->get_object_type())
+			{
+				softKeyMaskID = std::static_pointer_cast<AlarmMask>(mask)->get_soft_key_mask();
+			}
+		}
+		return (NULL_OBJECT_ID == softKeyMaskID) ? nullptr : workingSet->get_object_by_id(softKeyMaskID);
 	}
 
 	CANIdentifier::CANPriority VirtualTerminalServer::get_priority() const
@@ -543,7 +881,7 @@ namespace isobus
 				                                               buffer.data(),
 				                                               CAN_DATA_LENGTH,
 				                                               serverInternalControlFunction,
-				                                               message.get_source_control_function(),
+				                                               get_response_destination(message.get_source_control_function()),
 				                                               get_priority());
 				retVal = true;
 			}
@@ -565,7 +903,7 @@ namespace isobus
 				                                               buffer.data(),
 				                                               CAN_DATA_LENGTH,
 				                                               serverInternalControlFunction,
-				                                               message.get_source_control_function(),
+				                                               get_response_destination(message.get_source_control_function()),
 				                                               get_priority());
 				retVal = true;
 			}
@@ -579,14 +917,14 @@ namespace isobus
 				buffer[2] = 0xFF; // Reserved
 				buffer[3] = 0xFF; // Reserved
 				buffer[4] = 0xFF; // Reserved
-				buffer[5] = get_supported_small_fonts_bitfield(); // Say we support all small fonts
-				buffer[6] = get_supported_large_fonts_bitfield(); // Say we support all large fonts
-				buffer[7] = 0x8F; // Support normal, bold, italic, proportional
+				buffer[5] = get_supported_small_fonts_bitfield();
+				buffer[6] = get_supported_large_fonts_bitfield();
+				buffer[7] = get_supported_font_styles_bitfield();
 				CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 				                                               buffer.data(),
 				                                               CAN_DATA_LENGTH,
 				                                               serverInternalControlFunction,
-				                                               message.get_source_control_function(),
+				                                               get_response_destination(message.get_source_control_function()),
 				                                               get_priority());
 				retVal = true;
 			}
@@ -607,7 +945,7 @@ namespace isobus
 				                                               buffer.data(),
 				                                               CAN_DATA_LENGTH,
 				                                               serverInternalControlFunction,
-				                                               message.get_source_control_function(),
+				                                               get_response_destination(message.get_source_control_function()),
 				                                               get_priority());
 				retVal = true;
 			}
@@ -640,7 +978,7 @@ namespace isobus
 				                                               buffer.data(),
 				                                               static_cast<std::uint32_t>(buffer.size()),
 				                                               serverInternalControlFunction,
-				                                               message.get_source_control_function(),
+				                                               get_response_destination(message.get_source_control_function()),
 				                                               get_priority());
 				retVal = true;
 			}
@@ -648,7 +986,7 @@ namespace isobus
 
 			case Function::GetWindowMaskDataMessage:
 			{
-				send_get_window_mask_data_response(message.get_source_control_function());
+				send_get_window_mask_data_response(get_response_destination(message.get_source_control_function()));
 				retVal = true;
 			}
 			break;
@@ -726,7 +1064,26 @@ namespace isobus
 			case Function::ExtendedLoadVersionCommand:
 			{
 				const bool isExtended = (Function::ExtendedLoadVersionCommand == function);
-				const auto versionLabel = get_version_label(data, isExtended ? EXTENDED_VERSION_LABEL_LENGTH : VERSION_LABEL_LENGTH);
+				const std::uint8_t versionLabelLength = isExtended ? EXTENDED_VERSION_LABEL_LENGTH : VERSION_LABEL_LENGTH;
+				auto versionLabel = get_version_label(data, versionLabelLength);
+
+				// A blank label loads the last stored version (ISO 11783-6:2018, E.6)
+				if ((!versionLabel.empty()) && is_version_label_blank(versionLabel))
+				{
+					versionLabel = get_last_stored_version_label(message.get_source_control_function()->get_NAME(), versionLabelLength);
+
+					if (versionLabel.empty())
+					{
+						send_load_version_response(function, get_bit(static_cast<std::uint8_t>(LoadVersionErrorBit::VersionLabelNotCorrectOrUnknown)), managedWorkingSet->get_control_function());
+						LOG_WARNING("[VT Server]: Client %u load version with a blank label, but it has no stored version", managedWorkingSet->get_control_function()->get_address());
+					}
+				}
+				else if ((!versionLabel.empty()) && (!is_version_label_valid(versionLabel)))
+				{
+					send_load_version_response(function, get_bit(static_cast<std::uint8_t>(LoadVersionErrorBit::VersionLabelNotCorrectOrUnknown)), managedWorkingSet->get_control_function());
+					LOG_WARNING("[VT Server]: Client %u load version with a label that has characters a label can't use", managedWorkingSet->get_control_function()->get_address());
+					versionLabel.clear();
+				}
 
 				if (!versionLabel.empty())
 				{
@@ -752,31 +1109,59 @@ namespace isobus
 			case Function::StoreVersionCommand:
 			case Function::ExtendedStoreVersionCommand:
 			{
-				const auto versionLabel = get_version_label(data, (Function::ExtendedStoreVersionCommand == function) ? EXTENDED_VERSION_LABEL_LENGTH : VERSION_LABEL_LENGTH);
+				const std::uint8_t versionLabelLength = (Function::ExtendedStoreVersionCommand == function) ? EXTENDED_VERSION_LABEL_LENGTH : VERSION_LABEL_LENGTH;
+				const NAME clientNAME = message.get_source_control_function()->get_NAME();
+				auto versionLabel = get_version_label(data, versionLabelLength);
 
 				if ((!versionLabel.empty()) && managedWorkingSet->get_any_object_pools())
 				{
-					std::ostringstream nameString;
-					nameString << std::hex << std::setfill('0') << std::setw(16) << managedWorkingSet->get_control_function()->get_NAME().get_full_name();
-					bool allPoolsSaved = true;
+					std::uint8_t errorBitfield = 0;
 
-					// A Store replaces the version with the same label, and save_version() appends, so the label is emptied first.
-					// The result is not checked, as nothing may be stored under the label yet
-					delete_version(versionLabel, message.get_source_control_function()->get_NAME());
-
-					for (std::size_t i = 0; i < managedWorkingSet->get_number_iop_files(); i++)
+					if (is_version_label_blank(versionLabel))
 					{
-						bool didSave = save_version(managedWorkingSet->get_iop_raw_data(i), versionLabel, message.get_source_control_function()->get_NAME());
-
-						if (didSave)
+						// A blank label overwrites the last stored version, and is an error if there is none (ISO 11783-6:2018, E.4)
+						versionLabel = get_last_stored_version_label(clientNAME, versionLabelLength);
+						if (versionLabel.empty())
 						{
-							LOG_INFO("[VT Server]: Object pool " + isobus::to_string(i) + " for NAME " + nameString.str() + " was stored.");
+							errorBitfield = get_bit(static_cast<std::uint8_t>(StoreVersionErrorBit::VersionLabelNotCorrect));
+							LOG_WARNING("[VT Server]: Client %u store version with a blank label, but it has no stored version to overwrite", managedWorkingSet->get_control_function()->get_address());
 						}
-						else
+					}
+					else if (!is_version_label_valid(versionLabel))
+					{
+						errorBitfield = get_bit(static_cast<std::uint8_t>(StoreVersionErrorBit::VersionLabelNotCorrect));
+						LOG_WARNING("[VT Server]: Client %u store version with a label that has characters a label can't use", managedWorkingSet->get_control_function()->get_address());
+					}
+
+					if (0 == errorBitfield)
+					{
+						std::ostringstream nameString;
+						nameString << std::hex << std::setfill('0') << std::setw(16) << managedWorkingSet->get_control_function()->get_NAME().get_full_name();
+						bool allPoolsSaved = true;
+
+						// A Store replaces the version with the same label, and save_version() appends, so the label is emptied first.
+						// The result is not checked, as nothing may be stored under the label yet
+						delete_version(versionLabel, clientNAME);
+
+						for (std::size_t i = 0; i < managedWorkingSet->get_number_iop_files(); i++)
 						{
-							LOG_ERROR("[VT Server]: Object pool " + isobus::to_string(i) + " for NAME " + nameString.str() + " could not be stored.");
-							allPoolsSaved = false;
-							break;
+							bool didSave = save_version(managedWorkingSet->get_iop_raw_data(i), versionLabel, clientNAME);
+
+							if (didSave)
+							{
+								LOG_INFO("[VT Server]: Object pool " + isobus::to_string(i) + " for NAME " + nameString.str() + " was stored.");
+							}
+							else
+							{
+								LOG_ERROR("[VT Server]: Object pool " + isobus::to_string(i) + " for NAME " + nameString.str() + " could not be stored.");
+								allPoolsSaved = false;
+								break;
+							}
+						}
+
+						if (!allPoolsSaved)
+						{
+							errorBitfield = get_bit(static_cast<std::uint8_t>(StoreVersionErrorBit::AnyOtherError));
 						}
 					}
 
@@ -786,14 +1171,7 @@ namespace isobus
 					buffer[2] = 0xFF; // Reserved
 					buffer[3] = 0xFF; // Reserved
 					buffer[4] = 0xFF; // Reserved
-					if (allPoolsSaved)
-					{
-						buffer[5] = 0; // No error
-					}
-					else
-					{
-						buffer[5] = get_bit(static_cast<std::uint8_t>(StoreVersionErrorBit::AnyOtherError));
-					}
+					buffer[5] = errorBitfield; // 0 for no error
 					buffer[6] = 0xFF; // Reserved
 					buffer[7] = 0xFF; // Reserved
 					CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
@@ -815,7 +1193,8 @@ namespace isobus
 			case Function::ExtendedDeleteVersionCommand:
 			{
 				const std::uint8_t versionLabelLength = (Function::ExtendedDeleteVersionCommand == function) ? EXTENDED_VERSION_LABEL_LENGTH : VERSION_LABEL_LENGTH;
-				const auto versionLabel = get_version_label(data, versionLabelLength);
+				const NAME clientNAME = managedWorkingSet->get_control_function()->get_NAME();
+				auto versionLabel = get_version_label(data, versionLabelLength);
 
 				if (!versionLabel.empty())
 				{
@@ -827,14 +1206,25 @@ namespace isobus
 					  ('*' == versionLabel.front()) &&
 					  std::all_of(versionLabel.begin() + 1, versionLabel.end(), [](std::uint8_t character) { return ' ' == character; });
 
+					if ((!isDeleteAllWildcard) && is_version_label_blank(versionLabel))
+					{
+						// A blank label deletes the last stored version (ISO 11783-6:2018, E.8)
+						versionLabel = get_last_stored_version_label(clientNAME, versionLabelLength);
+					}
+					else if ((!isDeleteAllWildcard) && (!is_version_label_valid(versionLabel)))
+					{
+						LOG_WARNING("[VT Server]: Client %u delete version with a label that has characters a label can't use", managedWorkingSet->get_control_function()->get_address());
+						versionLabel.clear();
+					}
+
 					bool deleted = false;
 					if (isDeleteAllWildcard)
 					{
-						deleted = delete_all_versions(versionLabelLength, managedWorkingSet->get_control_function()->get_NAME());
+						deleted = delete_all_versions(versionLabelLength, clientNAME);
 					}
-					else
+					else if (!versionLabel.empty())
 					{
-						deleted = delete_version(versionLabel, managedWorkingSet->get_control_function()->get_NAME());
+						deleted = delete_version(versionLabel, clientNAME);
 					}
 
 					if (deleted)
@@ -854,7 +1244,19 @@ namespace isobus
 
 			case Function::EndOfObjectPoolMessage:
 			{
-				if (managedWorkingSet->get_any_object_pools())
+				if (managedWorkingSet->get_object_pool_transfer_dropped())
+				{
+					LOG_ERROR("[VT Server]: Client %u object pool is deleted, because a transfer of it was dropped", managedWorkingSet->get_control_function()->get_address());
+					remove_object_pool(managedWorkingSet);
+					send_end_of_object_pool_response(false,
+					                                 NULL_OBJECT_ID,
+					                                 NULL_OBJECT_ID,
+					                                 get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::ObjectPoolWasDeletedFromVolatileMemory)),
+					                                 message.get_source_control_function(),
+					                                 true,
+					                                 &pendingObjectPoolDeletions.back().failure);
+				}
+				else if (managedWorkingSet->get_any_object_pools())
 				{
 					managedWorkingSet->start_parsing_thread();
 				}
@@ -878,7 +1280,12 @@ namespace isobus
 				auto lTargetObject = managedWorkingSet->get_object_by_id(objectId);
 				bool logSuccess = true;
 
-				if (nullptr != lTargetObject)
+				if ((nullptr != lTargetObject) && is_value_in_use_by_open_input(managedWorkingSet, objectId, true))
+				{
+					send_change_numeric_value_response(objectId, get_bit(static_cast<std::uint8_t>(ChangeNumericValueErrorBit::ValueInUse)), value, managedWorkingSet->get_control_function());
+					LOG_WARNING("[VT Server]: Client %u change numeric value for object %u refused because it is open for input", managedWorkingSet->get_control_function()->get_address(), objectId);
+				}
+				else if (nullptr != lTargetObject)
 				{
 					switch (lTargetObject->get_object_type())
 					{
@@ -959,6 +1366,7 @@ namespace isobus
 							std::static_pointer_cast<ObjectPointer>(lTargetObject)->set_value(get_low_16_bits(value));
 							onRepaintEventDispatcher.call(managedWorkingSet);
 							send_change_numeric_value_response(objectId, 0, value, managedWorkingSet->get_control_function());
+							notify_focus_lost_if_removed(managedWorkingSet);
 						}
 						break;
 
@@ -1019,6 +1427,7 @@ namespace isobus
 
 					if (0 == data[3])
 					{
+						notify_focus_lost_if_removed(managedWorkingSet);
 						LOG_DEBUG("[VT Server]: Client %u hide object command %u", managedWorkingSet->get_control_function()->get_address(), objectId);
 						process_macro(targetObject, EventID::OnHide, targetObject->get_object_type(), managedWorkingSet);
 					}
@@ -1041,7 +1450,14 @@ namespace isobus
 				auto objectId = get_little_endian_uint16(data, 1);
 				auto lTargetObject = managedWorkingSet->get_object_by_id(objectId);
 
-				if (nullptr != lTargetObject)
+				// Cleared on the failure paths below, as only a disable that succeeded takes the focus away
+				bool disabled = (0 == data[3]);
+
+				if ((nullptr != lTargetObject) && disabled && (objectId == managedWorkingSet->get_object_open_for_input()))
+				{
+					send_enable_disable_object_response(objectId, get_bit(static_cast<std::uint8_t>(EnableDisableObjectErrorBit::CouldNotCompleteTheInputObjectIsCurrentlyBeingModified)), false, managedWorkingSet->get_control_function());
+				}
+				else if (nullptr != lTargetObject)
 				{
 					if (data[3] <= 1)
 					{
@@ -1081,17 +1497,32 @@ namespace isobus
 
 							case VirtualTerminalObjectType::Button:
 							{
-								std::static_pointer_cast<Button>(lTargetObject)->set_option(Button::Options::Disabled, (0 == data[3]));
-								send_enable_disable_object_response(objectId, 0, (0 != data[3]), managedWorkingSet->get_control_function());
-								onRepaintEventDispatcher.call(managedWorkingSet);
+								// Buttons can only be enabled or disabled from VT version 4
+								if (get_vt_version_byte(get_version()) > 3)
+								{
+									std::static_pointer_cast<Button>(lTargetObject)->set_option(Button::Options::Disabled, (0 == data[3]));
+									send_enable_disable_object_response(objectId, 0, (0 != data[3]), managedWorkingSet->get_control_function());
+									onRepaintEventDispatcher.call(managedWorkingSet);
+								}
+								else
+								{
+									disabled = false;
+									send_enable_disable_object_response(objectId, get_bit(static_cast<std::uint8_t>(EnableDisableObjectErrorBit::InvalidObjectID)), (0 != data[3]), managedWorkingSet->get_control_function());
+								}
 							}
 							break;
 
 							default:
 							{
+								disabled = false;
 								send_enable_disable_object_response(objectId, get_bit(static_cast<std::uint8_t>(EnableDisableObjectErrorBit::InvalidObjectID)), (0 != data[3]), managedWorkingSet->get_control_function());
 							}
 							break;
+						}
+
+						if (disabled && (objectId == managedWorkingSet->get_object_focus()))
+						{
+							notify_focus_lost(managedWorkingSet);
 						}
 					}
 					else
@@ -1112,7 +1543,9 @@ namespace isobus
 				auto objectID = get_little_endian_uint16(data, 3);
 				auto parentObject = managedWorkingSet->get_object_by_id(parentObjectId);
 
-				if (nullptr != parentObject)
+				// Auxiliary Input Type 1 allows Change Child Location but not Change Child Position
+				if ((nullptr != parentObject) &&
+				    (can_move_children_of(parentObject->get_object_type()) || (VirtualTerminalObjectType::AuxiliaryInputType1 == parentObject->get_object_type())))
 				{
 					auto lTargetObject = managedWorkingSet->get_object_by_id(objectID);
 
@@ -1122,18 +1555,17 @@ namespace isobus
 						auto yRelativeChange = static_cast<std::int8_t>(static_cast<std::int16_t>(data[6]) - 127);
 						bool anyObjectMatched = parentObject->offset_all_children_with_id(objectID, xRelativeChange, yRelativeChange);
 
-						onRepaintEventDispatcher.call(managedWorkingSet);
-
 						if (anyObjectMatched)
 						{
+							onRepaintEventDispatcher.call(managedWorkingSet);
 							send_change_child_location_response(parentObjectId, objectID, 0, managedWorkingSet->get_control_function());
 							LOG_DEBUG("[VT Server]: Client %u change child location command. Parent: %u, Target: %u, X-Offset: %d, Y-Offset: %d", managedWorkingSet->get_control_function()->get_address(), parentObjectId, objectID, xRelativeChange, yRelativeChange);
 							process_macro(parentObject, EventID::ChangeChildLocation, parentObject->get_object_type(), managedWorkingSet);
 						}
 						else
 						{
-							send_change_child_location_response(parentObjectId, objectID, get_bit(static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), managedWorkingSet->get_control_function());
-							LOG_WARNING("[VT Server]: Client %u change child location failed because the target object with ID %u isn't applicable", managedWorkingSet->get_control_function()->get_address(), objectID);
+							send_change_child_location_response(parentObjectId, objectID, get_bit(static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject)), managedWorkingSet->get_control_function());
+							LOG_WARNING("[VT Server]: Client %u change child location failed because object %u is not a child of object %u", managedWorkingSet->get_control_function()->get_address(), objectID, parentObjectId);
 						}
 					}
 					else
@@ -1145,7 +1577,7 @@ namespace isobus
 				else
 				{
 					send_change_child_location_response(parentObjectId, objectID, get_bit(static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject)), managedWorkingSet->get_control_function());
-					LOG_WARNING("[VT Server]: Client %u change child location failed because the parent object with ID %u doesn't exist", managedWorkingSet->get_control_function()->get_address(), parentObjectId);
+					LOG_WARNING("[VT Server]: Client %u change child location failed because object %u doesn't exist or can't be a parent", managedWorkingSet->get_control_function()->get_address(), parentObjectId);
 				}
 			}
 			break;
@@ -1164,9 +1596,38 @@ namespace isobus
 					    ((VirtualTerminalObjectType::DataMask == newActiveMaskObject->get_object_type()) ||
 					     (VirtualTerminalObjectType::AlarmMask == newActiveMaskObject->get_object_type())))
 					{
-						std::static_pointer_cast<WorkingSet>(workingSetObject)->set_active_mask(newActiveMaskObjectId);
+						auto workingSet = std::static_pointer_cast<WorkingSet>(workingSetObject);
+						const std::uint16_t previousActiveMaskObjectId = workingSet->get_active_mask();
+						// The masks are only on the display while this working set is the active one, and only a different mask changes them.
+						// Everything the events depend on is read now, because the macros run synchronously and can change it.
+						const bool masksChangeOnTheDisplay = (managedWorkingSet == activeWorkingSet) && (previousActiveMaskObjectId != newActiveMaskObjectId);
+						const auto previousActiveMask = (NULL_OBJECT_ID == previousActiveMaskObjectId) ? nullptr : managedWorkingSet->get_object_by_id(previousActiveMaskObjectId);
+						const auto previousSoftKeyMask = get_soft_key_mask_of(previousActiveMask, managedWorkingSet);
+						const auto newSoftKeyMask = get_soft_key_mask_of(newActiveMaskObject, managedWorkingSet);
+
+						workingSet->set_active_mask(newActiveMaskObjectId);
+						// A new active mask puts the operator back to navigating, even when the focused object is on it too
+						if (previousActiveMaskObjectId != newActiveMaskObjectId)
+						{
+							notify_focus_lost(managedWorkingSet);
+						}
 						send_change_active_mask_response(newActiveMaskObjectId, 0, managedWorkingSet->get_control_function());
 						onChangeActiveMaskEventDispatcher.call(managedWorkingSet, workingSetObjectId, newActiveMaskObjectId);
+
+						// The old mask is hidden and the new one shown only when the active mask really changes on the display (ISO 11783-6:2018 4.6.18).
+						// That runs before On Change Active Mask: its macro can change the active mask again, and then its Hide and Show must come last.
+						if (masksChangeOnTheDisplay)
+						{
+							if (nullptr != previousActiveMask)
+							{
+								process_macro(previousActiveMask, EventID::OnHide, previousActiveMask->get_object_type(), managedWorkingSet);
+							}
+							process_macro(previousSoftKeyMask, EventID::OnHide, VirtualTerminalObjectType::SoftKeyMask, managedWorkingSet);
+							process_macro(newActiveMaskObject, EventID::OnShow, newActiveMaskObject->get_object_type(), managedWorkingSet);
+							process_macro(newSoftKeyMask, EventID::OnShow, VirtualTerminalObjectType::SoftKeyMask, managedWorkingSet);
+						}
+						// ISO 11783-6:2018 4.6.22.1 and Table B.1: On Change Active Mask runs for every valid command, even without a change.
+						process_macro(workingSetObject, EventID::OnChangeActiveMask, VirtualTerminalObjectType::WorkingSet, managedWorkingSet);
 						LOG_DEBUG("[VT Server]: Client %u changed active mask to object %u for working set object %u", managedWorkingSet->get_control_function()->get_address(), newActiveMaskObjectId, workingSetObjectId);
 					}
 					else
@@ -1198,7 +1659,12 @@ namespace isobus
 
 				if (message.get_data_length() >= static_cast<std::uint32_t>(numberOfBytesInString + 5))
 				{
-					if (nullptr != stringObject)
+					if ((nullptr != stringObject) && is_value_in_use_by_open_input(managedWorkingSet, objectIdToChange, true))
+					{
+						send_change_string_value_response(objectIdToChange, get_bit(static_cast<std::uint8_t>(ChangeStringValueErrorBit::ValueInUse)), message.get_source_control_function());
+						LOG_WARNING("[VT Server]: Client %u change string value command for object %u refused because it is open for input.", managedWorkingSet->get_control_function()->get_address(), objectIdToChange);
+					}
+					else if (nullptr != stringObject)
 					{
 						std::string newStringValue;
 
@@ -1335,55 +1801,34 @@ namespace isobus
 					auto parentObject = managedWorkingSet->get_object_by_id(parentObjectId);
 					auto targetObject = managedWorkingSet->get_object_by_id(objectID);
 
-					if (nullptr != parentObject)
+					if ((nullptr != parentObject) && can_move_children_of(parentObject->get_object_type()))
 					{
 						if (nullptr != targetObject)
 						{
-							switch (parentObject->get_object_type())
+							bool wasFound = false;
+
+							// If a parent object includes the child object multiple times, then each instance will be moved
+							for (std::uint16_t i = 0; i < parentObject->get_number_children(); i++)
 							{
-								case VirtualTerminalObjectType::Button:
-								case VirtualTerminalObjectType::Container:
-								case VirtualTerminalObjectType::AlarmMask:
-								case VirtualTerminalObjectType::DataMask:
-								case VirtualTerminalObjectType::Key:
-								case VirtualTerminalObjectType::WorkingSet:
-								case VirtualTerminalObjectType::AuxiliaryInputType2:
-								case VirtualTerminalObjectType::WindowMask:
+								if (objectID == parentObject->get_child_id(i))
 								{
-									bool wasFound = false;
-
-									// If a parent object includes the child object multiple times, then each instance will be moved
-									for (std::uint16_t i = 0; i < parentObject->get_number_children(); i++)
-									{
-										if (objectID == parentObject->get_child_id(i))
-										{
-											wasFound = true;
-											parentObject->set_child_x(i, newXPosition);
-											parentObject->set_child_y(i, newYPosition);
-											onRepaintEventDispatcher.call(managedWorkingSet);
-										}
-									}
-
-									if (wasFound)
-									{
-										LOG_DEBUG("[VT Server]: Client %u changed child position: object %u of parent object %u, x: %u, y: %u", managedWorkingSet->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
-										send_change_child_position_response(parentObjectId, objectID, 0, message.get_source_control_function());
-										process_macro(parentObject, EventID::OnChangeChildPosition, parentObject->get_object_type(), managedWorkingSet);
-									}
-									else
-									{
-										LOG_WARNING("[VT Server]: Client %u change child position error. Target object does not exist or is not applicable: object %u of parent object %u, x: %u, y: %u", managedWorkingSet->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
-										send_change_child_position_response(parentObjectId, objectID, get_bit(static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::TargetObjectDoesNotExistOrIsNotApplicable)), message.get_source_control_function());
-									}
+									wasFound = true;
+									parentObject->set_child_x(i, newXPosition);
+									parentObject->set_child_y(i, newYPosition);
+									onRepaintEventDispatcher.call(managedWorkingSet);
 								}
-								break;
+							}
 
-								default:
-								{
-									LOG_WARNING("[VT Server]: Client %u change child position error. Parent object type cannot be targeted by this command: object %u of parent object %u, x: %u, y: %u", managedWorkingSet->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
-									send_change_child_position_response(parentObjectId, objectID, get_bit(static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::AnyOtherError)), message.get_source_control_function());
-								}
-								break;
+							if (wasFound)
+							{
+								LOG_DEBUG("[VT Server]: Client %u changed child position: object %u of parent object %u, x: %u, y: %u", managedWorkingSet->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
+								send_change_child_position_response(parentObjectId, objectID, 0, message.get_source_control_function());
+								process_macro(parentObject, EventID::OnChangeChildPosition, parentObject->get_object_type(), managedWorkingSet);
+							}
+							else
+							{
+								LOG_WARNING("[VT Server]: Client %u change child position error. Object %u is not a child of object %u", managedWorkingSet->get_control_function()->get_address(), objectID, parentObjectId);
+								send_change_child_position_response(parentObjectId, objectID, get_bit(static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject)), message.get_source_control_function());
 							}
 						}
 						else
@@ -1394,7 +1839,7 @@ namespace isobus
 					}
 					else
 					{
-						LOG_WARNING("[VT Server]: Client %u change child position error. Parent object does not exist or is not applicable: object %u of parent object %u, x: %u, y: %u", managedWorkingSet->get_control_function()->get_address(), objectID, parentObjectId, newXPosition, newYPosition);
+						LOG_WARNING("[VT Server]: Client %u change child position error. Object %u doesn't exist or can't be a parent", managedWorkingSet->get_control_function()->get_address(), parentObjectId);
 						send_change_child_position_response(parentObjectId, objectID, get_bit(static_cast<std::uint8_t>(ChangeChildLocationorPositionErrorBit::ParentObjectDoesntExistOrIsNotAParentOfSpecifiedObject)), message.get_source_control_function());
 					}
 				}
@@ -1416,9 +1861,15 @@ namespace isobus
 
 				if ((NULL_OBJECT_ID != objectID) && (nullptr != targetObject))
 				{
-					if (targetObject->set_attribute(attributeID, attributeData, managedWorkingSet->get_object_tree(), errorCode)) // 0 Is always the read-only "type" attribute
+					if (is_value_in_use_by_open_input(managedWorkingSet, objectID, false))
+					{
+						LOG_WARNING("[VT Server]: Client %u change attribute command: object %u is open for input", managedWorkingSet->get_control_function()->get_address(), objectID);
+						send_change_attribute_response(objectID, get_bit(static_cast<std::uint8_t>(VTObject::AttributeError::ValueInUse)), data.at(3), message.get_source_control_function());
+					}
+					else if (targetObject->set_attribute(attributeID, attributeData, managedWorkingSet->get_object_tree(), errorCode)) // 0 Is always the read-only "type" attribute
 					{
 						send_change_attribute_response(objectID, 0, data.at(3), message.get_source_control_function());
+						notify_focus_lost_if_removed(managedWorkingSet);
 						LOG_DEBUG("[VT Server]: Client %u changed object %u attribute %u to %u", managedWorkingSet->get_control_function()->get_address(), objectID, attributeID, attributeData);
 						onRepaintEventDispatcher.call(managedWorkingSet);
 						process_macro(targetObject, EventID::OnChangeAttribute, targetObject->get_object_type(), managedWorkingSet);
@@ -1451,27 +1902,22 @@ namespace isobus
 					switch (targetObject->get_object_type())
 					{
 						case VirtualTerminalObjectType::OutputMeter:
+						case VirtualTerminalObjectType::InputBoolean:
 						{
-							if (newWidth == newHeight) // Output meter must be square!
-							{
-								targetObject->set_width(newWidth);
-								targetObject->set_height(newHeight);
-								success = true;
-								LOG_DEBUG("[VT Server]: Client %u change size command: Object: %u, Width: %u, Height: %u", managedWorkingSet->get_control_function()->get_address(), objectID, newWidth, newHeight);
-								onRepaintEventDispatcher.call(managedWorkingSet);
-							}
-							else
-							{
-								LOG_WARNING("[VT Server]: Client %u change size command: invalid new size. Meter must be square! Object: %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-								send_change_size_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeSizeErrorBit::AnyOtherError)), message.get_source_control_function());
-							}
+							// These objects are square, sized by their width alone (ISO 11783-6:2018, B.8.2 and B.11.2).
+							// A width or height of 0 means a size of 0, so the object is not drawn (F.18).
+							const std::uint16_t side = ((0 == newWidth) || (0 == newHeight)) ? 0 : newWidth;
+							targetObject->set_width(side);
+							targetObject->set_height(side);
+							success = true;
+							LOG_DEBUG("[VT Server]: Client %u change size command: Object: %u, Width: %u, Height: %u, square side: %u", managedWorkingSet->get_control_function()->get_address(), objectID, newWidth, newHeight, side);
+							onRepaintEventDispatcher.call(managedWorkingSet);
 						}
 						break;
 
 						case VirtualTerminalObjectType::Animation:
 						case VirtualTerminalObjectType::Button:
 						case VirtualTerminalObjectType::Container:
-						case VirtualTerminalObjectType::InputBoolean:
 						case VirtualTerminalObjectType::InputList:
 						case VirtualTerminalObjectType::InputString:
 						case VirtualTerminalObjectType::InputNumber:
@@ -1496,7 +1942,7 @@ namespace isobus
 						default:
 						{
 							LOG_WARNING("[VT Server]: Client %u change size command: invalid object type for object %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-							send_change_size_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeSizeErrorBit::AnyOtherError)), message.get_source_control_function());
+							send_change_size_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeSizeErrorBit::InvalidObjectID)), message.get_source_control_function());
 						}
 						break;
 					}
@@ -1523,7 +1969,12 @@ namespace isobus
 				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
 				auto newObject = managedWorkingSet->get_object_by_id(newObjectID);
 
-				if (nullptr != targetObject)
+				if ((nullptr != targetObject) && is_value_in_use_by_open_input(managedWorkingSet, objectID, false))
+				{
+					LOG_WARNING("[VT Server]: Client %u change list item command: object %u is open for input", managedWorkingSet->get_control_function()->get_address(), objectID);
+					send_change_list_item_response(objectID, newObjectID, get_bit(static_cast<std::uint8_t>(ChangeListItemErrorBit::ValueInUse)), listIndex, message.get_source_control_function());
+				}
+				else if (nullptr != targetObject)
 				{
 					if ((NULL_OBJECT_ID == newObjectID) || (nullptr != newObject))
 					{
@@ -1534,12 +1985,14 @@ namespace isobus
 								if (std::static_pointer_cast<InputList>(targetObject)->change_list_item(listIndex, newObjectID, managedWorkingSet->get_object_tree()))
 								{
 									send_change_list_item_response(objectID, newObjectID, 0, listIndex, message.get_source_control_function());
+									notify_focus_lost_if_removed(managedWorkingSet);
 									LOG_DEBUG("[VT Server]: Client %u change list item command: Object ID: %u, New Object ID: %u, Index: %u", managedWorkingSet->get_control_function()->get_address(), objectID, newObjectID, listIndex);
 									onRepaintEventDispatcher.call(managedWorkingSet);
 								}
 								else
 								{
-									send_change_list_item_response(objectID, newObjectID, get_bit(static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
+									const auto errorBit = (listIndex >= targetObject->get_number_children()) ? ChangeListItemErrorBit::InvalidListIndex : ChangeListItemErrorBit::InvalidNewListItemObjectID;
+									send_change_list_item_response(objectID, newObjectID, get_bit(static_cast<std::uint8_t>(errorBit)), listIndex, message.get_source_control_function());
 									LOG_WARNING("[VT Server]: Client %u change list item command failed. Object ID: %u, New Object ID: %u, Index: %u", managedWorkingSet->get_control_function()->get_address(), objectID, newObjectID, listIndex);
 								}
 							}
@@ -1559,12 +2012,14 @@ namespace isobus
 								if (std::static_pointer_cast<OutputList>(targetObject)->change_list_item(listIndex, newObjectID, managedWorkingSet->get_object_tree()))
 								{
 									send_change_list_item_response(objectID, newObjectID, 0, listIndex, message.get_source_control_function());
+									notify_focus_lost_if_removed(managedWorkingSet);
 									LOG_DEBUG("[VT Server]: Client %u change list item command: Object ID: %u, New Object ID: %u, Index: %u", managedWorkingSet->get_control_function()->get_address(), objectID, newObjectID, listIndex);
 									onRepaintEventDispatcher.call(managedWorkingSet);
 								}
 								else
 								{
-									send_change_list_item_response(objectID, newObjectID, get_bit(static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
+									const auto errorBit = (listIndex >= targetObject->get_number_children()) ? ChangeListItemErrorBit::InvalidListIndex : ChangeListItemErrorBit::InvalidNewListItemObjectID;
+									send_change_list_item_response(objectID, newObjectID, get_bit(static_cast<std::uint8_t>(errorBit)), listIndex, message.get_source_control_function());
 									LOG_WARNING("[VT Server]: Client %u change list item command failed. Object ID: %u, New Object ID: %u, Index: %u", managedWorkingSet->get_control_function()->get_address(), objectID, newObjectID, listIndex);
 								}
 							}
@@ -1573,7 +2028,7 @@ namespace isobus
 							default:
 							{
 								LOG_WARNING("[VT Server]: Client %u change list item command: invalid object type. Object: %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-								send_change_list_item_response(objectID, newObjectID, get_bit(static_cast<std::uint8_t>(ChangeListItemErrorBit::AnyOtherError)), listIndex, message.get_source_control_function());
+								send_change_list_item_response(objectID, newObjectID, get_bit(static_cast<std::uint8_t>(ChangeListItemErrorBit::InvalidObjectID)), listIndex, message.get_source_control_function());
 							}
 							break;
 						}
@@ -1663,6 +2118,23 @@ namespace isobus
 				auto targetMask = managedWorkingSet->get_object_by_id(dataOrAlarmMaskId);
 				auto newSoftKeyMask = managedWorkingSet->get_object_by_id(newSoftKeyMaskId);
 
+				// ISO 11783-6:2018 Tables B.2 and B.3: the soft key masks are hidden and shown only if the mask is on the display.
+				// Read that now, because the On Change Soft Key Mask macros run synchronously and can change the active mask.
+				// The Hide and Show run before On Change Soft Key Mask, so the ones of a change made by its macro come last.
+				const auto workingSetObject = managedWorkingSet->get_working_set_object();
+				const bool maskIsVisible = (managedWorkingSet == activeWorkingSet) &&
+				  (nullptr != workingSetObject) &&
+				  (VirtualTerminalObjectType::WorkingSet == workingSetObject->get_object_type()) &&
+				  (dataOrAlarmMaskId == std::static_pointer_cast<WorkingSet>(workingSetObject)->get_active_mask());
+				const auto previousSoftKeyMask = get_soft_key_mask_of(targetMask, managedWorkingSet);
+				const auto changeVisibleSoftKeyMask = [&]() {
+					if (maskIsVisible && (previousSoftKeyMask != newSoftKeyMask))
+					{
+						process_macro(previousSoftKeyMask, EventID::OnHide, VirtualTerminalObjectType::SoftKeyMask, managedWorkingSet);
+						process_macro(newSoftKeyMask, EventID::OnShow, VirtualTerminalObjectType::SoftKeyMask, managedWorkingSet);
+					}
+				};
+
 				if (nullptr != targetMask)
 				{
 					if ((NULL_OBJECT_ID == newSoftKeyMaskId) || (nullptr != newSoftKeyMask))
@@ -1675,13 +2147,15 @@ namespace isobus
 								{
 									LOG_DEBUG("[VT Server]: Client %u change soft key mask command: alarm mask object %u to %u", managedWorkingSet->get_control_function()->get_address(), dataOrAlarmMaskId, newSoftKeyMaskId);
 									send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, 0, message.get_source_control_function());
+									notify_focus_lost_if_removed(managedWorkingSet);
 									onChangeActiveSoftKeyMaskEventDispatcher.call(managedWorkingSet, dataOrAlarmMaskId, newSoftKeyMaskId);
+									changeVisibleSoftKeyMask();
 									process_macro(targetMask, EventID::OnChangeSoftKeyMask, VirtualTerminalObjectType::AlarmMask, managedWorkingSet);
 								}
 								else
 								{
 									LOG_WARNING("[VT Server]: Client %u change soft key mask command: failed to set mask for alarm mask object %u to %u", managedWorkingSet->get_control_function()->get_address(), dataOrAlarmMaskId, newSoftKeyMaskId);
-									send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, get_bit(static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::AnyOtherError)), message.get_source_control_function());
+									send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, get_bit(static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::InvalidSoftKeyMaskObjectID)), message.get_source_control_function());
 								}
 							}
 							break;
@@ -1692,13 +2166,15 @@ namespace isobus
 								{
 									LOG_DEBUG("[VT Server]: Client %u change soft key mask command: data mask object %u to %u", managedWorkingSet->get_control_function()->get_address(), dataOrAlarmMaskId, newSoftKeyMaskId);
 									send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, 0, message.get_source_control_function());
+									notify_focus_lost_if_removed(managedWorkingSet);
 									onChangeActiveSoftKeyMaskEventDispatcher.call(managedWorkingSet, dataOrAlarmMaskId, newSoftKeyMaskId);
+									changeVisibleSoftKeyMask();
 									process_macro(targetMask, EventID::OnChangeSoftKeyMask, VirtualTerminalObjectType::DataMask, managedWorkingSet);
 								}
 								else
 								{
 									LOG_WARNING("[VT Server]: Client %u change soft key mask command: failed to set mask for data mask object %u to %u", managedWorkingSet->get_control_function()->get_address(), dataOrAlarmMaskId, newSoftKeyMaskId);
-									send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, get_bit(static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::AnyOtherError)), message.get_source_control_function());
+									send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, get_bit(static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::InvalidSoftKeyMaskObjectID)), message.get_source_control_function());
 								}
 							}
 							break;
@@ -1706,7 +2182,7 @@ namespace isobus
 							default:
 							{
 								LOG_WARNING("[VT Server]: Client %u change soft key mask command: invalid object type for object %u", managedWorkingSet->get_control_function()->get_address(), dataOrAlarmMaskId);
-								send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, get_bit(static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::AnyOtherError)), message.get_source_control_function());
+								send_change_soft_key_mask_response(dataOrAlarmMaskId, newSoftKeyMaskId, get_bit(static_cast<std::uint8_t>(ChangeSoftKeyMaskErrorBit::InvalidDataOrAlarmMaskObjectID)), message.get_source_control_function());
 							}
 							break;
 						}
@@ -1735,6 +2211,7 @@ namespace isobus
 				{
 					switch (targetObject->get_object_type())
 					{
+						case VirtualTerminalObjectType::AuxiliaryFunctionType2:
 						case VirtualTerminalObjectType::AuxiliaryInputType2:
 						case VirtualTerminalObjectType::WorkingSet:
 						case VirtualTerminalObjectType::DataMask:
@@ -1761,7 +2238,7 @@ namespace isobus
 						default:
 						{
 							LOG_WARNING("[VT Server]: Client %u change background colour command: invalid object type for object %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-							send_change_background_colour_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeBackgroundColourErrorBit::AnyOtherError)), backgroundColour, message.get_source_control_function());
+							send_change_background_colour_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeBackgroundColourErrorBit::InvalidObjectID)), backgroundColour, message.get_source_control_function());
 						}
 						break;
 					}
@@ -1798,7 +2275,7 @@ namespace isobus
 					}
 					else
 					{
-						send_change_priority_response(objectID, get_bit(static_cast<std::uint8_t>(ChangePriorityErrorBit::AnyOtherError)), newPriority, message.get_source_control_function());
+						send_change_priority_response(objectID, get_bit(static_cast<std::uint8_t>(ChangePriorityErrorBit::InvalidObjectID)), newPriority, message.get_source_control_function());
 						LOG_WARNING("[VT Server]: Client %u change priority command: invalid object ID of %u - the object must be an alarm mask.", managedWorkingSet->get_control_function()->get_address(), objectID);
 					}
 				}
@@ -1813,91 +2290,104 @@ namespace isobus
 			case Function::SelectInputObjectCommand:
 			{
 				auto objectID = get_little_endian_uint16(data, 1);
+				const bool isVersion4OrLater = (get_vt_version_byte(get_version()) > 3);
+				// Before VT version 4 the option byte is reserved, so every request only sets focus
+				const std::uint8_t option = isVersion4OrLater ? data[3] : 0xFF;
 				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
+				bool isInputObject = false;
+				bool isEnabled = true;
+				bool canOpenForInput = true;
 
 				if (nullptr != targetObject)
 				{
 					switch (targetObject->get_object_type())
 					{
 						case VirtualTerminalObjectType::Button:
+						{
+							// Buttons and keys can only be selected from VT version 4
+							isInputObject = isVersion4OrLater;
+							isEnabled = !std::static_pointer_cast<Button>(targetObject)->get_option(Button::Options::Disabled);
+							canOpenForInput = false;
+						}
+						break;
+
 						case VirtualTerminalObjectType::Key:
 						{
-							if (get_vt_version_byte(get_version()) > 3)
-							{
-								if (0 == data[3])
-								{
-									// 0 in Version 4+ means to activate the object for input
-									managedWorkingSet->set_object_focus(objectID);
-									LOG_DEBUG("[VT Server]: Client %u select input object %u and open for input", managedWorkingSet->get_control_function()->get_address(), objectID);
-									onFocusObjectEventDispatcher.call(managedWorkingSet, objectID, true);
-									send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsOpenedForEdit, message.get_source_control_function());
-									process_macro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), managedWorkingSet);
-								}
-								else if (0xFF == data[3])
-								{
-									// This removes focus if the ID is NULL_OBJECT_ID, or sets focus if not
-									managedWorkingSet->set_object_focus(objectID);
-									LOG_DEBUG("[VT Server]: Client %u select input object %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-									onFocusObjectEventDispatcher.call(managedWorkingSet, objectID, false);
-									send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsSelected, message.get_source_control_function());
-									process_macro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), managedWorkingSet);
-								}
-								else
-								{
-									LOG_WARNING("[VT Server]: Client %u select input object command: Illegal option byte", managedWorkingSet->get_control_function()->get_address(), objectID);
-									send_select_input_object_response(objectID, get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidOptionValue)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
-								}
-							}
-							else
-							{
-								send_select_input_object_response(objectID, get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::AnyOtherError)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
-								LOG_WARNING("[VT Server]: Client %u select input object command: buttons and keys can only be selected when the server is version 4 or higher.", managedWorkingSet->get_control_function()->get_address(), objectID);
-							}
+							isInputObject = isVersion4OrLater;
+							canOpenForInput = false;
+						}
+						break;
+
+						case VirtualTerminalObjectType::InputBoolean:
+						{
+							isInputObject = true;
+							isEnabled = std::static_pointer_cast<InputBoolean>(targetObject)->get_enabled();
+						}
+						break;
+
+						case VirtualTerminalObjectType::InputString:
+						{
+							isInputObject = true;
+							isEnabled = std::static_pointer_cast<InputString>(targetObject)->get_enabled();
 						}
 						break;
 
 						case VirtualTerminalObjectType::InputNumber:
-						case VirtualTerminalObjectType::InputString:
+						{
+							isInputObject = true;
+							isEnabled = std::static_pointer_cast<InputNumber>(targetObject)->get_option2(InputNumber::Options2::Enabled);
+						}
+						break;
+
 						case VirtualTerminalObjectType::InputList:
 						{
-							if (0 == data[3])
-							{
-								// 0 in Version 4+ means to activate the object for input
-								managedWorkingSet->set_object_focus(objectID);
-								LOG_DEBUG("[VT Server]: Client %u select input object %u and open for input", managedWorkingSet->get_control_function()->get_address(), objectID);
-								onFocusObjectEventDispatcher.call(managedWorkingSet, objectID, true);
-								send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsOpenedForEdit, message.get_source_control_function());
-								process_macro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), managedWorkingSet);
-							}
-							else if (0xFF == data[3])
-							{
-								// This removes focus if the ID is NULL_OBJECT_ID, or sets focus if not
-								managedWorkingSet->set_object_focus(objectID);
-								LOG_DEBUG("[VT Server]: Client %u select input object %u", managedWorkingSet->get_control_function()->get_address(), objectID);
-								onFocusObjectEventDispatcher.call(managedWorkingSet, objectID, false);
-								send_select_input_object_response(objectID, 0, NULL_OBJECT_ID == objectID ? SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError : SelectInputObjectResponse::ObjectIsSelected, message.get_source_control_function());
-								process_macro(targetObject, NULL_OBJECT_ID == objectID ? EventID::OnInputFieldDeselection : EventID::OnInputFieldSelection, targetObject->get_object_type(), managedWorkingSet);
-							}
-							else
-							{
-								LOG_WARNING("[VT Server]: Client %u select input object command: Illegal option byte", managedWorkingSet->get_control_function()->get_address(), objectID);
-								send_select_input_object_response(objectID, get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidOptionValue)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
-							}
+							isInputObject = true;
+							isEnabled = std::static_pointer_cast<InputList>(targetObject)->get_option(InputList::Options::Enabled);
 						}
 						break;
 
 						default:
-						{
-							LOG_WARNING("[VT Server]: Client %u select input object command: invalid object type", managedWorkingSet->get_control_function()->get_address(), objectID);
-							send_select_input_object_response(objectID, get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::AnyOtherError)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
-						}
-						break;
+							break;
 					}
+				}
+
+				std::uint8_t errorBitfield = 0;
+
+				if (!isInputObject)
+				{
+					errorBitfield = get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidObjectID));
+				}
+				else if (!isEnabled)
+				{
+					errorBitfield = get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::ObjectIsDisabled));
+				}
+				else if (!is_shown_on_active_mask(managedWorkingSet, objectID))
+				{
+					errorBitfield = get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::ObjectIsNotOnTheActiveMaskOrIsInAHiddenContainer));
+				}
+				// Option 0 opens the object for input, which buttons and keys can't be
+				else if ((0xFF != option) && ((0 != option) || (!canOpenForInput)))
+				{
+					errorBitfield = get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidOptionValue));
+				}
+				else if ((NULL_OBJECT_ID != managedWorkingSet->get_object_open_for_input()) && (objectID != managedWorkingSet->get_object_open_for_input()))
+				{
+					errorBitfield = get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::CouldNotCompleteAnotherFieldIsBeingModified));
+				}
+
+				if (0 == errorBitfield)
+				{
+					const bool openForInput = (0 == option);
+					managedWorkingSet->set_object_focus(objectID);
+					LOG_DEBUG("[VT Server]: Client %u select input object %u, open for input: %u", managedWorkingSet->get_control_function()->get_address(), objectID, openForInput);
+					onFocusObjectEventDispatcher.call(managedWorkingSet, objectID, openForInput);
+					send_select_input_object_response(objectID, 0, openForInput ? SelectInputObjectResponse::ObjectIsOpenedForEdit : SelectInputObjectResponse::ObjectIsSelected, message.get_source_control_function());
+					process_macro(targetObject, EventID::OnInputFieldSelection, targetObject->get_object_type(), managedWorkingSet);
 				}
 				else
 				{
-					send_select_input_object_response(objectID, get_bit(static_cast<std::uint8_t>(SelectInputObjectErrorBit::InvalidObjectID)), SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
-					LOG_WARNING("[VT Server]: Client %u select input object command: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+					send_select_input_object_response(objectID, errorBitfield, SelectInputObjectResponse::ObjectIsNotSelectedOrIsNullOrError, message.get_source_control_function());
+					LOG_WARNING("[VT Server]: Client %u select input object %u with option %u failed, error bits 0x%02X", managedWorkingSet->get_control_function()->get_address(), objectID, option, errorBitfield);
 				}
 			}
 			break;
@@ -1913,7 +2403,7 @@ namespace isobus
 			{
 				// Todo? auto modelIdentificationCode = static_cast<std::uint16_t>(static_cast<std::uint16_t>(data[1]) | (static_cast<std::uint16_t>(data[2]) << 8));
 				// Todo? bool isReady = (1 == data[3]);
-				managedWorkingSet->set_auxiliary_input_maintenance_timestamp_ms(SystemTiming::get_timestamp_ms());
+				managedWorkingSet->set_auxiliary_input_maintenance_timestamp_ms(rxMessageArrivalTimestamp_ms);
 			}
 			break;
 
@@ -2016,13 +2506,7 @@ namespace isobus
 				}
 				else if (delete_object_pool(managedWorkingSet->get_control_function()->get_NAME()))
 				{
-					deactivate_working_set(managedWorkingSet);
-					managedWorkingSetIopLoadStateMap.erase(managedWorkingSet);
-					managedWorkingSet->clear_object_pool_data({});
-					{
-						LOCK_GUARD(Mutex, pendingShutdownsMutex);
-						pendingObjectPoolDeletions.push_back(managedWorkingSet);
-					}
+					remove_object_pool(managedWorkingSet);
 					LOG_INFO("[VT Server]: Client %u object pool has been deleted.", managedWorkingSet->get_control_function()->get_address());
 					send_delete_object_pool_response(0, message.get_source_control_function());
 				}
@@ -2051,6 +2535,7 @@ namespace isobus
 						if (polygon->change_point(polygonPointIndex, newXValue, newYValue))
 						{
 							LOG_DEBUG("[VT Server]: Client %u change polygon id %u point index %u. X = %u, Y = %u", managedWorkingSet->get_control_function()->get_address(), objectID, polygonPointIndex, newXValue, newYValue);
+							onRepaintEventDispatcher.call(managedWorkingSet);
 							send_change_polygon_point_response(objectID, 0, message.get_source_control_function());
 						}
 						else
@@ -2062,7 +2547,7 @@ namespace isobus
 					else
 					{
 						LOG_WARNING("[VT Server]: Client %u change polygon point: object id %u is not an output polygon", managedWorkingSet->get_control_function()->get_address(), objectID);
-						send_change_polygon_point_response(objectID, get_bit(static_cast<std::uint8_t>(ChangePolygonPointErrorBit::AnyOtherError)), message.get_source_control_function());
+						send_change_polygon_point_response(objectID, get_bit(static_cast<std::uint8_t>(ChangePolygonPointErrorBit::InvalidObjectID)), message.get_source_control_function());
 					}
 				}
 				else
@@ -2073,14 +2558,129 @@ namespace isobus
 			}
 			break;
 
+			case Function::ChangePolygonScaleCommand:
+			{
+				auto objectID = get_little_endian_uint16(data, 1);
+				const std::uint16_t newWidth = get_little_endian_uint16(data, 3);
+				const std::uint16_t newHeight = get_little_endian_uint16(data, 5);
+				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
+
+				if (nullptr != targetObject)
+				{
+					if (VirtualTerminalObjectType::OutputPolygon == targetObject->get_object_type())
+					{
+						auto polygon = std::static_pointer_cast<OutputPolygon>(targetObject);
+						const std::uint32_t oldWidth = polygon->get_width();
+						const std::uint32_t oldHeight = polygon->get_height();
+
+						const auto scale = [](std::uint16_t value, std::uint32_t newSize, std::uint32_t oldSize) {
+							return ((static_cast<std::uint32_t>(value) * newSize) + (oldSize / 2)) / oldSize;
+						};
+						bool pointsFit = ((0 != oldWidth) && (0 != oldHeight));
+
+						// Points may lie outside the enclosing area, so a scaled point can exceed 16 bits
+						for (std::uint8_t i = 0; pointsFit && (i < polygon->get_number_of_points()); i++)
+						{
+							const auto point = polygon->get_point(i);
+							pointsFit = (std::numeric_limits<std::uint16_t>::max() >= scale(point.xValue, newWidth, oldWidth)) &&
+							  (std::numeric_limits<std::uint16_t>::max() >= scale(point.yValue, newHeight, oldHeight));
+						}
+
+						if (pointsFit)
+						{
+							for (std::uint8_t i = 0; i < polygon->get_number_of_points(); i++)
+							{
+								const auto point = polygon->get_point(i);
+								polygon->change_point(i,
+								                      static_cast<std::uint16_t>(scale(point.xValue, newWidth, oldWidth)),
+								                      static_cast<std::uint16_t>(scale(point.yValue, newHeight, oldHeight)));
+							}
+							polygon->set_width(newWidth);
+							polygon->set_height(newHeight);
+							LOG_DEBUG("[VT Server]: Client %u change polygon scale id %u. Width = %u, Height = %u", managedWorkingSet->get_control_function()->get_address(), objectID, newWidth, newHeight);
+							onRepaintEventDispatcher.call(managedWorkingSet);
+							send_change_polygon_scale_response(objectID, newWidth, newHeight, 0, message.get_source_control_function());
+						}
+						else
+						{
+							LOG_WARNING("[VT Server]: Client %u change polygon scale: object %u has a zero width or height, or a point that would not fit in 16 bits after scaling", managedWorkingSet->get_control_function()->get_address(), objectID);
+							send_change_polygon_scale_response(objectID, newWidth, newHeight, get_bit(static_cast<std::uint8_t>(ChangePolygonScaleErrorBit::AnyOtherError)), message.get_source_control_function());
+						}
+					}
+					else
+					{
+						LOG_WARNING("[VT Server]: Client %u change polygon scale: object id %u is not an output polygon", managedWorkingSet->get_control_function()->get_address(), objectID);
+						send_change_polygon_scale_response(objectID, newWidth, newHeight, get_bit(static_cast<std::uint8_t>(ChangePolygonScaleErrorBit::InvalidObjectID)), message.get_source_control_function());
+					}
+				}
+				else
+				{
+					LOG_WARNING("[VT Server]: Client %u change polygon scale: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+					send_change_polygon_scale_response(objectID, newWidth, newHeight, get_bit(static_cast<std::uint8_t>(ChangePolygonScaleErrorBit::InvalidObjectID)), message.get_source_control_function());
+				}
+			}
+			break;
+
+			case Function::ChangeEndPointCommand:
+			{
+				auto objectID = get_little_endian_uint16(data, 1);
+				const std::uint16_t newWidth = get_little_endian_uint16(data, 3);
+				const std::uint16_t newHeight = get_little_endian_uint16(data, 5);
+				const std::uint8_t newLineDirection = data[7];
+				auto targetObject = managedWorkingSet->get_object_by_id(objectID);
+
+				if (nullptr != targetObject)
+				{
+					if (VirtualTerminalObjectType::OutputLine == targetObject->get_object_type())
+					{
+						auto line = std::static_pointer_cast<OutputLine>(targetObject);
+
+						if (static_cast<std::uint8_t>(OutputLine::LineDirection::BottomLeftToTopRight) >= newLineDirection)
+						{
+							line->set_width(newWidth);
+							line->set_height(newHeight);
+							line->set_line_direction(static_cast<OutputLine::LineDirection>(newLineDirection));
+							LOG_DEBUG("[VT Server]: Client %u change end point id %u. Width = %u, Height = %u, Direction = %u", managedWorkingSet->get_control_function()->get_address(), objectID, newWidth, newHeight, newLineDirection);
+							onRepaintEventDispatcher.call(managedWorkingSet);
+							send_change_end_point_response(objectID, 0, message.get_source_control_function());
+							process_macro(targetObject, EventID::OnChangeEndpoint, VirtualTerminalObjectType::OutputLine, managedWorkingSet);
+						}
+						else
+						{
+							LOG_WARNING("[VT Server]: Client %u change end point: the line direction of %u is not valid for object %u", managedWorkingSet->get_control_function()->get_address(), newLineDirection, objectID);
+							send_change_end_point_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeEndPointErrorBit::InvalidLineDirection)), message.get_source_control_function());
+						}
+					}
+					else
+					{
+						LOG_WARNING("[VT Server]: Client %u change end point: object id %u is not an output line", managedWorkingSet->get_control_function()->get_address(), objectID);
+						send_change_end_point_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeEndPointErrorBit::InvalidObjectID)), message.get_source_control_function());
+					}
+				}
+				else
+				{
+					LOG_WARNING("[VT Server]: Client %u change end point: invalid object ID of %u", managedWorkingSet->get_control_function()->get_address(), objectID);
+					send_change_end_point_response(objectID, get_bit(static_cast<std::uint8_t>(ChangeEndPointErrorBit::InvalidObjectID)), message.get_source_control_function());
+				}
+			}
+			break;
+
 			case Function::ControlAudioSignalCommand:
 			{
+				control_audio_signal(data[1],
+				                     get_little_endian_uint16(data, 2),
+				                     get_little_endian_uint16(data, 4),
+				                     get_little_endian_uint16(data, 6),
+				                     message.get_source_control_function());
 				send_audio_signal_successful(message.get_source_control_function());
 			}
 			break;
 
 			case Function::SetAudioVolumeCommand:
 			{
+				// The volume is a percentage, so a larger value is passed on as 100 %
+				constexpr std::uint8_t MAX_AUDIO_VOLUME_PERCENT = 100;
+				set_audio_volume(std::min(data[1], MAX_AUDIO_VOLUME_PERCENT), message.get_source_control_function());
 				send_audio_volume_response(message.get_source_control_function());
 			}
 			break;
@@ -2106,13 +2706,147 @@ namespace isobus
 			case Function::VTChangeActiveMaskMessage:
 			case Function::VTChangeStringValueMessage:
 			case Function::VTControlAudioSignalTerminationMessage:
+			case Function::VTChangeSoftKeyMaskMessage:
+			case Function::VTOnUserLayoutHideShowMessage:
+			case Function::AuxiliaryAssignmentTypeOneCommand:
+			case Function::AuxiliaryAssignmentTypeTwoCommand:
+			case Function::AuxiliaryInputStatusTypeTwoEnableCommand:
+			case Function::AuxiliaryInputTypeTwoStatusMessage:
 			{
 				// Todo, do something with the responses
 			}
 			break;
 
-			default:
+			// Already answered by process_stateless_messages, and a received 0xFD must never be answered
+			case Function::GetSupportedWidecharsMessage:
+			case Function::GetNumberOfSoftKeysMessage:
+			case Function::GetTextFontDataMessage:
+			case Function::GetWindowMaskDataMessage:
+			case Function::GetHardwareMessage:
+			case Function::UnsupportedVTFunctionMessage:
 				break;
+
+			// TODO: implement these, until then they are answered as unsupported
+			case Function::LockUnlockMaskCommand:
+			case Function::ChangeObjectLabelCommand:
+			case Function::GetAttributeValueMessage:
+			case Function::SelectColourMapCommand:
+			case Function::GraphicsContextCommand:
+			case Function::AuxiliaryCapabilitiesRequest:
+			case Function::SelectActiveWorkingSet:
+			default:
+			{
+				// A VT before version 5 had no defined response to an unknown function
+				if ((5 <= get_vt_version_byte(get_version())) && (!message.is_broadcast()) && (0 == number_of_running_macros()))
+				{
+					const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+						static_cast<std::uint8_t>(Function::UnsupportedVTFunctionMessage),
+						data.at(0),
+						0xFF,
+						0xFF,
+						0xFF,
+						0xFF,
+						0xFF,
+						0xFF
+					};
+					CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+					                                               buffer.data(),
+					                                               CAN_DATA_LENGTH,
+					                                               serverInternalControlFunction,
+					                                               message.get_source_control_function(),
+					                                               get_priority());
+				}
+			}
+			break;
+		}
+	}
+
+	void VirtualTerminalServer::store_rx_message(const CANMessage &message, void *parent)
+	{
+		if (nullptr != parent)
+		{
+			auto server = static_cast<VirtualTerminalServer *>(parent);
+			const std::uint32_t timestamp_ms = SystemTiming::get_timestamp_ms();
+
+			// Copied before locking, so update() is not blocked while a large transfer is copied
+			QueuedMessage entry = { message, timestamp_ms };
+			bool notify = false;
+
+			{
+				Mutex &queueMutex = server->rxMessageQueueMutex;
+				LOCK_GUARD(Mutex, queueMutex);
+				auto &sources = server->droppedObjectPoolTransferSources;
+				// Once a client's transfer was dropped nothing more from it is queued until the drain, so its drop is processed after everything it sent before
+				const bool sourceDroppedATransfer = (sources.end() != std::find(sources.begin(), sources.end(), message.get_source_control_function()));
+
+				if ((!sourceDroppedATransfer) && (server->rxMessageQueueSize_bytes < server->maxRxMessageQueueSize_bytes))
+				{
+					notify = server->rxMessageQueue.empty();
+					server->rxMessageQueue.push_back(std::move(entry));
+					server->rxMessageQueueSize_bytes += static_cast<std::uint32_t>(sizeof(QueuedMessage)) + message.get_data_length();
+				}
+				else
+				{
+					server->droppedRxMessageCount++;
+
+					if ((!sourceDroppedATransfer) &&
+					    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == message.get_identifier().get_parameter_group_number()) &&
+					    (CAN_DATA_LENGTH <= message.get_data_length()) &&
+					    (static_cast<std::uint8_t>(Function::ObjectPoolTransferMessage) == message.get_data()[0]))
+					{
+						sources.push_back(message.get_source_control_function());
+					}
+				}
+			}
+
+			if (notify)
+			{
+				server->on_rx_messages_pending();
+			}
+		}
+	}
+
+	void VirtualTerminalServer::set_max_rx_queue_size(std::uint32_t sizeInBytes)
+	{
+		LOCK_GUARD(Mutex, rxMessageQueueMutex);
+		maxRxMessageQueueSize_bytes = sizeInBytes;
+	}
+
+	void VirtualTerminalServer::process_rx_messages()
+	{
+		std::deque<QueuedMessage> rxMessages;
+		std::vector<std::shared_ptr<ControlFunction>> droppedTransferSources;
+		std::uint32_t droppedMessages = 0;
+		{
+			LOCK_GUARD(Mutex, rxMessageQueueMutex);
+			rxMessages.swap(rxMessageQueue);
+			droppedTransferSources.swap(droppedObjectPoolTransferSources);
+			rxMessageQueueSize_bytes = 0;
+			droppedMessages = droppedRxMessageCount;
+			droppedRxMessageCount = 0;
+		}
+
+		if (0 != droppedMessages)
+		{
+			LOG_WARNING("[VT Server]: Dropped %u received messages, as the queue was full", droppedMessages);
+		}
+
+		for (const auto &entry : rxMessages)
+		{
+			rxMessageArrivalTimestamp_ms = entry.arrivalTimestamp_ms;
+			process_rx_message(entry.message, this);
+		}
+
+		// After the batch, as nothing from these clients was queued after their dropped transfer
+		for (const auto &source : droppedTransferSources)
+		{
+			const auto workingSet = get_managed_working_set(source);
+
+			if ((nullptr != workingSet) && (!is_object_pool_parse_unanswered(*workingSet)))
+			{
+				workingSet->set_object_pool_transfer_dropped();
+				LOG_ERROR("[VT Server]: Client %u object pool transfer was dropped, as the queue was full", workingSet->get_control_function()->get_address());
+			}
 		}
 	}
 
@@ -2128,6 +2862,10 @@ namespace isobus
 			{
 				parentServer->process_working_set_master_message(message);
 			}
+			else if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMember) == message.get_identifier().get_parameter_group_number())
+			{
+				parentServer->process_working_set_member_message(message);
+			}
 			else if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == message.get_identifier().get_parameter_group_number())
 			{
 				if (static_cast<std::uint8_t>(Function::WorkingSetMaintenanceMessage) == message.get_uint8_at(0))
@@ -2137,7 +2875,8 @@ namespace isobus
 
 				bool responseSent = parentServer->process_stateless_messages(message);
 				bool isManaged = parentServer->check_if_source_is_managed(message);
-				if (!isManaged && !responseSent)
+				// Broadcasts are not answered, an input unit sends its maintenance before it connects (ISO 11783-6 J.7.10)
+				if (!isManaged && !responseSent && !message.is_broadcast())
 				{
 					// Whomever this is has probably timed out. Send them a NACK
 					LOG_WARNING("[VT Server]: Received a non-status message from a client at address %u, but they are not connected to this VT.", message.get_identifier().get_source_address());
@@ -2189,7 +2928,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeActiveMaskCommand),
@@ -2216,7 +2955,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeAttributeCommand),
@@ -2243,7 +2982,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeBackgroundColourCommand),
@@ -2270,7 +3009,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
 
@@ -2293,11 +3032,38 @@ namespace isobus
 		return retVal;
 	}
 
+	bool VirtualTerminalServer::send_change_end_point_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
+	{
+		bool retVal = false;
+
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
+		{
+			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+				static_cast<std::uint8_t>(Function::ChangeEndPointCommand),
+				get_low_byte(objectID),
+				get_high_byte(objectID),
+				errorBitfield,
+				0xFF,
+				0xFF,
+				0xFF,
+				0xFF
+			};
+
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        serverInternalControlFunction,
+			                                                        destination,
+			                                                        get_priority());
+		}
+		return retVal;
+	}
+
 	bool VirtualTerminalServer::send_change_child_position_response(std::uint16_t parentObjectID, std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
 				static_cast<std::uint8_t>(Function::ChangeChildPositionCommand),
@@ -2324,7 +3090,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeFillAttributesCommand),
@@ -2350,7 +3116,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeFontAttributesCommand),
@@ -2376,7 +3142,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeLineAttributesCommand),
@@ -2402,7 +3168,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeListItemCommand),
@@ -2532,6 +3298,49 @@ namespace isobus
 		return retVal;
 	}
 
+	bool VirtualTerminalServer::send_pointing_event_message(KeyActivationCode touchState, std::uint16_t xPosition, std::uint16_t yPosition, std::uint16_t parentMaskObjectId, std::shared_ptr<ControlFunction> destination)
+	{
+		bool retVal = false;
+		// ISO 11783-6:2018 H.6: VT version 3 and prior have no touch state, a Pointing Event always means a press.
+		// A release or a held touch would be read as another press, so only presses are sent.
+		const bool canReportTouchState = (get_version() >= VTVersion::Version4);
+
+		if ((nullptr != destination) &&
+		    (canReportTouchState || (KeyActivationCode::ButtonPressedOrLatched == touchState)))
+		{
+			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+				static_cast<std::uint8_t>(Function::PointingEventMessage),
+				get_low_byte(xPosition),
+				get_high_byte(xPosition),
+				get_low_byte(yPosition),
+				get_high_byte(yPosition),
+				0xFF, // VT version 3 and prior only report presses
+				0xFF,
+				0xFF
+			};
+
+			if (get_version() >= VTVersion::Version6)
+			{
+				buffer[5] = static_cast<std::uint8_t>((pointingEventTransactionNumber << 4) | (static_cast<std::uint8_t>(touchState) & 0x0F));
+				buffer[6] = get_low_byte(parentMaskObjectId);
+				buffer[7] = get_high_byte(parentMaskObjectId);
+				pointingEventTransactionNumber = (pointingEventTransactionNumber + 1) & 0x0F;
+			}
+			else if (get_version() >= VTVersion::Version4)
+			{
+				buffer[5] = static_cast<std::uint8_t>(touchState);
+			}
+
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        serverInternalControlFunction,
+			                                                        destination,
+			                                                        get_priority());
+		}
+		return retVal;
+	}
+
 	bool VirtualTerminalServer::send_soft_key_activation_message(KeyActivationCode activationCode, std::uint16_t objectId, std::uint16_t parentObjectId, std::uint8_t keyNumber, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
@@ -2623,6 +3432,30 @@ namespace isobus
 		return retVal;
 	}
 
+	std::vector<std::uint8_t> VirtualTerminalServer::get_last_stored_version_label(NAME clientNAME, std::uint8_t labelLength)
+	{
+		// The application returns the versions in the order they were stored, so the last one is the last stored version
+		std::vector<std::uint8_t> retVal;
+
+		if (VERSION_LABEL_LENGTH == labelLength)
+		{
+			const auto versions = get_versions(clientNAME);
+			if (!versions.empty())
+			{
+				retVal.assign(versions.back().begin(), versions.back().end());
+			}
+		}
+		else
+		{
+			const auto versions = get_extended_versions(clientNAME);
+			if (!versions.empty())
+			{
+				retVal.assign(versions.back().begin(), versions.back().end());
+			}
+		}
+		return retVal;
+	}
+
 	void VirtualTerminalServer::process_macro(std::shared_ptr<isobus::VTObject> object, isobus::EventID macroEvent, isobus::VirtualTerminalObjectType targetObjectType, std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> workingset)
 	{
 		if (nullptr != object && targetObjectType == object->get_object_type())
@@ -2642,7 +3475,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
 
@@ -2669,7 +3502,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
 
@@ -2692,11 +3525,38 @@ namespace isobus
 		return retVal;
 	}
 
+	bool VirtualTerminalServer::send_change_polygon_scale_response(std::uint16_t objectID, std::uint16_t width, std::uint16_t height, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
+	{
+		bool retVal = false;
+
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
+		{
+			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
+				static_cast<std::uint8_t>(Function::ChangePolygonScaleCommand),
+				get_low_byte(objectID),
+				get_high_byte(objectID),
+				get_low_byte(width),
+				get_high_byte(width),
+				get_low_byte(height),
+				get_high_byte(height),
+				errorBitfield
+			};
+
+			retVal = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+			                                                        buffer.data(),
+			                                                        CAN_DATA_LENGTH,
+			                                                        serverInternalControlFunction,
+			                                                        destination,
+			                                                        get_priority());
+		}
+		return retVal;
+	}
+
 	bool VirtualTerminalServer::send_change_size_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
 				static_cast<std::uint8_t>(Function::ChangeSizeCommand),
@@ -2723,7 +3583,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
 				static_cast<std::uint8_t>(Function::ChangeSoftKeyMaskCommand),
@@ -2750,7 +3610,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = {
 				static_cast<std::uint8_t>(Function::ChangeStringValueCommand),
@@ -2847,7 +3707,7 @@ namespace isobus
 	{
 		bool retVal = false;
 
-		if (nullptr != destination)
+		if ((nullptr != destination) && (0 == number_of_running_macros()))
 		{
 			std::array<std::uint8_t, CAN_DATA_LENGTH> buffer;
 
@@ -2874,18 +3734,36 @@ namespace isobus
 	                                                             std::uint16_t parentIDOfFaultingObject,
 	                                                             std::uint16_t faultingObjectID,
 	                                                             std::uint8_t objectPoolErrorCodes,
-	                                                             std::shared_ptr<ControlFunction> destination) const
+	                                                             std::shared_ptr<ControlFunction> destination,
+	                                                             bool ranOutOfMemory,
+	                                                             EndOfObjectPoolFailure *failure) const
 	{
 		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
 
 		buffer[0] = static_cast<std::uint8_t>(Function::EndOfObjectPoolMessage);
-		buffer[1] = (success ? 0x00 : 0x01); // Error in object pool is 0x01, no error is 0x00
+		std::uint8_t errorCodes = 0x00; // Bit 0: errors in object pool, bit 1: VT ran out of memory during transfer
+
+		if (ranOutOfMemory)
+		{
+			errorCodes = 0x02;
+		}
+		else if (!success)
+		{
+			errorCodes = 0x01;
+		}
+		buffer[1] = errorCodes;
 		buffer[2] = get_low_byte(parentIDOfFaultingObject);
 		buffer[3] = get_high_byte(parentIDOfFaultingObject);
 		buffer[4] = get_low_byte(faultingObjectID);
 		buffer[5] = get_high_byte(faultingObjectID);
 		buffer[6] = objectPoolErrorCodes;
 		buffer[7] = 0xFF; // Reserved
+
+		// Recorded before sending, so a response that could not be sent still raises the alarm
+		if (nullptr != failure)
+		{
+			*failure = { errorCodes, parentIDOfFaultingObject, faultingObjectID, objectPoolErrorCodes };
+		}
 
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
 		                                                      buffer.data(),
@@ -2925,12 +3803,13 @@ namespace isobus
 		buffer[6] = 0xFF;
 		buffer[7] = 0xFF;
 
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      serverInternalControlFunction,
-		                                                      destination,
-		                                                      get_priority());
+		return (0 == number_of_running_macros()) &&
+		  CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                 buffer.data(),
+		                                                 CAN_DATA_LENGTH,
+		                                                 serverInternalControlFunction,
+		                                                 destination,
+		                                                 get_priority());
 	}
 
 	bool VirtualTerminalServer::send_hide_show_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, bool value, std::shared_ptr<ControlFunction> destination) const
@@ -2946,12 +3825,13 @@ namespace isobus
 		buffer[6] = 0xFF; // Reserved
 		buffer[7] = 0xFF; // Reserved
 
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      serverInternalControlFunction,
-		                                                      destination,
-		                                                      get_priority());
+		return (0 == number_of_running_macros()) &&
+		  CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                 buffer.data(),
+		                                                 CAN_DATA_LENGTH,
+		                                                 serverInternalControlFunction,
+		                                                 destination,
+		                                                 get_priority());
 	}
 
 	bool VirtualTerminalServer::send_change_priority_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::uint8_t priority, std::shared_ptr<ControlFunction> destination) const
@@ -2967,12 +3847,13 @@ namespace isobus
 		buffer[6] = 0xFF; // Reserved
 		buffer[7] = 0xFF; // Reserved
 
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      serverInternalControlFunction,
-		                                                      destination,
-		                                                      get_priority());
+		return (0 == number_of_running_macros()) &&
+		  CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                 buffer.data(),
+		                                                 CAN_DATA_LENGTH,
+		                                                 serverInternalControlFunction,
+		                                                 destination,
+		                                                 get_priority());
 	}
 
 	bool VirtualTerminalServer::send_select_input_object_response(std::uint16_t objectID, std::uint8_t errorBitfield, SelectInputObjectResponse response, std::shared_ptr<ControlFunction> destination) const
@@ -2988,12 +3869,13 @@ namespace isobus
 		buffer[6] = 0xFF; // Reserved
 		buffer[7] = 0xFF; // Reserved
 
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      serverInternalControlFunction,
-		                                                      destination,
-		                                                      get_priority());
+		return (0 == number_of_running_macros()) &&
+		  CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                 buffer.data(),
+		                                                 CAN_DATA_LENGTH,
+		                                                 serverInternalControlFunction,
+		                                                 destination,
+		                                                 get_priority());
 	}
 
 	bool VirtualTerminalServer::send_esc_response(std::uint16_t objectID, std::uint8_t errorBitfield, std::shared_ptr<ControlFunction> destination) const
@@ -3072,12 +3954,13 @@ namespace isobus
 	bool VirtualTerminalServer::send_audio_signal_successful(std::shared_ptr<ControlFunction> destination) const
 	{
 		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ControlAudioSignalCommand), 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      serverInternalControlFunction,
-		                                                      destination,
-		                                                      get_priority());
+		return (0 == number_of_running_macros()) &&
+		  CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                 buffer.data(),
+		                                                 CAN_DATA_LENGTH,
+		                                                 serverInternalControlFunction,
+		                                                 destination,
+		                                                 get_priority());
 	}
 
 	bool VirtualTerminalServer::send_get_window_mask_data_response(std::shared_ptr<ControlFunction> destination) const
@@ -3104,12 +3987,13 @@ namespace isobus
 	bool VirtualTerminalServer::send_audio_volume_response(std::shared_ptr<ControlFunction> destination) const
 	{
 		std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::SetAudioVolumeCommand), 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
-		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
-		                                                      buffer.data(),
-		                                                      CAN_DATA_LENGTH,
-		                                                      serverInternalControlFunction,
-		                                                      destination,
-		                                                      get_priority());
+		return (0 == number_of_running_macros()) &&
+		  CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU),
+		                                                 buffer.data(),
+		                                                 CAN_DATA_LENGTH,
+		                                                 serverInternalControlFunction,
+		                                                 destination,
+		                                                 get_priority());
 	}
 
 	bool VirtualTerminalServer::send_capture_screen_response(std::uint8_t item, std::uint8_t path, std::uint8_t errorCode, std::uint16_t imageId, std::shared_ptr<ControlFunction> requestor) const
@@ -3134,21 +4018,23 @@ namespace isobus
 
 	void VirtualTerminalServer::update()
 	{
-		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> deletedObjectPools;
+		const std::uint32_t drainTimestamp_ms = SystemTiming::get_timestamp_ms();
+		process_rx_messages();
+
+		std::vector<PendingObjectPoolDeletion> deletedObjectPools;
+		deletedObjectPools.swap(pendingObjectPoolDeletions);
+		for (const auto &deletion : deletedObjectPools)
 		{
-			LOCK_GUARD(Mutex, pendingShutdownsMutex);
-			deletedObjectPools.swap(pendingObjectPoolDeletions);
-		}
-		for (const auto &ws : deletedObjectPools)
-		{
-			object_pool_deleted(ws);
+			object_pool_deleted(deletion.workingSet);
+			report_suspension(deletion.workingSet, deletion.failure);
 		}
 
 		// Timeouts are handled first, so the status message never reports a working set that has already shut down
 		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> timedOutWorkingSets;
 		for (const auto &ws : managedWorkingSetList)
 		{
-			if (SystemTiming::time_expired_ms(ws->get_working_set_maintenance_message_timestamp_ms(), WORKING_SET_MAINTENANCE_TIMEOUT_MS))
+			// Measured up to the drain, as maintenance that arrived after it is still waiting in the queue
+			if (SystemTiming::time_expired_ms(ws->get_working_set_maintenance_message_timestamp_ms(), WORKING_SET_MAINTENANCE_TIMEOUT_MS + SystemTiming::get_time_elapsed_ms(drainTimestamp_ms)))
 			{
 				timedOutWorkingSets.push_back(ws);
 			}
@@ -3160,23 +4046,37 @@ namespace isobus
 		}
 		report_shut_down_working_sets();
 
+		// The working set master can change its address, for example after a Commanded Address,
+		// and the VT Status message has to report the address it has now (ISO 11783-6:2018 G.2)
+		if ((nullptr != activeWorkingSet) &&
+		    (nullptr != activeWorkingSet->get_control_function()) &&
+		    (activeWorkingSet->get_control_function()->get_address_valid()))
+		{
+			activeWorkingSetMasterAddress = activeWorkingSet->get_control_function()->get_address();
+		}
+
 		if ((isobus::SystemTiming::time_expired_ms(statusMessageTimestamp_ms, 1000)) &&
 		    (send_status_message()))
 		{
 			statusMessageTimestamp_ms = isobus::SystemTiming::get_timestamp_ms();
 		}
 
-		std::vector<std::pair<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, bool>> parsedWorkingSets;
+		struct ParsedWorkingSet
+		{
+			std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet;
+			bool success;
+			EndOfObjectPoolFailure failure;
+		};
+		std::vector<ParsedWorkingSet> parsedWorkingSets;
 		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> selectableWorkingSets;
 		for (const auto &ws : managedWorkingSetList)
 		{
+			EndOfObjectPoolFailure failure = {};
 			const auto processingState = ws->get_object_pool_processing_state();
-			bool deletionPending = false;
-			{
-				// Read after the state, so a deletion that came before this parse is found and reported before it
-				LOCK_GUARD(Mutex, pendingShutdownsMutex);
-				deletionPending = (pendingObjectPoolDeletions.end() != std::find(pendingObjectPoolDeletions.begin(), pendingObjectPoolDeletions.end(), ws));
-			}
+			// A pool deleted after the swap above, from inside a hook that update() calls, is reported by the next update() before the new pool
+			const bool deletionPending = (std::any_of(pendingObjectPoolDeletions.begin(), pendingObjectPoolDeletions.end(), [&ws](const PendingObjectPoolDeletion &deletion) {
+				return deletion.workingSet == ws;
+			}));
 
 			if ((!deletionPending) && (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Success == processingState))
 			{
@@ -3194,7 +4094,7 @@ namespace isobus
 					}
 					else
 					{
-						send_end_of_object_pool_response(false, NULL_OBJECT_ID, NULL_OBJECT_ID, get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::AnyOtherError)), ws->get_control_function());
+						send_end_of_object_pool_response(false, NULL_OBJECT_ID, NULL_OBJECT_ID, get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::AnyOtherError)), ws->get_control_function(), false, &failure);
 						LOG_ERROR("[VT Server]: The object pool was parsed but contains no working set object. Rejecting the pool.");
 					}
 				}
@@ -3211,7 +4111,8 @@ namespace isobus
 					}
 
 					// A Load Version can replace the pool of the active working set, so its mask has to be refreshed
-					if (ws->get_control_function()->get_address() == activeWorkingSetMasterAddress)
+					if (((nullptr != activeWorkingSet) && (activeWorkingSet->get_control_function() == ws->get_control_function())) ||
+					    (ws->get_control_function()->get_address() == activeWorkingSetMasterAddress))
 					{
 						activeWorkingSet = ws;
 						activeWorkingSetDataMaskObjectID = std::static_pointer_cast<WorkingSet>(workingSetObject)->get_active_mask();
@@ -3221,7 +4122,7 @@ namespace isobus
 						selectableWorkingSets.push_back(ws);
 					}
 				}
-				parsedWorkingSets.emplace_back(ws, success);
+				parsedWorkingSets.push_back({ ws, success, failure });
 			}
 			else if ((!deletionPending) && (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Fail == processingState))
 			{
@@ -3232,9 +4133,9 @@ namespace isobus
 				}
 				else
 				{
-					send_end_of_object_pool_response(false, ws->get_object_pool_faulting_parent_object_id(), ws->get_object_pool_faulting_object_id(), get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::AnyOtherError)), ws->get_control_function());
+					send_end_of_object_pool_response(false, ws->get_object_pool_faulting_parent_object_id(), ws->get_object_pool_faulting_object_id(), get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::AnyOtherError)), ws->get_control_function(), false, &failure);
 				}
-				parsedWorkingSets.emplace_back(ws, false);
+				parsedWorkingSets.push_back({ ws, false, failure });
 			}
 		}
 
@@ -3248,7 +4149,12 @@ namespace isobus
 		}
 		for (const auto &parsed : parsedWorkingSets)
 		{
-			object_pool_parse_finished(parsed.first, parsed.second);
+			if (parsed.success)
+			{
+				notify_focus_lost_if_removed(parsed.workingSet, true);
+			}
+			object_pool_parse_finished(parsed.workingSet, parsed.success);
+			report_suspension(parsed.workingSet, parsed.failure);
 		}
 	}
 }

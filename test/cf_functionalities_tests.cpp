@@ -3,6 +3,7 @@
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/isobus/isobus_functionalities.hpp"
 #include "isobus/utility/system_timing.hpp"
 
@@ -24,6 +25,20 @@ public:
 	{
 		ControlFunctionFunctionalities::get_message_content(messageData);
 	}
+};
+
+class ErrorCountingLogger : public CANStackLogger
+{
+public:
+	void sink_CAN_stack_log(CANStackLogger::LoggingLevel level, const std::string &) override
+	{
+		if (CANStackLogger::LoggingLevel::Error == level)
+		{
+			errors++;
+		}
+	}
+
+	std::uint32_t errors = 0;
 };
 
 class ControlFunctionFunctionalitiesTest : public AgIsoStackTestFixture
@@ -123,6 +138,13 @@ TEST_F(ControlFunctionFunctionalitiesTest, CFFunctionalitiesTest)
 
 	// Our weak termination should be supported
 	EXPECT_EQ(true, cfFunctionalitiesUnderTest.get_minimum_control_function_option_state(ControlFunctionFunctionalities::MinimumControlFunctionOptions::Type1ECUInternalWeakTermination));
+
+	// Setting an already supported functionality again should update its generation and keep its options
+	cfFunctionalitiesUnderTest.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::MinimumControlFunction, 2, true);
+	EXPECT_EQ(2, cfFunctionalitiesUnderTest.get_functionality_generation(ControlFunctionFunctionalities::Functionalities::MinimumControlFunction));
+	EXPECT_EQ(true, cfFunctionalitiesUnderTest.get_minimum_control_function_option_state(ControlFunctionFunctionalities::MinimumControlFunctionOptions::Type1ECUInternalWeakTermination));
+	cfFunctionalitiesUnderTest.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::MinimumControlFunction, 1, true);
+	EXPECT_EQ(1, cfFunctionalitiesUnderTest.get_functionality_generation(ControlFunctionFunctionalities::Functionalities::MinimumControlFunction));
 
 	// Test Min CF functionalities
 	EXPECT_EQ(false, cfFunctionalitiesUnderTest.get_minimum_control_function_option_state(ControlFunctionFunctionalities::MinimumControlFunctionOptions::SupportOfHeartbeatConsumer));
@@ -257,7 +279,8 @@ TEST_F(ControlFunctionFunctionalitiesTest, CFFunctionalitiesTest)
 	auto aux_n_inputs_test_wrapper = [&cfFunctionalitiesUnderTest](ControlFunctionFunctionalities::AuxNOptions functionalityOption) {
 		bool retVal = true;
 
-		for (std::uint32_t i = 1; i <= 0x80; i = i << 1)
+		// Types 0 to 7 are in the first option byte, types 8 to 14 in the second
+		for (std::uint32_t i = 1; i <= static_cast<std::uint32_t>(ControlFunctionFunctionalities::AuxNOptions::SupportsType14Function); i = i << 1)
 		{
 			if (static_cast<ControlFunctionFunctionalities::AuxNOptions>(i) == functionalityOption)
 			{
@@ -272,7 +295,7 @@ TEST_F(ControlFunctionFunctionalitiesTest, CFFunctionalitiesTest)
 	};
 
 	cfFunctionalitiesUnderTest.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::AuxNInputs, 1, true);
-	for (std::uint8_t i = static_cast<std::uint8_t>(ControlFunctionFunctionalities::AuxNOptions::SupportsType0Function); i != static_cast<std::uint8_t>(ControlFunctionFunctionalities::AuxNOptions::SupportsType14Function); i = i << 1)
+	for (std::uint16_t i = static_cast<std::uint16_t>(ControlFunctionFunctionalities::AuxNOptions::SupportsType0Function); i <= static_cast<std::uint16_t>(ControlFunctionFunctionalities::AuxNOptions::SupportsType14Function); i = static_cast<std::uint16_t>(i << 1))
 	{
 		cfFunctionalitiesUnderTest.set_aux_N_inputs_option_state(static_cast<ControlFunctionFunctionalities::AuxNOptions>(i), true);
 		aux_n_inputs_test_wrapper(static_cast<ControlFunctionFunctionalities::AuxNOptions>(i));
@@ -284,7 +307,8 @@ TEST_F(ControlFunctionFunctionalitiesTest, CFFunctionalitiesTest)
 	auto aux_n_functions_test_wrapper = [&cfFunctionalitiesUnderTest](ControlFunctionFunctionalities::AuxNOptions functionalityOption) {
 		bool retVal = true;
 
-		for (std::uint32_t i = 1; i <= 0x80; i = i << 1)
+		// Types 0 to 7 are in the first option byte, types 8 to 14 in the second
+		for (std::uint32_t i = 1; i <= static_cast<std::uint32_t>(ControlFunctionFunctionalities::AuxNOptions::SupportsType14Function); i = i << 1)
 		{
 			if (static_cast<ControlFunctionFunctionalities::AuxNOptions>(i) == functionalityOption)
 			{
@@ -299,7 +323,7 @@ TEST_F(ControlFunctionFunctionalitiesTest, CFFunctionalitiesTest)
 	};
 
 	cfFunctionalitiesUnderTest.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::AuxNFunctions, 1, true);
-	for (std::uint8_t i = static_cast<std::uint8_t>(ControlFunctionFunctionalities::AuxNOptions::SupportsType0Function); i != static_cast<std::uint8_t>(ControlFunctionFunctionalities::AuxNOptions::SupportsType14Function); i = i << 1)
+	for (std::uint16_t i = static_cast<std::uint16_t>(ControlFunctionFunctionalities::AuxNOptions::SupportsType0Function); i <= static_cast<std::uint16_t>(ControlFunctionFunctionalities::AuxNOptions::SupportsType14Function); i = static_cast<std::uint16_t>(i << 1))
 	{
 		cfFunctionalitiesUnderTest.set_aux_N_functions_option_state(static_cast<ControlFunctionFunctionalities::AuxNOptions>(i), true);
 		aux_n_functions_test_wrapper(static_cast<ControlFunctionFunctionalities::AuxNOptions>(i));
@@ -534,14 +558,15 @@ TEST_F(ControlFunctionFunctionalitiesTest, CFFunctionalitiesTest)
 
 	cfFunctionalitiesUnderTest.test_wrapper_get_message_content(testMessageData);
 
-	// We should just have the minimum CF functionalities
+	// We should just have the minimum CF functionalities.
+	// ISO 11783-12 A.12: a functionality without options reports 0 option bytes.
 	ASSERT_EQ(8, testMessageData.size());
 	EXPECT_EQ(0xFF, testMessageData.at(0)); // Each control function shall respond with byte 1 set to FF16
 	EXPECT_EQ(1, testMessageData.at(1)); // We are reporting 1 functionality
 	EXPECT_EQ(0, testMessageData.at(2)); // Functionality 0 is min CF
 	EXPECT_EQ(1, testMessageData.at(3)); // We specify generation 1 by default
-	EXPECT_EQ(1, testMessageData.at(4)); // 1 Option byte
-	EXPECT_EQ(0, testMessageData.at(5)); // No options
+	EXPECT_EQ(0, testMessageData.at(4)); // No options, so no option bytes
+	EXPECT_EQ(0xFF, testMessageData.at(5)); // 0xFF Padding to 8 bytes
 	EXPECT_EQ(0xFF, testMessageData.at(6)); // 0xFF Padding to 8 bytes
 	EXPECT_EQ(0xFF, testMessageData.at(7)); // 0xFF Padding to 8 bytes
 
@@ -550,65 +575,165 @@ TEST_F(ControlFunctionFunctionalitiesTest, CFFunctionalitiesTest)
 	cfFunctionalitiesUnderTest.test_wrapper_get_message_content(testMessageData);
 
 	// We should just have the minimum CF functionalities PLUS the UT client
-	ASSERT_EQ(10, testMessageData.size());
+	ASSERT_EQ(8, testMessageData.size());
 	EXPECT_EQ(0xFF, testMessageData.at(0)); // Each control function shall respond with byte 1 set to FF16
 	EXPECT_EQ(2, testMessageData.at(1)); // We are reporting 2 functionalities
 	EXPECT_EQ(0, testMessageData.at(2)); // Functionality 0 is min CF
 	EXPECT_EQ(1, testMessageData.at(3)); // We specify generation 1 by default
-	EXPECT_EQ(1, testMessageData.at(4)); // 1 Option byte
-	EXPECT_EQ(0, testMessageData.at(5)); // No options
-	EXPECT_EQ(2, testMessageData.at(6)); // UT working set
-	EXPECT_EQ(1, testMessageData.at(7)); // Generation 1. These generations are seemingly user defined and arbitrary, not the ISO standard version... no SPN defined...
-	EXPECT_EQ(1, testMessageData.at(8)); // 1 Option byte
-	EXPECT_EQ(0, testMessageData.at(9)); // No options
+	EXPECT_EQ(0, testMessageData.at(4)); // No option bytes
+	EXPECT_EQ(2, testMessageData.at(5)); // UT working set
+	EXPECT_EQ(1, testMessageData.at(6)); // Generation 1. These generations are seemingly user defined and arbitrary, not the ISO standard version... no SPN defined...
+	EXPECT_EQ(0, testMessageData.at(7)); // No option bytes
 
 	// Add Aux-N
 	cfFunctionalitiesUnderTest.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::AuxNFunctions, 1, true);
 	cfFunctionalitiesUnderTest.test_wrapper_get_message_content(testMessageData);
-	ASSERT_EQ(15, testMessageData.size());
+	ASSERT_EQ(11, testMessageData.size());
 	EXPECT_EQ(0xFF, testMessageData.at(0)); // Each control function shall respond with byte 1 set to FF16
 	EXPECT_EQ(3, testMessageData.at(1)); // We are reporting 3 functionalities
 	EXPECT_EQ(0, testMessageData.at(2)); // Functionality 0 is min CF
 	EXPECT_EQ(1, testMessageData.at(3)); // We specify generation 1 by default
-	EXPECT_EQ(1, testMessageData.at(4)); // 1 Option byte
-	EXPECT_EQ(0, testMessageData.at(5)); // No options
-	EXPECT_EQ(2, testMessageData.at(6)); // UT working set
-	EXPECT_EQ(1, testMessageData.at(7)); // Generation 1. These generations are seemingly user defined and arbitrary, not the ISO standard version... no SPN defined...
-	EXPECT_EQ(1, testMessageData.at(8)); // 1 Option byte
-	EXPECT_EQ(0, testMessageData.at(9)); // No options
-	EXPECT_EQ(6, testMessageData.at(10)); // Functionality 6 is AUX N functions
-	EXPECT_EQ(1, testMessageData.at(11)); // We specify generation 1
-	EXPECT_EQ(2, testMessageData.at(12)); // 2 Option bytes
-	EXPECT_EQ(0, testMessageData.at(13)); // No options
-	EXPECT_EQ(0, testMessageData.at(14)); // No options
+	EXPECT_EQ(0, testMessageData.at(4)); // No option bytes
+	EXPECT_EQ(2, testMessageData.at(5)); // UT working set
+	EXPECT_EQ(1, testMessageData.at(6)); // Generation 1
+	EXPECT_EQ(0, testMessageData.at(7)); // No option bytes
+	EXPECT_EQ(6, testMessageData.at(8)); // Functionality 6 is AUX N functions
+	EXPECT_EQ(1, testMessageData.at(9)); // We specify generation 1
+	EXPECT_EQ(0, testMessageData.at(10)); // No options, so neither of its 2 option bytes is sent
+
+	// A trailing zero option byte is omitted, an earlier one is kept
+	cfFunctionalitiesUnderTest.set_aux_N_functions_option_state(ControlFunctionFunctionalities::AuxNOptions::SupportsType1Function, true);
+	cfFunctionalitiesUnderTest.test_wrapper_get_message_content(testMessageData);
+	ASSERT_EQ(12, testMessageData.size());
+	EXPECT_EQ(1, testMessageData.at(10)); // Only the first option byte is set
+	EXPECT_EQ(0x02, testMessageData.at(11)); // Type 1 function
+	// The stored options are unchanged, so the getters still see them
+	EXPECT_TRUE(cfFunctionalitiesUnderTest.get_aux_N_functions_option_state(ControlFunctionFunctionalities::AuxNOptions::SupportsType1Function));
+	cfFunctionalitiesUnderTest.set_aux_N_functions_option_state(ControlFunctionFunctionalities::AuxNOptions::SupportsType1Function, false);
+	cfFunctionalitiesUnderTest.set_aux_N_functions_option_state(ControlFunctionFunctionalities::AuxNOptions::SupportsType9Function, true);
+	cfFunctionalitiesUnderTest.test_wrapper_get_message_content(testMessageData);
+	ASSERT_EQ(13, testMessageData.size());
+	EXPECT_EQ(2, testMessageData.at(10)); // The second option byte is set, so the first is sent too
+	EXPECT_EQ(0x00, testMessageData.at(11));
+	EXPECT_EQ(0x02, testMessageData.at(12)); // Type 9 function
+	cfFunctionalitiesUnderTest.set_aux_N_functions_option_state(ControlFunctionFunctionalities::AuxNOptions::SupportsType9Function, false);
 
 	// Add Task controller Client
 	cfFunctionalitiesUnderTest.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::TaskControllerSectionControlClient, 1, true);
 	cfFunctionalitiesUnderTest.set_task_controller_section_control_client_option_state(1, 255); // 1 Boom, 255 sections
 	cfFunctionalitiesUnderTest.test_wrapper_get_message_content(testMessageData);
 
-	ASSERT_EQ(20, testMessageData.size());
+	ASSERT_EQ(16, testMessageData.size());
 	EXPECT_EQ(0xFF, testMessageData.at(0)); // Each control function shall respond with byte 1 set to FF16
 	EXPECT_EQ(4, testMessageData.at(1)); // We are reporting 4 functionalities
 	EXPECT_EQ(0, testMessageData.at(2)); // Functionality 0 is min CF
 	EXPECT_EQ(1, testMessageData.at(3)); // We specify generation 1 by default
-	EXPECT_EQ(1, testMessageData.at(4)); // 1 Option byte
-	EXPECT_EQ(0, testMessageData.at(5)); // No options
-	EXPECT_EQ(2, testMessageData.at(6)); // UT working set
-	EXPECT_EQ(1, testMessageData.at(7)); // Generation 1. These generations are seemingly user defined and arbitrary, not the ISO standard version... no SPN defined...
-	EXPECT_EQ(1, testMessageData.at(8)); // 1 Option byte
-	EXPECT_EQ(0, testMessageData.at(9)); // No options
-	EXPECT_EQ(6, testMessageData.at(10)); // Functionality 6 is AUX N functions
-	EXPECT_EQ(1, testMessageData.at(11)); // We specify generation 1
-	EXPECT_EQ(2, testMessageData.at(12)); // 2 Option bytes
-	EXPECT_EQ(0, testMessageData.at(13)); // No options
-	EXPECT_EQ(0, testMessageData.at(14)); // No options
-	EXPECT_EQ(12, testMessageData.at(15)); // Functionality 12 is TC section control client
-	EXPECT_EQ(1, testMessageData.at(16)); // We specify generation 1
-	EXPECT_EQ(2, testMessageData.at(17)); // 2 Option bytes
-	EXPECT_EQ(1, testMessageData.at(18)); // 1 Boom
-	EXPECT_EQ(255, testMessageData.at(19)); // 255 Sections
+	EXPECT_EQ(0, testMessageData.at(4)); // No option bytes
+	EXPECT_EQ(2, testMessageData.at(5)); // UT working set
+	EXPECT_EQ(1, testMessageData.at(6)); // Generation 1
+	EXPECT_EQ(0, testMessageData.at(7)); // No option bytes
+	EXPECT_EQ(6, testMessageData.at(8)); // Functionality 6 is AUX N functions
+	EXPECT_EQ(1, testMessageData.at(9)); // We specify generation 1
+	EXPECT_EQ(0, testMessageData.at(10)); // No option bytes
+	EXPECT_EQ(12, testMessageData.at(11)); // Functionality 12 is TC section control client
+	EXPECT_EQ(1, testMessageData.at(12)); // We specify generation 1
+	EXPECT_EQ(2, testMessageData.at(13)); // 2 Option bytes
+	EXPECT_EQ(1, testMessageData.at(14)); // 1 Boom
+	EXPECT_EQ(255, testMessageData.at(15)); // 255 Sections
 
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 	CANNetworkManager::CANNetwork.deactivate_control_function(otherECU);
+}
+
+TEST_F(ControlFunctionFunctionalitiesTest, FunctionalitiesNineteenToTwentyEightHaveNoDefaultOptions)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x01, 0, time_source);
+	TestControlFunctionFunctionalities cfFunctionalitiesUnderTest(internalECU);
+
+	using Functionalities = ControlFunctionFunctionalities::Functionalities;
+	const std::vector<std::pair<Functionalities, std::uint8_t>> expectedIds = {
+		{ Functionalities::SequenceControllerServer, 19 },
+		{ Functionalities::SequenceControllerClient, 20 },
+		{ Functionalities::ShortcutButtonServer, 21 },
+		{ Functionalities::ShortcutButtonClient, 22 },
+		{ Functionalities::DiagnosticTool, 23 },
+		{ Functionalities::DataLoggerServer, 24 },
+		{ Functionalities::DataLoggerClient, 25 },
+		{ Functionalities::SystemInformationServer, 26 },
+		{ Functionalities::TaskControllerTramlineServer, 27 },
+		{ Functionalities::TaskControllerTramlineClient, 28 }
+	};
+
+	ErrorCountingLogger logger;
+	CANStackLogger::set_can_stack_logger_sink(&logger);
+
+	for (const auto &expected : expectedIds)
+	{
+		std::vector<std::uint8_t> messageData;
+
+		cfFunctionalitiesUnderTest.set_functionality_is_supported(expected.first, 1, true);
+		cfFunctionalitiesUnderTest.test_wrapper_get_message_content(messageData);
+		// 0xFF, 2 functionalities, then minimum CF and the one under test, each as ID, generation 1, no option bytes
+		EXPECT_EQ((std::vector<std::uint8_t>{ 0xFF, 2, 0, 1, 0, expected.second, 1, 0 }), messageData);
+
+		cfFunctionalitiesUnderTest.set_functionality_is_supported(expected.first, 1, false);
+	}
+
+	// The fixture's TearDown logs through the sink after this local logger is gone
+	CANStackLogger::set_can_stack_logger_sink(&discardingLogger);
+	EXPECT_EQ(0u, logger.errors);
+}
+
+TEST_F(ControlFunctionFunctionalitiesTest, TramlineClientOptions)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x01, 0, time_source);
+	TestControlFunctionFunctionalities cfFunctionalitiesUnderTest(internalECU);
+
+	using Options = ControlFunctionFunctionalities::TaskControllerTramlineClientOptions;
+	std::vector<std::uint8_t> messageData;
+
+	// Options can't be set before the functionality is supported
+	cfFunctionalitiesUnderTest.set_task_controller_tramline_client_option_state(Options::TramlineControl, true);
+	EXPECT_FALSE(cfFunctionalitiesUnderTest.get_task_controller_tramline_client_option_state(Options::TramlineControl));
+
+	cfFunctionalitiesUnderTest.set_functionality_is_supported(ControlFunctionFunctionalities::Functionalities::TaskControllerTramlineClient, 1, true);
+	EXPECT_FALSE(cfFunctionalitiesUnderTest.get_task_controller_tramline_client_option_state(Options::TramlineRhythmTransition));
+	EXPECT_FALSE(cfFunctionalitiesUnderTest.get_task_controller_tramline_client_option_state(Options::StorageOfImplementTrackParameters));
+	EXPECT_FALSE(cfFunctionalitiesUnderTest.get_task_controller_tramline_client_option_state(Options::TramlineControl));
+
+	// Each option is its own bit of the option byte (isobus.net functionality 28)
+	const std::vector<std::pair<Options, std::uint8_t>> expectedBits = {
+		{ Options::TramlineRhythmTransition, 0x01 },
+		{ Options::StorageOfImplementTrackParameters, 0x02 },
+		{ Options::TramlineControl, 0x04 }
+	};
+	for (const auto &expected : expectedBits)
+	{
+		cfFunctionalitiesUnderTest.set_task_controller_tramline_client_option_state(expected.first, true);
+		EXPECT_TRUE(cfFunctionalitiesUnderTest.get_task_controller_tramline_client_option_state(expected.first));
+		cfFunctionalitiesUnderTest.test_wrapper_get_message_content(messageData);
+		// 0xFF, 2 functionalities, then minimum CF and TRACK client, each as ID, generation and number of option bytes
+		EXPECT_EQ((std::vector<std::uint8_t>{ 0xFF, 2, 0, 1, 0, 28, 1, 1, expected.second }), messageData);
+		cfFunctionalitiesUnderTest.set_task_controller_tramline_client_option_state(expected.first, false);
+	}
+
+	// All three together, and the reserved bits are never set
+	cfFunctionalitiesUnderTest.set_task_controller_tramline_client_option_state(Options::TramlineRhythmTransition, true);
+	cfFunctionalitiesUnderTest.set_task_controller_tramline_client_option_state(Options::StorageOfImplementTrackParameters, true);
+	cfFunctionalitiesUnderTest.set_task_controller_tramline_client_option_state(Options::TramlineControl, true);
+	cfFunctionalitiesUnderTest.set_task_controller_tramline_client_option_state(Options::Reserved, true);
+	cfFunctionalitiesUnderTest.test_wrapper_get_message_content(messageData);
+	EXPECT_EQ((std::vector<std::uint8_t>{ 0xFF, 2, 0, 1, 0, 28, 1, 1, 0x07 }), messageData);
+	EXPECT_FALSE(cfFunctionalitiesUnderTest.get_task_controller_tramline_client_option_state(Options::Reserved));
+
+	CANHardwareInterface::stop();
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }

@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cstring>
 #include <limits>
+#include <set>
 
 namespace isobus
 {
@@ -138,8 +139,21 @@ namespace isobus
 
 		if (nullptr != objectToAdd)
 		{
-			vtObjectTree[objectToAdd->get_id()] = objectToAdd;
-			retVal = true;
+			const auto existingObject = vtObjectTree.find(objectToAdd->get_id());
+
+			// A replaced object shall be of the same type (ISO 11783-6:2018 4.6.10.3). Objects refer to each other by ID,
+			// and the server reads the object with the Working Set's ID as the Working Set
+			if ((vtObjectTree.end() == existingObject) ||
+			    (nullptr == existingObject->second) ||
+			    (existingObject->second->get_object_type() == objectToAdd->get_object_type()))
+			{
+				vtObjectTree[objectToAdd->get_id()] = objectToAdd;
+				retVal = true;
+			}
+			else
+			{
+				LOG_ERROR("[WS]: Object %u can't replace the object of another type with the same ID", objectToAdd->get_id());
+			}
 		}
 		return retVal;
 	}
@@ -1457,6 +1471,15 @@ namespace isobus
 							const std::uint8_t numberOfMacrosToFollow = iopData[16];
 							iopData += 17;
 							iopLength -= 17;
+							std::uint64_t pixelsPerByte = 1;
+							if (PictureGraphic::Format::Monochrome == tempObject->get_format())
+							{
+								pixelsPerByte = 8;
+							}
+							else if (PictureGraphic::Format::FourBitColour == tempObject->get_format())
+							{
+								pixelsPerByte = 2;
+							}
 
 							if (tempObject->get_option(PictureGraphic::Options::RunLengthEncoded))
 							{
@@ -1471,7 +1494,12 @@ namespace isobus
 								else
 								{
 									pixelDataParsed = true;
-									// Decode the RLE
+									std::uint64_t runLengthTotal = 0;
+									for (std::uint_fast32_t i = 0; i < tempObject->get_number_of_bytes_in_raw_data(); i += 2)
+									{
+										runLengthTotal += iopData[i];
+									}
+									tempObject->reserve_raw_data(runLengthTotal * pixelsPerByte);
 									std::size_t lineAmountLeft = tempObject->get_actual_width();
 									for (std::uint_fast32_t i = 0; i < (tempObject->get_number_of_bytes_in_raw_data() / 2); i++)
 									{
@@ -1542,6 +1570,7 @@ namespace isobus
 								if (iopLength >= tempObject->get_number_of_bytes_in_raw_data())
 								{
 									pixelDataParsed = true;
+									tempObject->reserve_raw_data(tempObject->get_number_of_bytes_in_raw_data() * pixelsPerByte);
 
 									switch (tempObject->get_format())
 									{
@@ -1896,7 +1925,29 @@ namespace isobus
 
 						const std::uint8_t numberOfCodePlanesToFollow = iopData[4];
 						tempObject->set_number_of_code_planes(numberOfCodePlanesToFollow);
-						LOG_ERROR("[WS]: Extended input attributes not supported yet (todo)");
+						iopData += 5;
+						iopLength -= 5;
+						retVal = true;
+
+						// Character ranges are skipped because input is not validated against them yet
+						for (std::uint_fast8_t i = 0; (i < numberOfCodePlanesToFollow) && retVal; i++)
+						{
+							if ((iopLength >= 2) && (iopLength >= (2U + (4U * iopData[1]))))
+							{
+								const std::uint32_t codePlaneLength = 2U + (4U * iopData[1]);
+								iopData += codePlaneLength;
+								iopLength -= codePlaneLength;
+							}
+							else
+							{
+								retVal = false;
+							}
+						}
+
+						if (!retVal)
+						{
+							LOG_ERROR("[WS]: Not enough IOP data to parse extended input attributes code planes");
+						}
 					}
 					else
 					{
@@ -1957,7 +2008,42 @@ namespace isobus
 
 				case VirtualTerminalObjectType::ObjectLabelRefrenceList:
 				{
-					LOG_ERROR("[WS]: Object label reference not supported yet (todo)");
+					constexpr std::uint32_t LABELLED_OBJECT_LENGTH = 7;
+
+					if (iopLength >= 5)
+					{
+						const std::uint16_t numberOfLabelledObjects = get_little_endian_uint16(iopData, 3);
+						iopData += 5;
+						iopLength -= 5;
+
+						if (iopLength >= (LABELLED_OBJECT_LENGTH * numberOfLabelledObjects))
+						{
+							// Labels are only checked, not stored, because nothing displays them yet
+							std::set<std::uint16_t> labelledObjects;
+							retVal = true;
+
+							for (std::uint_fast16_t i = 0; (i < numberOfLabelledObjects) && retVal; i++)
+							{
+								const std::uint16_t labelledObject = get_little_endian_uint16(iopData, 0);
+
+								if (!labelledObjects.insert(labelledObject).second)
+								{
+									LOG_ERROR("[WS]: Object %u is labelled more than once in object label reference list %u", labelledObject, decodedID);
+									retVal = false;
+								}
+								iopData += LABELLED_OBJECT_LENGTH;
+								iopLength -= LABELLED_OBJECT_LENGTH;
+							}
+						}
+						else
+						{
+							LOG_ERROR("[WS]: Not enough IOP data to parse object label reference list %u", decodedID);
+						}
+					}
+					else
+					{
+						LOG_ERROR("[WS]: Not enough IOP data to parse object label reference list object");
+					}
 				}
 				break;
 

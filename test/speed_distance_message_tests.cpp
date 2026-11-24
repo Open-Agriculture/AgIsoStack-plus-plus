@@ -98,7 +98,7 @@ TEST_F(SpeedMessageTest, SpeedMessages)
 
 	CANHardwareInterface::set_number_of_can_channels(1);
 	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
-	CANHardwareInterface::start();
+	CANHardwareInterface::start(false);
 
 	auto testECU = test_helpers::claim_internal_control_function(0x45, 0, time_source);
 	ASSERT_TRUE(testECU->get_address_valid());
@@ -179,6 +179,7 @@ TEST_F(SpeedMessageTest, SpeedMessages)
 		ASSERT_FALSE(interfaceUnderTest.test_wrapper_send_wheel_based_speed());
 		ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_machine_selected_speed());
 		ASSERT_FALSE(interfaceUnderTest.test_wrapper_send_machine_selected_speed_command());
+		CANHardwareInterface::update();
 		ASSERT_TRUE(testPlugin.read_frame(testFrame));
 
 		// Validate MSS encoding
@@ -229,6 +230,7 @@ TEST_F(SpeedMessageTest, SpeedMessages)
 		ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_wheel_based_speed());
 		ASSERT_FALSE(interfaceUnderTest.test_wrapper_send_machine_selected_speed());
 		ASSERT_FALSE(interfaceUnderTest.test_wrapper_send_machine_selected_speed_command());
+		CANHardwareInterface::update();
 		ASSERT_TRUE(testPlugin.read_frame(testFrame));
 
 		// Validate wheel-based speed encoding
@@ -273,6 +275,7 @@ TEST_F(SpeedMessageTest, SpeedMessages)
 		ASSERT_FALSE(interfaceUnderTest.test_wrapper_send_wheel_based_speed());
 		ASSERT_FALSE(interfaceUnderTest.test_wrapper_send_machine_selected_speed());
 		ASSERT_FALSE(interfaceUnderTest.test_wrapper_send_machine_selected_speed_command());
+		CANHardwareInterface::update();
 		ASSERT_TRUE(testPlugin.read_frame(testFrame));
 
 		EXPECT_EQ(0x0CFE4945, testFrame.identifier); // Verify priority 3 and PGN is FE49
@@ -312,6 +315,7 @@ TEST_F(SpeedMessageTest, SpeedMessages)
 		ASSERT_FALSE(interfaceUnderTest.test_wrapper_send_wheel_based_speed());
 		ASSERT_FALSE(interfaceUnderTest.test_wrapper_send_machine_selected_speed());
 		ASSERT_TRUE(interfaceUnderTest.test_wrapper_send_machine_selected_speed_command());
+		CANHardwareInterface::update();
 		ASSERT_TRUE(testPlugin.read_frame(testFrame));
 
 		EXPECT_EQ(0x0CFD4345, testFrame.identifier); // Verify priority 3 and PGN is FD43
@@ -340,9 +344,13 @@ TEST_F(SpeedMessageTest, SpeedMessages)
 		interfaceUnderTest.update();
 
 		// Should get 4 messages every 100ms
+		CANHardwareInterface::update();
 		ASSERT_TRUE(testPlugin.read_frame(testFrame));
+		CANHardwareInterface::update();
 		ASSERT_TRUE(testPlugin.read_frame(testFrame));
+		CANHardwareInterface::update();
 		ASSERT_TRUE(testPlugin.read_frame(testFrame));
+		CANHardwareInterface::update();
 		ASSERT_TRUE(testPlugin.read_frame(testFrame));
 	}
 

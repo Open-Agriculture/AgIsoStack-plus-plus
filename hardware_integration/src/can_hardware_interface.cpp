@@ -21,7 +21,7 @@ namespace isobus
 	std::unique_ptr<std::thread> CANHardwareInterface::updateThread;
 	std::condition_variable CANHardwareInterface::updateThreadWakeupCondition;
 #endif
-	std::uint32_t CANHardwareInterface::periodicUpdateInterval = PERIODIC_UPDATE_INTERVAL;
+	std::atomic<std::uint32_t> CANHardwareInterface::periodicUpdateInterval = { PERIODIC_UPDATE_INTERVAL };
 	std::uint32_t CANHardwareInterface::lastUpdateTimestamp;
 
 	EventDispatcher<const CANMessageFrame &> CANHardwareInterface::frameReceivedEventDispatcher;
@@ -36,7 +36,7 @@ namespace isobus
 	CANHardwareInterface CANHardwareInterface::SINGLETON;
 
 	CANHardwareInterface::CANHardware::CANHardware(std::size_t queueCapacity) :
-	  messagesToBeTransmittedQueue(queueCapacity), receivedMessagesQueue(queueCapacity)
+	  messagesToBeTransmittedQueue(queueCapacity), receivedMessagesQueue(queueCapacity), maxFramesReceivedPerUpdate(queueCapacity)
 	{
 	}
 
@@ -262,6 +262,16 @@ namespace isobus
 	{
 		LOCK_GUARD(Mutex, hardwareChannelsMutex);
 
+		if (!started)
+		{
+			// A transmit that passed its started check just before stop() can still queue a frame after stop() cleared the queue.
+			// Producers are refused until started is set, so only such old frames are dropped here
+			for (const auto &channel : hardwareChannels)
+			{
+				channel->messagesToBeTransmittedQueue.clear();
+			}
+		}
+
 		if (start_thread)
 		{
 #if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
@@ -375,24 +385,67 @@ namespace isobus
 	{
 		if (started)
 		{
-			{
-				// Stage 1 - Receiving messages from hardware
+			// The lock is taken per frame and released before the frame is handed on, so
+			// callbacks run without it and may call back into this interface.
+			auto receive_next_frame = [](std::uint8_t channelIndex, CANMessageFrame &frame) {
 				LOCK_GUARD(Mutex, hardwareChannelsMutex);
-				for (std::uint8_t i = 0; i < hardwareChannels.size(); i++)
+				bool retVal = (channelIndex < hardwareChannels.size()) &&
+				  hardwareChannels[channelIndex]->receivedMessagesQueue.peek(frame);
+				if (retVal)
 				{
+					hardwareChannels[channelIndex]->receivedMessagesQueue.pop();
+				}
+				return retVal;
+			};
+			auto transmit_next_frame = [](std::uint8_t channelIndex, CANMessageFrame &frame) {
+				LOCK_GUARD(Mutex, hardwareChannelsMutex);
+				bool retVal = (channelIndex < hardwareChannels.size()) &&
+				  hardwareChannels[channelIndex]->messagesToBeTransmittedQueue.peek(frame) &&
+				  hardwareChannels[channelIndex]->transmit_can_frame(frame);
+				if (retVal)
+				{
+					hardwareChannels[channelIndex]->messagesToBeTransmittedQueue.pop();
+				}
+				return retVal;
+			};
+
+			std::size_t numberOfChannels = 0;
+			{
+				LOCK_GUARD(Mutex, hardwareChannelsMutex);
+				numberOfChannels = hardwareChannels.size();
+			}
+
+			// Stage 1 - Receiving messages from hardware
+			for (std::uint8_t i = 0; i < numberOfChannels; i++)
+			{
 #if defined CAN_STACK_DISABLE_THREADS || defined ARDUINO
-					// If we don't have threads, we need to poll the hardware for messages here
-					hardwareChannels[i]->receive_can_frame();
+				// Without threads, poll the driver here. Take every frame it holds, so a burst
+				// doesn't overflow its receive buffers, but at most one queue's worth and one
+				// update interval, since some drivers wait for the next frame.
+				if (i < hardwareChannels.size())
+				{
+					const std::uint32_t receiveStart = SystemTiming::get_timestamp_ms();
+					std::size_t framesReceived = 0;
+
+					while ((framesReceived < hardwareChannels[i]->maxFramesReceivedPerUpdate) &&
+					       hardwareChannels[i]->receive_can_frame())
+					{
+						framesReceived++;
+
+						if (SystemTiming::time_expired_ms(receiveStart, periodicUpdateInterval))
+						{
+							break;
+						}
+					}
+				}
 #endif
 
-					isobus::CANMessageFrame frame;
-					while (hardwareChannels[i]->receivedMessagesQueue.peek(frame))
-					{
-						frame.channel = i;
-						frameReceivedEventDispatcher.invoke(frame);
-						receive_can_message_frame_from_hardware(frame);
-						hardwareChannels[i]->receivedMessagesQueue.pop();
-					}
+				isobus::CANMessageFrame frame;
+				while (receive_next_frame(i, frame))
+				{
+					frame.channel = i;
+					frameReceivedEventDispatcher.invoke(frame);
+					receive_can_message_frame_from_hardware(frame);
 				}
 			}
 
@@ -405,24 +458,14 @@ namespace isobus
 			}
 
 			// Stage 3 - Transmitting messages to hardware
+			for (std::uint8_t i = 0; i < numberOfChannels; i++)
 			{
-				LOCK_GUARD(Mutex, hardwareChannelsMutex);
-				std::for_each(hardwareChannels.begin(), hardwareChannels.end(), [](const std::unique_ptr<CANHardware> &channel) {
-					isobus::CANMessageFrame frame;
-					while (channel->messagesToBeTransmittedQueue.peek(frame))
-					{
-						if (channel->transmit_can_frame(frame))
-						{
-							frameTransmittedEventDispatcher.invoke(frame);
-							on_transmit_can_message_frame_from_hardware(frame);
-							channel->messagesToBeTransmittedQueue.pop();
-						}
-						else
-						{
-							break;
-						}
-					}
-				});
+				isobus::CANMessageFrame frame;
+				while (transmit_next_frame(i, frame))
+				{
+					frameTransmittedEventDispatcher.invoke(frame);
+					on_transmit_can_message_frame_from_hardware(frame);
+				}
 			}
 		}
 	}
@@ -437,7 +480,7 @@ namespace isobus
 		while (started)
 		{
 			std::unique_lock<std::mutex> threadLock(updateMutex);
-			updateThreadWakeupCondition.wait_for(threadLock, std::chrono::milliseconds(periodicUpdateInterval)); // Update with at least the periodic interval
+			updateThreadWakeupCondition.wait_for(threadLock, std::chrono::milliseconds(periodicUpdateInterval.load())); // Update with at least the periodic interval
 			update();
 		}
 	}
