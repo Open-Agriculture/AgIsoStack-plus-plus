@@ -248,9 +248,9 @@ public:
 		audioVolumeSources.push_back(source);
 	}
 
-	void on_rx_messages_pending() override
+	void on_update_needed() override
 	{
-		rxMessagesPendingCalls++;
+		updateNeededCalls++;
 	}
 
 	void run_update()
@@ -322,7 +322,7 @@ public:
 	std::vector<std::shared_ptr<ControlFunction>> audioSignalSources;
 	std::vector<std::uint8_t> audioVolumes;
 	std::vector<std::shared_ptr<ControlFunction>> audioVolumeSources;
-	std::atomic<std::uint32_t> rxMessagesPendingCalls = { 0 };
+	std::atomic<std::uint32_t> updateNeededCalls = { 0 };
 };
 
 class VirtualTerminalServerMessagingTest : public AgIsoStackTestFixture
@@ -474,12 +474,13 @@ protected:
 	bool poll_for_response(DerivedTestVTServer &server,
 	                       VirtualCANPlugin &plugin,
 	                       std::uint8_t function,
-	                       CANMessageFrame &responseFrame)
+	                       CANMessageFrame &responseFrame,
+	                       std::uint_fast8_t attempts = 50)
 	{
 		bool foundResponse = false;
 
 		// The pool is parsed on a worker thread, so the response only goes out once that thread finishes
-		for (std::uint_fast8_t attempt = 0; (attempt < 50) && (!foundResponse); attempt++)
+		for (std::uint_fast8_t attempt = 0; (attempt < attempts) && (!foundResponse); attempt++)
 		{
 			server.run_update();
 			time_source.update_for_ms(5);
@@ -652,6 +653,7 @@ protected:
 	{
 		CANHardwareInterface::stop();
 		serverToDrain = nullptr;
+		server->join_parsing_threads();
 		server.reset();
 		VirtualTerminalServerMessagingTest::TearDown();
 	}
@@ -670,6 +672,17 @@ protected:
 		receive_from_client(internalECU, uploader, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
 		testPlugin.clear_queue();
 		return poll_for_response(*server, testPlugin, 0x12, response) && (0x00 == response.data[1]);
+	}
+
+	/// @brief Waits until the server's on_update_needed() was called at least expectedCalls times in total
+	/// @details Waits in real time, not on the test time source, because the parsing thread calls the hook
+	bool wait_for_pending_hook_calls(std::uint32_t expectedCalls)
+	{
+		for (std::uint_fast16_t attempt = 0; (attempt < 1000) && (server->updateNeededCalls < expectedCalls); attempt++)
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
+		return server->updateNeededCalls >= expectedCalls;
 	}
 
 	/// @brief Makes the server answer Load Version with the VT3 test pool
@@ -931,15 +944,47 @@ TEST_F(VirtualTerminalServerBusTest, DroppedObjectPoolTransferFromAnUnmanagedSou
 TEST_F(VirtualTerminalServerBusTest, PendingHookIsCalledOncePerDrain)
 {
 	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
-	const std::uint32_t before = server->rxMessagesPendingCalls;
+	const std::uint32_t before = server->updateNeededCalls;
 
 	receive_from_client_without_processing(internalECU, client, { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF });
 	receive_from_client_without_processing(internalECU, client, { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF });
-	EXPECT_EQ(before + 1, server->rxMessagesPendingCalls);
+	EXPECT_EQ(before + 1, server->updateNeededCalls);
 
 	server->process_rx_messages();
 	receive_from_client_without_processing(internalECU, client, { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF });
-	EXPECT_EQ(before + 2, server->rxMessagesPendingCalls);
+	EXPECT_EQ(before + 2, server->updateNeededCalls);
+}
+
+TEST_F(VirtualTerminalServerBusTest, PendingHookIsCalledWhenAnObjectPoolFailsToParse)
+{
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_from_client(internalECU, client, { 0x11, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA });
+	const std::uint32_t before = server->updateNeededCalls;
+
+	// One call for queuing End of Object Pool, one when the parsing thread ends
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	ASSERT_TRUE(wait_for_pending_hook_calls(before + 2));
+	testPlugin.clear_queue();
+
+	// The state is final when the hook is called, so one update() answers
+	CANMessageFrame responseFrame = {};
+	ASSERT_TRUE(poll_for_response(*server, testPlugin, 0x12, responseFrame, 1));
+	EXPECT_EQ(0x01, responseFrame.data[1]); // Error in object pool
+}
+
+TEST_F(VirtualTerminalServerBusTest, PendingHookIsCalledWhenARestoredObjectPoolParses)
+{
+	load_vt3_pool_into_server();
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const std::uint32_t before = server->updateNeededCalls;
+
+	receive_from_client(internalECU, client, { 0xD1, 'V', 'E', 'R', 'S', 'I', 'O', 'N' });
+	ASSERT_TRUE(wait_for_pending_hook_calls(before + 2));
+	testPlugin.clear_queue();
+
+	CANMessageFrame responseFrame = {};
+	ASSERT_TRUE(poll_for_response(*server, testPlugin, 0xD1, responseFrame, 1));
+	EXPECT_EQ(0x00, responseFrame.data[5]); // No error
 }
 
 TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsAnErrorWhenTheObjectPoolFailsToParse)
