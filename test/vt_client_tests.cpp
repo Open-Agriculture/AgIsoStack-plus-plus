@@ -3576,6 +3576,124 @@ TEST_F(VirtualTerminalTest, GetStateReportsTheStateMachineState)
 	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
 }
 
+class VirtualTerminalVersionQueryTest : public VirtualTerminalTest
+  , public ::testing::WithParamInterface<std::uint8_t>
+{
+protected:
+	using State = VirtualTerminalClient::StateMachineState;
+	VirtualCANPlugin serverVT;
+	std::shared_ptr<InternalControlFunction> internalECU;
+	std::shared_ptr<PartneredControlFunction> vtPartner;
+	std::unique_ptr<DerivedTestVTClient> client;
+	const std::vector<std::uint8_t> pool = { 0 };
+
+	void SetUp() override
+	{
+		VirtualTerminalTest::SetUp();
+		serverVT.open();
+		CANHardwareInterface::set_number_of_can_channels(1);
+		CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+		CANHardwareInterface::start(false);
+		internalECU = test_helpers::claim_internal_control_function(0x41, 0, time_source);
+		vtPartner = test_helpers::force_claim_partnered_control_function(0x42, 0);
+		client.reset(new DerivedTestVTClient(vtPartner, internalECU));
+		client->initialize(false);
+		client->set_object_pool(0, &pool, "0123456789abcdef");
+		client->connectedVTVersion = GetParam();
+		client->test_wrapper_refresh_vt_status();
+		serverVT.clear_queue();
+		client->test_wrapper_set_state(State::SendGetVersions);
+		client->update();
+		ASSERT_EQ(State::WaitForGetVersionsResponse, client->state);
+	}
+
+	void TearDown() override
+	{
+		client.reset();
+		CANHardwareInterface::stop();
+		serverVT.close();
+		CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+		CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+		VirtualTerminalTest::TearDown();
+	}
+
+	void reject_query(std::uint8_t query)
+	{
+		client->test_wrapper_process_rx_message(create_vt_to_ecu_message({ 0xFD, query, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }), client.get());
+	}
+
+	void finish_upload()
+	{
+		client->test_wrapper_set_state(State::WaitForEndOfObjectPoolResponse);
+		client->test_wrapper_process_rx_message(create_vt_to_ecu_message({ 0x12, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0xFF }), client.get());
+		EXPECT_EQ(State::SendStoreVersion, client->state);
+	}
+};
+
+TEST_P(VirtualTerminalVersionQueryTest, UnansweredQueryUploadsObjectPool)
+{
+	time_source.update_for_ms(5);
+	CANMessageFrame frame = {};
+	ASSERT_TRUE(serverVT.read_frame(frame));
+	EXPECT_EQ((GetParam() >= 5 ? 0xD3 : 0xDF), frame.data[0]);
+
+	// Older VT5/6 servers can ignore extended queries; silent standard queries recover too.
+	time_source.simulate_delay_ms(2994);
+	client->test_wrapper_refresh_vt_status();
+	client->update();
+	EXPECT_EQ(State::WaitForGetVersionsResponse, client->state);
+	time_source.simulate_delay_ms(2);
+	client->test_wrapper_refresh_vt_status();
+	client->update();
+	ASSERT_EQ(State::UploadObjectPool, client->state);
+
+	std::vector<std::uint8_t> response = { static_cast<std::uint8_t>(GetParam() >= 5 ? 0xD3 : 0xE0), 1 };
+	const std::string label = "0123456789abcdef";
+	const std::size_t labelLength = GetParam() >= 5 ? 32 : 7;
+	response.insert(response.end(), label.begin(), label.begin() + std::min(label.size(), labelLength));
+	response.resize(2 + labelLength, ' ');
+	client->test_wrapper_process_rx_message(create_vt_to_ecu_message(response), client.get());
+	EXPECT_EQ(State::UploadObjectPool, client->state);
+	finish_upload();
+}
+
+TEST_P(VirtualTerminalVersionQueryTest, UnsupportedQueryUploadsImmediately)
+{
+	reject_query(static_cast<std::uint8_t>(GetParam() >= 5 ? 0xDF : 0xD3));
+	client->update();
+	EXPECT_EQ(State::WaitForGetVersionsResponse, client->state);
+	reject_query(static_cast<std::uint8_t>(GetParam() >= 5 ? 0xD3 : 0xDF));
+	client->update();
+	ASSERT_EQ(State::UploadObjectPool, client->state);
+	finish_upload();
+}
+
+TEST_P(VirtualTerminalVersionQueryTest, LostTerminalStatusDoesNotStartAnUpload)
+{
+	reject_query(static_cast<std::uint8_t>(GetParam() >= 5 ? 0xD3 : 0xDF));
+	time_source.simulate_delay_ms(3001);
+	client->update();
+	EXPECT_EQ(State::Disconnected, client->state);
+}
+
+INSTANTIATE_TEST_SUITE_P(StandardAndExtended, VirtualTerminalVersionQueryTest, ::testing::Values<std::uint8_t>(3, 4, 5, 6));
+
+TEST_F(VirtualTerminalTest, UnsentVersionQueryRetainsTheSendFailure)
+{
+	using State = VirtualTerminalClient::StateMachineState;
+	auto internalECU = CANNetworkManager::CANNetwork.create_internal_control_function(NAME(0), 0, 0x41);
+	std::vector<NAMEFilter> vtNameFilters = { NAMEFilter(NAME::NAMEParameters::FunctionCode, static_cast<std::uint8_t>(NAME::Function::VirtualTerminal)) };
+	auto vtPartner = CANNetworkManager::CANNetwork.create_partnered_control_function(0, vtNameFilters);
+	DerivedTestVTClient client(vtPartner, internalECU);
+	client.test_wrapper_set_state(State::SendGetVersions);
+	time_source.simulate_delay_ms(3001);
+	client.test_wrapper_refresh_vt_status();
+	client.update();
+	EXPECT_EQ(State::Failed, client.state);
+	CANNetworkManager::CANNetwork.deactivate_control_function(vtPartner);
+	CANNetworkManager::CANNetwork.deactivate_control_function(internalECU);
+}
+
 TEST_F(VirtualTerminalTest, ObjectPoolParsingWaitsForThreeConsecutiveIdleStatusMessages)
 {
 	using State = VirtualTerminalClient::StateMachineState;

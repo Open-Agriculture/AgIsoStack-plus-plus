@@ -1674,16 +1674,31 @@ namespace isobus
 					         (uses_extended_versions(objectPools[0].versionLabel) ? send_extended_get_versions() : send_get_versions()))
 					{
 						set_state(StateMachineState::WaitForGetVersionsResponse);
+						LOG_INFO("[VT]: Sent %s (label length %zu).", uses_extended_versions(objectPools[0].versionLabel) ? "Extended Get Versions" : "Get Versions", objectPools[0].versionLabel.size());
 					}
 				}
 				break;
 
 				case StateMachineState::WaitForGetVersionsResponse:
 				{
-					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					if (SystemTiming::time_expired_ms(lastVTStatusTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
-						set_state(StateMachineState::Failed);
-						LOG_ERROR("[VT]: Get Versions Response Timeout");
+						set_state(StateMachineState::Disconnected);
+						LOG_ERROR("[VT]: Status Timeout");
+					}
+					else
+					{
+						const auto query = uses_extended_versions(objectPools[0].versionLabel) ? Function::ExtendedGetVersionsMessage : Function::GetVersionsMessage;
+						if (is_function_unsupported(query))
+						{
+							set_state(StateMachineState::UploadObjectPool);
+							LOG_WARNING("[VT]: Versions query unsupported. Uploading object pool.");
+						}
+						else if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+						{
+							set_state(StateMachineState::UploadObjectPool);
+							LOG_WARNING("[VT]: Get Versions Response Timeout. Uploading object pool.");
+						}
 					}
 				}
 				break;

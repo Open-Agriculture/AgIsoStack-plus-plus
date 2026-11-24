@@ -322,6 +322,24 @@ namespace isobus
 		return retVal;
 	}
 
+	void ControlFunctionFunctionalities::set_task_controller_tramline_client_option_state(TaskControllerTramlineClientOptions option, bool optionState)
+	{
+		LOCK_GUARD(Mutex, functionalitiesMutex);
+
+		auto existingFunctionality = get_functionality(Functionalities::TaskControllerTramlineClient);
+
+		if ((supportedFunctionalities.end() != existingFunctionality) &&
+		    (option < TaskControllerTramlineClientOptions::Reserved))
+		{
+			existingFunctionality->set_bit_in_option(0, static_cast<std::uint8_t>(option), optionState);
+		}
+	}
+
+	bool ControlFunctionFunctionalities::get_task_controller_tramline_client_option_state(TaskControllerTramlineClientOptions option)
+	{
+		return get_functionality_byte_option(Functionalities::TaskControllerTramlineClient, 0, static_cast<std::uint8_t>(option));
+	}
+
 	void ControlFunctionFunctionalities::set_basic_tractor_ECU_server_option_state(BasicTractorECUOptions option, bool optionState)
 	{
 		LOCK_GUARD(Mutex, functionalitiesMutex);
