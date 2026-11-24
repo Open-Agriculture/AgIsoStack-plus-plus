@@ -77,21 +77,24 @@ public:
 		wasGBSCallbackHit = true;
 	}
 
-	static void test_command_callback(const std::shared_ptr<MachineSelectedSpeedCommandData>, bool)
+	static void test_command_callback(const std::shared_ptr<MachineSelectedSpeedCommandData>, bool changed)
 	{
 		wasCommandCallbackHit = true;
+		commandCallbackChanged = changed;
 	}
 
 	static bool wasMSSCallbackHit;
 	static bool wasWBSCallbackHit;
 	static bool wasGBSCallbackHit;
 	static bool wasCommandCallbackHit;
+	static bool commandCallbackChanged;
 };
 
 bool TestSpeedInterface::wasMSSCallbackHit = false;
 bool TestSpeedInterface::wasWBSCallbackHit = false;
 bool TestSpeedInterface::wasGBSCallbackHit = false;
 bool TestSpeedInterface::wasCommandCallbackHit = false;
+bool TestSpeedInterface::commandCallbackChanged = false;
 
 class SpeedMessageTest : public AgIsoStackTestFixture
 {
@@ -547,6 +550,7 @@ TEST_F(SpeedMessageTest, ListenOnlyModeAndDecoding)
 		EXPECT_EQ(false, TestSpeedInterface::wasMSSCallbackHit);
 		EXPECT_EQ(false, TestSpeedInterface::wasWBSCallbackHit);
 		EXPECT_EQ(true, TestSpeedInterface::wasCommandCallbackHit);
+		EXPECT_TRUE(TestSpeedInterface::commandCallbackChanged);
 		TestSpeedInterface::wasCommandCallbackHit = false;
 
 		EXPECT_EQ(1, interfaceUnderTest.get_number_received_machine_selected_speed_command_sources());

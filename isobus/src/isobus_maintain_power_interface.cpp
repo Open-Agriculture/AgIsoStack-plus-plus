@@ -317,6 +317,7 @@ namespace isobus
 									keySwitchLog = "[Maintain Power]: The key switch state is detected as NOT OFF.";
 									targetInterface->keyNotOffTimestamp = SystemTiming::get_timestamp_ms();
 								}
+								targetInterface->keySwitchOffSendPending = false;
 								targetInterface->maintainPowerTransmitTimestamp_ms = 0;
 							}
 							break;
@@ -325,6 +326,7 @@ namespace isobus
 							{
 								targetInterface->keyOffTimestamp = 0;
 								targetInterface->keyNotOffTimestamp = 0;
+								targetInterface->keySwitchOffSendPending = false;
 								targetInterface->maintainPowerTransmitTimestamp_ms = 0;
 							}
 							break;

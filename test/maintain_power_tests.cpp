@@ -372,7 +372,7 @@ TEST_F(MaintainPowerTest, LateUpdateAfterKeyOffSendsOnce)
 	testPlugin.close();
 }
 
-TEST_F(MaintainPowerTest, KeyOnBeforeUpdateStopsRepeats)
+TEST_F(MaintainPowerTest, KeyOnBeforeUpdateSendsNoRequest)
 {
 	VirtualCANPlugin testPlugin;
 	testPlugin.open();
@@ -410,8 +410,6 @@ TEST_F(MaintainPowerTest, KeyOnBeforeUpdateStopsRepeats)
 
 	interfaceUnderTest.update();
 	time_source.update_for_ms(5);
-	ASSERT_TRUE(testPlugin.read_frame(testFrame));
-	EXPECT_EQ(0x18FE4784, testFrame.identifier);
 	EXPECT_TRUE(testPlugin.get_queue_empty());
 
 	time_source.simulate_delay_ms(1100);

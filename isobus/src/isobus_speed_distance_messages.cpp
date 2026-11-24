@@ -412,9 +412,9 @@ namespace isobus
 							LOCK_GUARD(Mutex, receivedMessagesMutex);
 							std::shared_ptr<MachineSelectedSpeedCommandData> &stored = find_or_add_received_message(targetInterface->receivedMachineSelectedSpeedCommandMessages, message.get_source_control_function());
 							updated = std::make_shared<MachineSelectedSpeedCommandData>(*stored);
-							updated->set_machine_speed_setpoint_command(message.get_uint16_at(0));
-							updated->set_machine_selected_speed_setpoint_limit(message.get_uint16_at(2));
-							updated->set_machine_direction_of_travel(static_cast<MachineDirection>(message.get_uint8_at(7) & 0x03));
+							changed |= updated->set_machine_speed_setpoint_command(message.get_uint16_at(0));
+							changed |= updated->set_machine_selected_speed_setpoint_limit(message.get_uint16_at(2));
+							changed |= updated->set_machine_direction_of_travel(static_cast<MachineDirection>(message.get_uint8_at(7) & 0x03));
 							updated->set_timestamp_ms(SystemTiming::get_timestamp_ms());
 							stored = updated;
 						}
