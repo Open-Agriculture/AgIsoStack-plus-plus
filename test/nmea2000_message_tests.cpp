@@ -638,6 +638,7 @@ TEST_F(NMEA2000Test, NMEA2KInterface)
 		EXPECT_TRUE(wasDatumCallbackHit);
 		EXPECT_EQ(1, interfaceUnderTest.get_number_received_datum_message_sources());
 		EXPECT_NE(nullptr, interfaceUnderTest.get_received_datum_message(0));
+		EXPECT_EQ(SystemTiming::get_timestamp_ms(), interfaceUnderTest.get_received_datum_message(0)->get_timestamp());
 		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 
