@@ -11,6 +11,7 @@
 
 #include <array>
 #include <atomic>
+#include <functional>
 #include <map>
 #include <mutex>
 #include <thread>
@@ -53,7 +54,8 @@ namespace isobus
 		~VirtualTerminalServerManagedWorkingSet();
 
 		/// @brief Starts a thread to parse the received object pool files
-		void start_parsing_thread();
+		/// @param[in] onParsingEnded Called on the parsing thread after the processing state becomes Success or Fail, can be nullptr
+		void start_parsing_thread(const std::function<void()> &onParsingEnded = nullptr);
 
 		/// @brief Joins the parsing thread
 		void join_parsing_thread();

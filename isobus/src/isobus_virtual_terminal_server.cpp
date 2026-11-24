@@ -339,7 +339,16 @@ namespace isobus
 			                                                                                          this);
 		}
 
-		// A shut down working set can still be parsing its object pool, and its thread must not outlive it
+		// Fallback for an owner that did not call join_parsing_threads(): a parsing thread must not outlive the server
+		join_parsing_threads();
+	}
+
+	void VirtualTerminalServer::join_parsing_threads()
+	{
+		for (const auto &workingSet : managedWorkingSetList)
+		{
+			workingSet->join_parsing_thread();
+		}
 		for (const auto &shutDown : pendingShutdowns)
 		{
 			shutDown.first->join_parsing_thread();
@@ -443,7 +452,7 @@ namespace isobus
 	{
 	}
 
-	void VirtualTerminalServer::on_rx_messages_pending()
+	void VirtualTerminalServer::on_update_needed()
 	{
 	}
 
@@ -1094,7 +1103,7 @@ namespace isobus
 						managedWorkingSet->set_iop_size(static_cast<std::uint32_t>(loadedVersion.size()));
 						managedWorkingSet->add_iop_raw_data(loadedVersion);
 						managedWorkingSet->set_was_object_pool_loaded_from_non_volatile_memory(true, isExtended, {});
-						managedWorkingSet->start_parsing_thread();
+						managedWorkingSet->start_parsing_thread([this]() { on_update_needed(); });
 						LOG_DEBUG("[VT Server]: Starting parsing thread for loaded pool data.");
 					}
 					else
@@ -1258,7 +1267,7 @@ namespace isobus
 				}
 				else if (managedWorkingSet->get_any_object_pools())
 				{
-					managedWorkingSet->start_parsing_thread();
+					managedWorkingSet->start_parsing_thread([this]() { on_update_needed(); });
 				}
 				else
 				{
@@ -2801,7 +2810,7 @@ namespace isobus
 
 			if (notify)
 			{
-				server->on_rx_messages_pending();
+				server->on_update_needed();
 			}
 		}
 	}

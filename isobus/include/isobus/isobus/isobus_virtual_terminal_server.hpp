@@ -31,9 +31,9 @@ namespace isobus
 	/// The data for these masks is contained in object definitions that are loaded into a VT via the ISO 11783 CAN bus, or from non-volatile memory.
 	/// See ISO 11783-6 for the complete definition of this interface, and the objects involved.
 	/// Received commands are queued and processed in update(), so every function you override and every event dispatcher
-	/// is called on the thread that calls update(), except on_rx_messages_pending(). Call process_macro(), the send functions
+	/// is called on the thread that calls update(), except on_update_needed(). Call process_macro(), the send functions
 	/// and functions that read or change a working set, like set_object_focus() and set_object_open_for_input(), from that thread as well.
-	/// A command is answered only when update() processes it, so call update() often, or wake it up from on_rx_messages_pending().
+	/// A command is answered only when update() processes it, so call update() often, or wake it up from on_update_needed().
 	class VirtualTerminalServer : public VirtualTerminalBase
 	{
 	public:
@@ -49,9 +49,15 @@ namespace isobus
 		VirtualTerminalServer(std::shared_ptr<InternalControlFunction> controlFunctionToUse);
 
 		/// @brief Destructor for the VirtualTerminalServer
-		/// @details Stop the CAN hardware interface before destroying the server, so no received message is being queued
-		/// and on_rx_messages_pending() is not running while it is destroyed. CANHardwareInterface::stop() waits for its thread to finish.
+		/// @details Before destroying the server, stop the CAN hardware interface, stop calling update(), then call join_parsing_threads(),
+		/// so no received message is being queued and on_update_needed() is not running while it is destroyed.
+		/// CANHardwareInterface::stop() waits for its thread to finish. The destructor joins the parsing threads too, only as a fallback.
 		~VirtualTerminalServer();
+
+		/// @brief Waits until every object pool parsing thread has ended, including those of working sets that have shut down
+		/// @details Call it before destroying the server, see ~VirtualTerminalServer(). The parsing threads call on_update_needed(),
+		/// which must not run once destruction has begun, even in a derived class's destructor.
+		void join_parsing_threads();
 
 		/// @brief Initializes the interface, which registers it with the network manager.
 		void initialize();
@@ -421,11 +427,14 @@ namespace isobus
 		/// @param[in] source The control function that sent the command
 		virtual void set_audio_volume(std::uint8_t volumePercent, std::shared_ptr<ControlFunction> source);
 
-		/// @brief Called when a received message is queued while no other received message was waiting for update()
-		/// @details This is the only function of this class that is called on the thread that receives CAN messages.
-		/// Override it to wake the thread that calls update(), for example by posting an event to it, so commands are answered
-		/// without waiting for the next periodic update(). It must return quickly and must not call into the server.
-		virtual void on_rx_messages_pending();
+		/// @brief Called when update() has new work: a received message was queued while none was waiting, or an object pool finished parsing
+		/// @details This is the only function of this class that is called outside the thread that calls update(): on the thread that
+		/// receives CAN messages and on each thread that parses an object pool, so it can run on several threads at once. Override it to wake
+		/// the thread that calls update(), for example by posting an event to it, so commands and parsed object pools are answered without
+		/// waiting for the next periodic update(). It must return quickly, must not call into the server, and must not wait for anything the
+		/// thread that calls update() can hold, because update() waits for the parsing threads to end. See ~VirtualTerminalServer()
+		/// for the order to shut down in.
+		virtual void on_update_needed();
 
 		//-------------- Callbacks/Event driven interface ---------------------
 

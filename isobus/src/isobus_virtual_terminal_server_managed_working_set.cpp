@@ -42,12 +42,18 @@ namespace isobus
 		join_parsing_thread();
 	}
 
-	void VirtualTerminalServerManagedWorkingSet::start_parsing_thread()
+	void VirtualTerminalServerManagedWorkingSet::start_parsing_thread(const std::function<void()> &onParsingEnded)
 	{
 		if (nullptr == objectPoolProcessingThread)
 		{
 			set_object_pool_processing_state(ObjectPoolProcessingThreadState::Running);
-			objectPoolProcessingThread.reset(new std::thread([this]() { worker_thread_function(); }));
+			objectPoolProcessingThread.reset(new std::thread([this, onParsingEnded]() {
+				worker_thread_function();
+				if (nullptr != onParsingEnded)
+				{
+					onParsingEnded();
+				}
+			}));
 		}
 	}
 
