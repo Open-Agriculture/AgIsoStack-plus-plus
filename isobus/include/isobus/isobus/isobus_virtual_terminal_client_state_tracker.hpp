@@ -31,7 +31,7 @@ namespace isobus
 		explicit VirtualTerminalClientStateTracker(std::shared_ptr<ControlFunction> client);
 
 		/// @brief The destructor.
-		~VirtualTerminalClientStateTracker();
+		virtual ~VirtualTerminalClientStateTracker();
 
 		/// @brief Initializes the state tracker.
 		void initialize();
@@ -157,7 +157,7 @@ namespace isobus
 		std::uint16_t activeDataOrAlarmMask = NULL_OBJECT_ID; ///< Holds the data/alarm mask currently visible on the server for this client.
 		std::deque<std::uint16_t> dataAndAlarmMaskHistory; ///< Holds the history of data/alarm masks that were active on the server for this client.
 		std::size_t maxDataAndAlarmMaskHistorySize = 100; ///< Holds the maximum size of the data/alarm mask history.
-		std::uint8_t activeWorkingSetAddress = NULL_CAN_ADDRESS; ///< Holds the address of the control function that currently has
+		std::uint8_t activeWorkingSetAddress = NULL_CAN_ADDRESS; ///< Holds the address of the working set master that is active on the server.
 		std::map<std::uint16_t, std::uint16_t> softKeyMasks; ///< Holds the data/alarms masks with their associated soft keys masks for tracked objects.
 		std::map<std::uint16_t, std::map<std::uint8_t, std::uint32_t>> attributeStates; ///< Holds the 'attribute' state of tracked objects.
 		//! TODO: std::map<std::uint16_t, std::uint8_t> alarmMaskPrioritiesStates; ///< Holds the 'alarm mask priority' state of tracked objects.
@@ -183,7 +183,7 @@ namespace isobus
 		/// @param[in] message The message to process.
 		void process_status_message(const CANMessage &message);
 
-		/// @brief Processes a VT->ECU message received by any client, sent from the connected server.
+		/// @brief Processes a VT->ECU message sent from the connected server to the tracked client.
 		/// @param[in] message The message to process.
 		void process_message_from_connected_server(const CANMessage &message);
 

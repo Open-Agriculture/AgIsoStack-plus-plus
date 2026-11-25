@@ -48,6 +48,7 @@ set(TEST_SRC
     candlelight_bittiming_tests.cpp
     candlelight_io_tests.cpp
     vt_client_tests.cpp
+    vt_client_state_tracker_tests.cpp
     vt_server_tests.cpp
     language_command_interface_tests.cpp
     tc_client_tests.cpp

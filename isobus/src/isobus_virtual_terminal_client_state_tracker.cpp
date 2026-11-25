@@ -32,21 +32,19 @@ namespace isobus
 	{
 		CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_or_tx_message, this);
 		CANNetworkManager::CANNetwork.add_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal), process_rx_or_tx_message, this);
-		CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_or_tx_message, this);
 	}
 
 	void VirtualTerminalClientStateTracker::terminate()
 	{
 		CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_or_tx_message, this);
 		CANNetworkManager::CANNetwork.remove_any_control_function_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal), process_rx_or_tx_message, this);
-		CANNetworkManager::CANNetwork.remove_global_parameter_group_number_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::VirtualTerminalToECU), process_rx_or_tx_message, this);
 	}
 
 	void VirtualTerminalClientStateTracker::add_tracked_container_shown(std::uint16_t objectId, bool initialValue)
 	{
 		if (shownStates.find(objectId) != shownStates.end())
 		{
-			LOG_WARNING("[VTStateHelper] add_tracked_container_shown: objectId '%lu' already tracked", objectId);
+			LOG_WARNING("[VTStateHelper] add_tracked_container_shown: objectId '%hu' already tracked", objectId);
 			return;
 		}
 
@@ -57,7 +55,7 @@ namespace isobus
 	{
 		if (shownStates.find(objectId) == shownStates.end())
 		{
-			LOG_WARNING("[VTStateHelper] remove_tracked_container_shown: objectId '%lu' was not tracked", objectId);
+			LOG_WARNING("[VTStateHelper] remove_tracked_container_shown: objectId '%hu' was not tracked", objectId);
 			return;
 		}
 
@@ -68,7 +66,7 @@ namespace isobus
 	{
 		if (shownStates.find(objectId) == shownStates.end())
 		{
-			LOG_WARNING("[VTStateHelper] get_container_shown: objectId '%lu' not tracked", objectId);
+			LOG_WARNING("[VTStateHelper] get_container_shown: objectId '%hu' not tracked", objectId);
 			return 0;
 		}
 
@@ -79,7 +77,7 @@ namespace isobus
 	{
 		if (numericValueStates.find(objectId) != numericValueStates.end())
 		{
-			LOG_WARNING("[VTStateHelper] add_tracked_numeric_value: objectId '%lu' already tracked", objectId);
+			LOG_WARNING("[VTStateHelper] add_tracked_numeric_value: objectId '%hu' already tracked", objectId);
 			return;
 		}
 
@@ -90,7 +88,7 @@ namespace isobus
 	{
 		if (numericValueStates.find(objectId) == numericValueStates.end())
 		{
-			LOG_WARNING("[VTStateHelper] remove_tracked_numeric_value: objectId '%lu' was not tracked", objectId);
+			LOG_WARNING("[VTStateHelper] remove_tracked_numeric_value: objectId '%hu' was not tracked", objectId);
 			return;
 		}
 
@@ -101,7 +99,7 @@ namespace isobus
 	{
 		if (numericValueStates.find(objectId) == numericValueStates.end())
 		{
-			LOG_WARNING("[VTStateHelper] get_numeric_value: objectId '%lu' not tracked", objectId);
+			LOG_WARNING("[VTStateHelper] get_numeric_value: objectId '%hu' not tracked", objectId);
 			return 0;
 		}
 
@@ -126,13 +124,14 @@ namespace isobus
 	void VirtualTerminalClientStateTracker::set_max_mask_history_size(std::size_t size)
 	{
 		maxDataAndAlarmMaskHistorySize = size;
+		dataAndAlarmMaskHistory.resize(std::min(size, dataAndAlarmMaskHistory.size()));
 	}
 
 	void VirtualTerminalClientStateTracker::add_tracked_soft_key_mask(std::uint16_t dataOrAlarmMaskId, std::uint16_t initialSoftKeyMaskId)
 	{
 		if (softKeyMasks.find(dataOrAlarmMaskId) != softKeyMasks.end())
 		{
-			LOG_WARNING("[VTStateHelper] add_tracked_soft_key_mask: data/alarm mask '%lu' already tracked", dataOrAlarmMaskId);
+			LOG_WARNING("[VTStateHelper] add_tracked_soft_key_mask: data/alarm mask '%hu' already tracked", dataOrAlarmMaskId);
 			return;
 		}
 
@@ -143,7 +142,7 @@ namespace isobus
 	{
 		if (softKeyMasks.find(dataOrAlarmMaskId) == softKeyMasks.end())
 		{
-			LOG_WARNING("[VTStateHelper] remove_tracked_soft_key_mask: data/alarm mask '%lu' was not tracked", dataOrAlarmMaskId);
+			LOG_WARNING("[VTStateHelper] remove_tracked_soft_key_mask: data/alarm mask '%hu' was not tracked", dataOrAlarmMaskId);
 			return;
 		}
 
@@ -154,7 +153,7 @@ namespace isobus
 	{
 		if (softKeyMasks.find(activeDataOrAlarmMask) == softKeyMasks.end())
 		{
-			LOG_WARNING("[VTStateHelper] get_active_soft_key_mask: the currently active data/alarm mask '%lu' is not tracked", activeDataOrAlarmMask);
+			LOG_WARNING("[VTStateHelper] get_active_soft_key_mask: the currently active data/alarm mask '%hu' is not tracked", activeDataOrAlarmMask);
 			return NULL_OBJECT_ID;
 		}
 
@@ -165,7 +164,7 @@ namespace isobus
 	{
 		if (softKeyMasks.find(dataOrAlarmMaskId) == softKeyMasks.end())
 		{
-			LOG_WARNING("[VTStateHelper] get_soft_key_mask: data/alarm mask '%lu' is not tracked", activeDataOrAlarmMask);
+			LOG_WARNING("[VTStateHelper] get_soft_key_mask: data/alarm mask '%hu' is not tracked", dataOrAlarmMaskId);
 			return NULL_OBJECT_ID;
 		}
 
@@ -187,7 +186,7 @@ namespace isobus
 		auto &attributeMap = attributeStates.at(objectId);
 		if (attributeMap.find(attribute) != attributeMap.end())
 		{
-			LOG_WARNING("[VTStateHelper] add_tracked_attribute: attribute '%lu' of objectId '%lu' already tracked", attribute, objectId);
+			LOG_WARNING("[VTStateHelper] add_tracked_attribute: attribute '%hhu' of objectId '%hu' already tracked", attribute, objectId);
 			return;
 		}
 
@@ -203,14 +202,14 @@ namespace isobus
 	{
 		if (attributeStates.find(objectId) == attributeStates.end())
 		{
-			LOG_WARNING("[VTStateHelper] remove_tracked_attribute: objectId '%lu' was not tracked", objectId);
+			LOG_WARNING("[VTStateHelper] remove_tracked_attribute: objectId '%hu' was not tracked", objectId);
 			return;
 		}
 
 		auto &attributeMap = attributeStates.at(objectId);
 		if (attributeMap.find(attribute) == attributeMap.end())
 		{
-			LOG_WARNING("[VTStateHelper] remove_tracked_attribute: attribute '%lu' of objectId '%lu' was not tracked", attribute, objectId);
+			LOG_WARNING("[VTStateHelper] remove_tracked_attribute: attribute '%hhu' of objectId '%hu' was not tracked", attribute, objectId);
 			return;
 		}
 
@@ -221,14 +220,14 @@ namespace isobus
 	{
 		if (attributeStates.find(objectId) == attributeStates.end())
 		{
-			LOG_WARNING("[VTStateHelper] get_attribute: objectId '%lu' not tracked", objectId);
+			LOG_WARNING("[VTStateHelper] get_attribute: objectId '%hu' not tracked", objectId);
 			return 0;
 		}
 
 		const auto &attributeMap = attributeStates.at(objectId);
 		if (attributeMap.find(attribute) == attributeMap.end())
 		{
-			LOG_WARNING("[VTStateHelper] get_attribute: attribute '%lu' of objectId '%lu' not tracked", attribute, objectId);
+			LOG_WARNING("[VTStateHelper] get_attribute: attribute '%hhu' of objectId '%hu' not tracked", attribute, objectId);
 			return 0;
 		}
 
@@ -244,7 +243,6 @@ namespace isobus
 	{
 		if (activeDataOrAlarmMask != maskId)
 		{
-			// Add the current active mask to the history if it is valid
 			if (activeDataOrAlarmMask != NULL_OBJECT_ID)
 			{
 				dataAndAlarmMaskHistory.push_front(activeDataOrAlarmMask);
@@ -253,16 +251,15 @@ namespace isobus
 					dataAndAlarmMaskHistory.pop_back();
 				}
 			}
-			// Update the active mask
 			activeDataOrAlarmMask = maskId;
 		}
 	}
 
 	void VirtualTerminalClientStateTracker::process_rx_or_tx_message(const CANMessage &message, void *parentPointer)
 	{
-		if ((!message.has_valid_source_control_function()) || (message.get_data_length() == 0))
+		if ((!message.has_valid_source_control_function()) || (CAN_DATA_LENGTH != message.get_data_length()))
 		{
-			// We are not interested in messages without a valid source control function or without data
+			// ISO 11783-6 pads every message read here to 8 bytes
 			return;
 		}
 
@@ -273,7 +270,7 @@ namespace isobus
 		{
 			parent->process_status_message(message);
 		}
-		if (message.is_source(parent->server) && (!message.is_broadcast()) && message.is_parameter_group_number(CANLibParameterGroupNumber::VirtualTerminalToECU))
+		if (message.is_source(parent->server) && message.is_destination(parent->client) && (!message.is_broadcast()) && message.is_parameter_group_number(CANLibParameterGroupNumber::VirtualTerminalToECU))
 		{
 			parent->process_message_from_connected_server(message);
 		}
@@ -285,9 +282,15 @@ namespace isobus
 
 	void VirtualTerminalClientStateTracker::process_status_message(const CANMessage &message)
 	{
-		if (CAN_DATA_LENGTH == message.get_data_length())
+		const std::uint8_t workingSetAddress = message.get_uint8_at(1);
+		const bool isNamingOurClient = (nullptr != client) &&
+		  (client->get_can_port() == message.get_can_port_index()) &&
+		  (client->get_address() == workingSetAddress);
+
+		// Another VT takes over by naming our client
+		if (message.is_source(server) || isNamingOurClient)
 		{
-			activeWorkingSetAddress = message.get_uint8_at(1);
+			activeWorkingSetAddress = workingSetAddress;
 			if (is_working_set_active())
 			{
 				server = message.get_source_control_function();
@@ -308,24 +311,14 @@ namespace isobus
 		{
 			case static_cast<std::uint8_t>(VirtualTerminalClient::Function::VTStatusMessage):
 			{
-				server = message.get_source_control_function();
-				activeWorkingSetAddress = message.get_uint8_at(1);
-				if (is_working_set_active())
-				{
-					cache_active_mask(message.get_uint16_at(2));
-					if (softKeyMasks.find(activeDataOrAlarmMask) != softKeyMasks.end())
-					{
-						std::uint16_t softKeyMask = message.get_uint16_at(4);
-						softKeyMasks[activeDataOrAlarmMask] = softKeyMask;
-					}
-				}
+				process_status_message(message);
 			}
 			break;
 
 			case static_cast<std::uint8_t>(VirtualTerminalClient::Function::ChangeActiveMaskCommand):
 			{
 				auto errorCode = message.get_uint8_at(3);
-				if (errorCode == 0)
+				if (0 == errorCode)
 				{
 					cache_active_mask(message.get_uint16_at(1));
 				}
@@ -334,11 +327,11 @@ namespace isobus
 
 			case static_cast<std::uint8_t>(VirtualTerminalClient::Function::ChangeSoftKeyMaskCommand):
 			{
-				auto errorCode = message.get_uint8_at(3);
-				if (errorCode == 0)
+				auto errorCode = message.get_uint8_at(5);
+				if (0 == errorCode)
 				{
 					std::uint16_t associatedMask = message.get_uint16_at(1);
-					std::uint16_t softKeyMask = message.get_uint16_at(4);
+					std::uint16_t softKeyMask = message.get_uint16_at(3);
 					if (softKeyMasks.find(associatedMask) != softKeyMasks.end())
 					{
 						softKeyMasks[associatedMask] = softKeyMask;
@@ -349,25 +342,8 @@ namespace isobus
 
 			case static_cast<std::uint8_t>(VirtualTerminalClient::Function::ChangeNumericValueCommand):
 			{
-				if (CAN_DATA_LENGTH == message.get_data_length())
-				{
-					auto errorCode = message.get_uint8_at(3);
-					if (errorCode == 0)
-					{
-						std::uint16_t objectId = message.get_uint16_at(1);
-						if (numericValueStates.find(objectId) != numericValueStates.end())
-						{
-							std::uint32_t value = message.get_uint32_at(4);
-							numericValueStates[objectId] = value;
-						}
-					}
-				}
-			}
-			break;
-
-			case static_cast<std::uint8_t>(VirtualTerminalClient::Function::VTChangeNumericValueMessage):
-			{
-				if (CAN_DATA_LENGTH == message.get_data_length())
+				auto errorCode = message.get_uint8_at(3);
+				if (0 == errorCode)
 				{
 					std::uint16_t objectId = message.get_uint16_at(1);
 					if (numericValueStates.find(objectId) != numericValueStates.end())
@@ -379,27 +355,35 @@ namespace isobus
 			}
 			break;
 
+			case static_cast<std::uint8_t>(VirtualTerminalClient::Function::VTChangeNumericValueMessage):
+			{
+				std::uint16_t objectId = message.get_uint16_at(1);
+				if (numericValueStates.find(objectId) != numericValueStates.end())
+				{
+					std::uint32_t value = message.get_uint32_at(4);
+					numericValueStates[objectId] = value;
+				}
+			}
+			break;
+
 			case static_cast<std::uint8_t>(VirtualTerminalClient::Function::ChangeAttributeCommand):
 			{
-				if (CAN_DATA_LENGTH == message.get_data_length())
+				auto errorCode = message.get_uint8_at(4);
+				if (0 == errorCode)
 				{
-					auto errorCode = message.get_uint8_at(4);
-					if (errorCode == 0)
-					{
-						std::uint16_t objectId = message.get_uint16_at(1);
-						std::uint8_t attribute = message.get_uint8_at(3);
-						std::uint8_t error = message.get_uint8_at(4);
+					std::uint16_t objectId = message.get_uint16_at(1);
+					std::uint8_t attribute = message.get_uint8_at(3);
+					std::uint8_t error = message.get_uint8_at(4);
 
-						if (pendingChangeAttributeCommands.find(message.get_destination_control_function()) != pendingChangeAttributeCommands.end())
+					if (pendingChangeAttributeCommands.find(message.get_destination_control_function()) != pendingChangeAttributeCommands.end())
+					{
+						const auto &pendingCommand = pendingChangeAttributeCommands.at(message.get_source_control_function());
+						if ((pendingCommand.objectId == objectId) && (pendingCommand.attribute == attribute) && (0 == error))
 						{
-							const auto &pendingCommand = pendingChangeAttributeCommands.at(message.get_source_control_function());
-							if ((pendingCommand.objectId == objectId) && (pendingCommand.attribute == attribute) && (0 == error))
-							{
-								std::uint32_t value = message.get_uint32_at(5);
-								attributeStates[objectId][attribute] = value;
-							}
-							pendingChangeAttributeCommands.erase(message.get_destination_control_function());
+							std::uint32_t value = message.get_uint32_at(5);
+							attributeStates[objectId][attribute] = value;
 						}
+						pendingChangeAttributeCommands.erase(message.get_destination_control_function());
 					}
 				}
 			}
@@ -417,18 +401,14 @@ namespace isobus
 		{
 			case static_cast<std::uint8_t>(VirtualTerminalClient::Function::ChangeAttributeCommand):
 			{
-				if (CAN_DATA_LENGTH == message.get_data_length())
-				{
-					std::uint16_t objectId = message.get_uint16_at(1);
-					std::uint8_t attribute = message.get_uint8_at(3);
+				std::uint16_t objectId = message.get_uint16_at(1);
+				std::uint8_t attribute = message.get_uint8_at(3);
 
-					// Only track the change if the attribute should be tracked
-					if ((attributeStates.find(objectId) != attributeStates.end()) &&
-					    (attributeStates.at(objectId).find(attribute) != attributeStates.at(objectId).end()))
-					{
-						std::uint32_t value = message.get_uint32_at(4);
-						pendingChangeAttributeCommands[message.get_source_control_function()] = { value, objectId, attribute };
-					}
+				if ((attributeStates.find(objectId) != attributeStates.end()) &&
+				    (attributeStates.at(objectId).find(attribute) != attributeStates.at(objectId).end()))
+				{
+					std::uint32_t value = message.get_uint32_at(4);
+					pendingChangeAttributeCommands[message.get_source_control_function()] = { value, objectId, attribute };
 				}
 			}
 			break;
