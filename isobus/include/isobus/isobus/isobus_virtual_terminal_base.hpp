@@ -253,7 +253,7 @@ namespace isobus
 		{
 			TooManyRanges = 0x01, ///< Too many ranges (more than 255 sub-ranges in the requested range)
 			ErrorInCodePlane = 0x02,
-			AnyOtherError = 0x08
+			AnyOtherError = 0x10
 		};
 
 		/// @brief A struct for storing information of a function assigned to an auxiliary input

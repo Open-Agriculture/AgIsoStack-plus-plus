@@ -969,6 +969,12 @@ namespace isobus
 				std::uint16_t lastWideCharInInquiryRange = get_little_endian_uint16(data, 4);
 				auto errorCode = get_supported_wide_chars(codePlane, firstWideCharInInquiryRange, lastWideCharInInquiryRange, numberOfRanges, wideCharRangeArray);
 
+				if (0 != static_cast<std::uint8_t>(errorCode))
+				{
+					numberOfRanges = 0;
+					wideCharRangeArray.clear();
+				}
+
 				std::vector<std::uint8_t> buffer;
 				buffer.push_back(static_cast<std::uint8_t>(Function::GetSupportedWidecharsMessage));
 				buffer.push_back(codePlane);
@@ -1271,7 +1277,9 @@ namespace isobus
 				}
 				else
 				{
-					LOG_WARNING("[VT Server]: End of object pool message ignored - no object pools are loaded for the source control function");
+					LOG_WARNING("[VT Server]: End of object pool message rejected - no object pools are loaded for the source control function");
+					remove_object_pool(managedWorkingSet);
+					send_end_of_object_pool_response(false, NULL_OBJECT_ID, NULL_OBJECT_ID, get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::AnyOtherError)), message.get_source_control_function(), false, &pendingObjectPoolDeletions.back().failure);
 				}
 			}
 			break;
@@ -1428,7 +1436,9 @@ namespace isobus
 				auto objectId = get_little_endian_uint16(data, 1);
 				auto targetObject = managedWorkingSet->get_object_by_id(objectId);
 
-				if ((nullptr != targetObject) && (VirtualTerminalObjectType::Container == targetObject->get_object_type()))
+				const bool isContainer = (nullptr != targetObject) && (VirtualTerminalObjectType::Container == targetObject->get_object_type());
+
+				if (isContainer && (data[3] <= 1))
 				{
 					std::static_pointer_cast<Container>(targetObject)->set_hidden(0 == data[3]);
 					send_hide_show_object_response(objectId, 0, (0 != data[3]), managedWorkingSet->get_control_function());
@@ -1445,6 +1455,11 @@ namespace isobus
 						LOG_DEBUG("[VT Server]: Client %u show object command %u", managedWorkingSet->get_control_function()->get_address(), objectId);
 						process_macro(targetObject, EventID::OnShow, targetObject->get_object_type(), managedWorkingSet);
 					}
+				}
+				else if (isContainer)
+				{
+					send_hide_show_object_response(objectId, get_bit(static_cast<std::uint8_t>(HideShowObjectErrorBit::CommandError)), (0 != data[3]), managedWorkingSet->get_control_function());
+					LOG_WARNING("[VT Server]: Client %u hide/show object command for %u has an invalid value %u", managedWorkingSet->get_control_function()->get_address(), objectId, data[3]);
 				}
 				else
 				{
@@ -1560,8 +1575,8 @@ namespace isobus
 
 					if (nullptr != lTargetObject)
 					{
-						auto xRelativeChange = static_cast<std::int8_t>(static_cast<std::int16_t>(data[5]) - 127);
-						auto yRelativeChange = static_cast<std::int8_t>(static_cast<std::int16_t>(data[6]) - 127);
+						auto xRelativeChange = static_cast<std::int16_t>(data[5] - 127);
+						auto yRelativeChange = static_cast<std::int16_t>(data[6] - 127);
 						bool anyObjectMatched = parentObject->offset_all_children_with_id(objectID, xRelativeChange, yRelativeChange);
 
 						if (anyObjectMatched)
@@ -2865,7 +2880,7 @@ namespace isobus
 		if ((nullptr != message.get_source_control_function()) &&
 		    (nullptr != parentServer) &&
 		    ((CAN_DATA_LENGTH <= message.get_data_length()) ||
-		     ((message.get_data_length() > 5) && (static_cast<std::uint8_t>(Function::ChangeStringValueCommand) == message.get_uint8_at(0))))) // Technically this message can be 6 bytes
+		     ((message.get_data_length() > 5) && (static_cast<std::uint8_t>(Function::ChangeStringValueCommand) == message.get_uint8_at(0)) && (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal) == message.get_identifier().get_parameter_group_number())))) // Technically this message can be 6 bytes
 		{
 			if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster) == message.get_identifier().get_parameter_group_number())
 			{
@@ -2928,7 +2943,7 @@ namespace isobus
 			                                                        CAN_DATA_LENGTH,
 			                                                        source,
 			                                                        destination,
-			                                                        get_priority());
+			                                                        CANIdentifier::CANPriority::PriorityDefault6);
 		}
 		return retVal;
 	}
@@ -3800,13 +3815,14 @@ namespace isobus
 		if (extendedMacro)
 		{
 			buffer[2] = get_high_byte(objectID);
+			buffer[3] = errorBitfield;
 		}
 		else
 		{
-			buffer[2] = 0xFF;
+			buffer[2] = errorBitfield;
+			buffer[3] = 0xFF;
 		}
 
-		buffer[3] = errorBitfield;
 		buffer[4] = 0xFF;
 		buffer[5] = 0xFF;
 		buffer[6] = 0xFF;

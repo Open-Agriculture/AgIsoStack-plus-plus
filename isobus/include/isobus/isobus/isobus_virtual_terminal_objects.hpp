@@ -305,7 +305,7 @@ namespace isobus
 		/// @param[in] xOffset The relative amount to offset the object(s) by in the X axis
 		/// @param[in] yOffset The relative amount to offset the object(s) by in the Y axis
 		/// @returns true if any child matched the specified object ID, otherwise false if no children were found with the specified ID.
-		bool offset_all_children_with_id(std::uint16_t childObjectID, std::int8_t xOffset, std::int8_t yOffset);
+		bool offset_all_children_with_id(std::uint16_t childObjectID, std::int16_t xOffset, std::int16_t yOffset);
 
 		/// @brief Removes an object reference from another object. All fields must exactly match for the object to be removed.
 		/// This is because objects can have multiple of the same child at different places, so we can't infer which one to

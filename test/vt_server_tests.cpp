@@ -108,10 +108,11 @@ public:
 		}
 	}
 
-	SupportedWideCharsErrorCode get_supported_wide_chars(std::uint8_t, std::uint16_t, std::uint16_t, std::uint8_t &numberOfRanges, std::vector<std::uint8_t> &) override
+	SupportedWideCharsErrorCode get_supported_wide_chars(std::uint8_t, std::uint16_t, std::uint16_t, std::uint8_t &numberOfRanges, std::vector<std::uint8_t> &wideCharRangeArray) override
 	{
-		numberOfRanges = 0;
-		return static_cast<SupportedWideCharsErrorCode>(0);
+		numberOfRanges = wideCharRangeCount;
+		wideCharRangeArray = wideCharRanges;
+		return wideCharsErrorCode;
 	}
 
 	std::vector<std::array<std::uint8_t, 7>> get_versions(NAME) override
@@ -290,6 +291,9 @@ public:
 	using VirtualTerminalServer::send_status_message;
 	using VirtualTerminalServer::store_rx_message;
 
+	SupportedWideCharsErrorCode wideCharsErrorCode = static_cast<SupportedWideCharsErrorCode>(0);
+	std::uint8_t wideCharRangeCount = 0;
+	std::vector<std::uint8_t> wideCharRanges;
 	std::vector<std::uint8_t> versionToLoad;
 	VTVersion version = VTVersion::Version3;
 	bool saveSucceeds = true;
@@ -526,10 +530,10 @@ protected:
 		return foundNack;
 	}
 
-	// A managed working set without an object pool gets no response to an End of Object Pool message, an unmanaged one gets a NACK
+	// Probes with a Change Numeric Value for the null object ID, which changes nothing in a managed working set
 	bool is_managed(std::shared_ptr<InternalControlFunction> server, std::shared_ptr<ControlFunction> client, VirtualCANPlugin &plugin)
 	{
-		return !is_nacked(server, client, plugin, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+		return !is_nacked(server, client, plugin, { 0xA8, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00 });
 	}
 
 	void receive_working_set_member_from_client(std::shared_ptr<ControlFunction> master, std::shared_ptr<ControlFunction> member)
@@ -627,6 +631,9 @@ static const std::vector<std::uint8_t> SELECTABLE_OBJECT_POOL = { 0x11, 0x00, 0x
 /// @brief The selectable pool with Output Polygon 2 (100x50, points (0,0) (100,0) (33,17)), Output Line 3 (10x20, direction 0)
 /// and Macro 5, which Line 3 runs On Change End Point to resize Polygon 2 to 7x8
 static const std::vector<std::uint8_t> POLYGON_AND_LINE_OBJECT_POOL = { 0x11, 0x00, 0x00, 0x00, 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x1B, 0xFF, 0xFF, 0x02, 0x00, 0x10, 0x64, 0x00, 0x32, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x03, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x64, 0x00, 0x00, 0x00, 0x21, 0x00, 0x11, 0x00, 0x03, 0x00, 0x0D, 0xFF, 0xFF, 0x0A, 0x00, 0x14, 0x00, 0x00, 0x01, 0x12, 0x05, 0x05, 0x00, 0x1C, 0x08, 0x00, 0xA6, 0x02, 0x00, 0x07, 0x00, 0x08, 0x00, 0xFF };
+
+/// @brief Working Set 0 holds Object Pointer 1; Data Mask 1000 holds disabled Input Boolean 4 and hidden Container 2 (Input Boolean 3); Input Boolean 5 is on no mask
+static const std::vector<std::uint8_t> INPUT_AND_CONTAINER_OBJECT_POOL = { 0x11, 0x00, 0x00, 0x00, 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x1B, 0xFF, 0xFF, 0xE8, 0x03, 0x01, 0x00, 0xFF, 0xFF, 0x02, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x03, 0x0A, 0x00, 0x0A, 0x00, 0x01, 0x01, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x07, 0x00, 0x0A, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x01, 0x00, 0x04, 0x00, 0x07, 0x00, 0x0A, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x05, 0x00, 0x07, 0x00, 0x0A, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x01, 0x00 };
 
 /// @brief A VT server on a virtual bus with one connected client
 class VirtualTerminalServerBusTest : public VirtualTerminalServerMessagingTest
@@ -774,7 +781,7 @@ TEST_F(VirtualTerminalServerBusTest, NackForUnmanagedWorkingSetIsSentToTheWorkin
 	time_source.update_for_ms(5);
 	ASSERT_TRUE(testPlugin.read_frame(nackFrame));
 
-	const std::uint32_t expectedUnicastIdentifier = test_helpers::create_ext_can_id(static_cast<std::uint8_t>(CANIdentifier::CANPriority::PriorityLowest7),
+	const std::uint32_t expectedUnicastIdentifier = test_helpers::create_ext_can_id(static_cast<std::uint8_t>(CANIdentifier::CANPriority::PriorityDefault6),
 	                                                                                static_cast<std::uint32_t>(CANLibParameterGroupNumber::Acknowledge),
 	                                                                                client,
 	                                                                                internalECU);
@@ -805,6 +812,21 @@ TEST_F(VirtualTerminalServerBusTest, BroadcastFromUnmanagedClientIsNotNacked)
 
 	// The same client is still NACKed for a message sent to the VT
 	EXPECT_TRUE(is_nacked(internalECU, client, testPlugin, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+}
+
+TEST_F(VirtualTerminalServerBusTest, ShortWorkingSetMemberFrameStartingWithChangeStringValueIsIgnored)
+{
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(5,
+	                                                                                                             static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMember),
+	                                                                                                             client,
+	                                                                                                             { 0xB3, 0x01, 0x02, 0x03, 0x04, 0x05 }));
+	CANNetworkManager::CANNetwork.update();
+
+	EXPECT_NO_THROW(server->process_rx_messages());
+	EXPECT_EQ(1U, server->managedWorkingSetList.size());
 }
 
 TEST_F(VirtualTerminalServerBusTest, CommandsAreDroppedWhenTheQueueIsFull)
@@ -1017,6 +1039,19 @@ TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsAnErrorWhenTh
 	EXPECT_EQ(0x01, server->suspensions.front().errorCodes);
 	EXPECT_EQ(0x04, server->suspensions.front().objectPoolErrorCodes);
 	EXPECT_EQ((std::vector<std::string>{ "parsed:81", "suspended:81" }), order);
+}
+
+TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolWithNoObjectPoolIsAnsweredWithAnError)
+{
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+
+	CANMessageFrame response = {};
+	ASSERT_TRUE(send_and_poll({ 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }, response));
+	EXPECT_EQ(0x01, response.data[1]); // Error in object pool
+	EXPECT_EQ(0x04, response.data[6]); // Any other error
+	EXPECT_TRUE(server->parsedWorkingSets.empty());
+	expect_single_suspension(0x01, NULL_OBJECT_ID, NULL_OBJECT_ID, 0x04);
 }
 
 TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsAnErrorWhenTheObjectPoolHasNoWorkingSetObject)
@@ -1540,9 +1575,33 @@ TEST_F(VirtualTerminalServerBusTest, ExecuteMacroCommandIsStillAnswered)
 
 	ASSERT_TRUE(connected);
 	ASSERT_TRUE(answered);
-	EXPECT_EQ(0x05, response.data[1]);
-	EXPECT_EQ(0x00, response.data[3]);
+	EXPECT_EQ((std::vector<std::uint8_t>{ 0xBE, 0x05, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }), payload_of(response));
 	EXPECT_EQ(7, server->managedWorkingSetList.front()->get_object_by_id(2)->get_width());
+}
+
+TEST_F(VirtualTerminalServerBusTest, ExecuteMacroCommandResponseCarriesTheErrorAtIndex2)
+{
+	CANMessageFrame response = {};
+
+	const bool connected = upload_pool(POLYGON_AND_LINE_OBJECT_POOL);
+	// Object 2 is a polygon, not a macro
+	const bool answered = send_and_poll({ 0xBE, 0x02, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }, response);
+
+	ASSERT_TRUE(connected);
+	ASSERT_TRUE(answered);
+	EXPECT_EQ((std::vector<std::uint8_t>{ 0xBE, 0x02, 0x02, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }), payload_of(response));
+}
+
+TEST_F(VirtualTerminalServerBusTest, ExecuteExtendedMacroCommandResponseCarriesBothIDBytes)
+{
+	CANMessageFrame response = {};
+
+	const bool connected = upload_pool(POLYGON_AND_LINE_OBJECT_POOL);
+	const bool answered = send_and_poll({ 0xBC, 0x34, 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }, response);
+
+	ASSERT_TRUE(connected);
+	ASSERT_TRUE(answered);
+	EXPECT_EQ((std::vector<std::uint8_t>{ 0xBC, 0x34, 0x12, 0x01, 0xFF, 0xFF, 0xFF, 0xFF }), payload_of(response));
 }
 
 TEST_F(VirtualTerminalServerBusTest, ThrowingMacroCommandDoesNotSilenceLaterResponses)
@@ -1608,8 +1667,7 @@ TEST_F(VirtualTerminalServerBusTest, CommandsToObjectsOfTheWrongTypeReportTheErr
 		return errorByteOf(*command.begin(), errorByte);
 	};
 
-	// Working Set 0 holds Object Pointer 1; Data Mask 1000 holds disabled Input Boolean 4 and hidden Container 2 (Input Boolean 3); Input Boolean 5 is on no mask
-	const bool connected = upload_pool({ 0x11, 0x00, 0x00, 0x00, 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x1B, 0xFF, 0xFF, 0xE8, 0x03, 0x01, 0x00, 0xFF, 0xFF, 0x02, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x03, 0x0A, 0x00, 0x0A, 0x00, 0x01, 0x01, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x07, 0x00, 0x0A, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x01, 0x00, 0x04, 0x00, 0x07, 0x00, 0x0A, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x05, 0x00, 0x07, 0x00, 0x0A, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x01, 0x00 });
+	const bool connected = upload_pool(INPUT_AND_CONTAINER_OBJECT_POOL);
 
 	const int changeSize = errorCodeOf({ 0xA6, 0x01, 0x00, 0x0A, 0x00, 0x0A, 0x00, 0xFF }, 3);
 	const int changeBackgroundColour = errorCodeOf({ 0xA7, 0x01, 0x00, 0x05, 0xFF, 0xFF, 0xFF, 0xFF }, 4);
@@ -1666,6 +1724,50 @@ TEST_F(VirtualTerminalServerBusTest, CommandsToObjectsOfTheWrongTypeReportTheErr
 	ASSERT_TRUE(openOnVersion3Answered);
 	EXPECT_EQ(0x01, openOnVersion3.data[3]);
 	EXPECT_EQ(0x00, openOnVersion3.data[4]);
+}
+
+TEST_F(VirtualTerminalServerBusTest, HideShowObjectWithAnInvalidCommandValueIsRefusedAndKeepsTheContainerState)
+{
+	CANMessageFrame response = {};
+
+	const bool connected = upload_pool(INPUT_AND_CONTAINER_OBJECT_POOL);
+	const bool answered = send_and_poll({ 0xA0, 0x02, 0x00, 0x02, 0xFF, 0xFF, 0xFF, 0xFF }, response);
+
+	ASSERT_TRUE(connected);
+	ASSERT_TRUE(answered);
+	EXPECT_EQ(0x04, response.data[4]); // Command error
+	EXPECT_TRUE(std::static_pointer_cast<Container>(server->managedWorkingSetList.front()->get_object_by_id(2))->get_hidden());
+}
+
+TEST_F(VirtualTerminalServerBusTest, ChangeChildLocationOffsetOf255MovesTheChildBy128Pixels)
+{
+	CANMessageFrame response = {};
+
+	ASSERT_TRUE(upload_pool(INPUT_AND_CONTAINER_OBJECT_POOL));
+	ASSERT_TRUE(send_and_poll({ 0xA5, 0xE8, 0x03, 0x02, 0x00, 0xFF, 0x7F, 0xFF }, response));
+	const auto dataMask = server->managedWorkingSetList.front()->get_object_by_id(1000);
+
+	ASSERT_NE(nullptr, dataMask);
+	EXPECT_EQ(0x00, response.data[5]);
+	ASSERT_EQ(2U, dataMask->get_number_children());
+	EXPECT_EQ(2, dataMask->get_child_id(1));
+	EXPECT_EQ(128, dataMask->get_child_x(1));
+	EXPECT_EQ(0, dataMask->get_child_y(1));
+}
+
+TEST_F(VirtualTerminalServerBusTest, SupportedWideCharsErrorResponseCarriesNoRanges)
+{
+	CANMessageFrame response = {};
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	server->wideCharsErrorCode = VirtualTerminalBase::SupportedWideCharsErrorCode::AnyOtherError;
+	server->wideCharRangeCount = 2;
+	server->wideCharRanges = { 0x20, 0x00, 0x7E, 0x00, 0xA0, 0x00, 0xFF, 0x00 };
+	const bool answered = send_and_poll({ 0xC1, 0x00, 0x20, 0x00, 0xFF, 0x00, 0xFF, 0xFF }, response);
+
+	ASSERT_TRUE(answered);
+	EXPECT_EQ((std::vector<std::uint8_t>{ 0xC1, 0x00, 0x20, 0x00, 0xFF, 0x00, 0x10, 0x00 }), payload_of(response));
 }
 
 TEST_F(VirtualTerminalServerBusTest, GetSupportedObjectsResponseIsASortedListOfVariableLength)
