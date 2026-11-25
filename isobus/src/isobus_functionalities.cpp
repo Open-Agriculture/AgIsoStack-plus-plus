@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
 #include <limits>
 
 namespace isobus
@@ -52,6 +53,11 @@ namespace isobus
 			newFunctionality.configure_default_data();
 			newFunctionality.generation = functionalityGeneration;
 			supportedFunctionalities.emplace_back(newFunctionality);
+		}
+		else if ((supportedFunctionalities.end() != existingFunctionality) && isSupported)
+		{
+			// Keep the options that are already configured, only the generation changes
+			existingFunctionality->generation = functionalityGeneration;
 		}
 		else if ((supportedFunctionalities.end() != existingFunctionality) && (!isSupported))
 		{
@@ -161,7 +167,10 @@ namespace isobus
 
 	bool ControlFunctionFunctionalities::get_aux_N_inputs_option_state(AuxNOptions option)
 	{
-		return get_functionality_byte_option(Functionalities::AuxNInputs, 0, static_cast<std::uint8_t>(option));
+		// Read from the byte and bit that set_aux_N_inputs_option_state() writes to
+		return get_functionality_byte_option(Functionalities::AuxNInputs,
+		                                     option > AuxNOptions::SupportsType7Function ? 1 : 0,
+		                                     option > AuxNOptions::SupportsType7Function ? static_cast<std::uint8_t>(static_cast<std::uint16_t>(option) >> 8) : static_cast<std::uint8_t>(option));
 	}
 
 	void ControlFunctionFunctionalities::set_aux_N_functions_option_state(AuxNOptions option, bool optionState)
@@ -181,7 +190,10 @@ namespace isobus
 
 	bool ControlFunctionFunctionalities::get_aux_N_functions_option_state(AuxNOptions option)
 	{
-		return get_functionality_byte_option(Functionalities::AuxNFunctions, 0, static_cast<std::uint8_t>(option));
+		// Read from the byte and bit that set_aux_N_functions_option_state() writes to
+		return get_functionality_byte_option(Functionalities::AuxNFunctions,
+		                                     option > AuxNOptions::SupportsType7Function ? 1 : 0,
+		                                     option > AuxNOptions::SupportsType7Function ? static_cast<std::uint8_t>(static_cast<std::uint16_t>(option) >> 8) : static_cast<std::uint8_t>(option));
 	}
 
 	void ControlFunctionFunctionalities::set_task_controller_geo_server_option_state(TaskControllerGeoServerOptions option, bool optionState)
@@ -308,6 +320,24 @@ namespace isobus
 			retVal = existingFunctionality->serializedValue.at(1);
 		}
 		return retVal;
+	}
+
+	void ControlFunctionFunctionalities::set_task_controller_tramline_client_option_state(TaskControllerTramlineClientOptions option, bool optionState)
+	{
+		LOCK_GUARD(Mutex, functionalitiesMutex);
+
+		auto existingFunctionality = get_functionality(Functionalities::TaskControllerTramlineClient);
+
+		if ((supportedFunctionalities.end() != existingFunctionality) &&
+		    (option < TaskControllerTramlineClientOptions::Reserved))
+		{
+			existingFunctionality->set_bit_in_option(0, static_cast<std::uint8_t>(option), optionState);
+		}
+	}
+
+	bool ControlFunctionFunctionalities::get_task_controller_tramline_client_option_state(TaskControllerTramlineClientOptions option)
+	{
+		return get_functionality_byte_option(Functionalities::TaskControllerTramlineClient, 0, static_cast<std::uint8_t>(option));
 	}
 
 	void ControlFunctionFunctionalities::set_basic_tractor_ECU_server_option_state(BasicTractorECUOptions option, bool optionState)
@@ -478,10 +508,11 @@ namespace isobus
 		LOCK_GUARD(Mutex, functionalitiesMutex);
 
 		auto existingFunctionality = get_functionality(Functionalities::TractorImplementManagementClient);
+		std::uint8_t optionBit = get_tim_option_bit_index(option);
 
-		if (supportedFunctionalities.end() != existingFunctionality)
+		if ((supportedFunctionalities.end() != existingFunctionality) && (optionBit < std::numeric_limits<std::uint8_t>::digits))
 		{
-			existingFunctionality->set_bit_in_option(get_tim_option_byte_index(option), 1 << get_tim_option_bit_index(option), optionState);
+			existingFunctionality->set_bit_in_option(get_tim_option_byte_index(option), static_cast<std::uint8_t>(1 << optionBit), optionState);
 		}
 	}
 
@@ -588,6 +619,16 @@ namespace isobus
 			case Functionalities::BasicTractorECUImplementClient:
 			case Functionalities::FileServer:
 			case Functionalities::FileServerClient:
+			case Functionalities::SequenceControllerServer:
+			case Functionalities::SequenceControllerClient:
+			case Functionalities::ShortcutButtonServer:
+			case Functionalities::ShortcutButtonClient:
+			case Functionalities::DiagnosticTool:
+			case Functionalities::DataLoggerServer:
+			case Functionalities::DataLoggerClient:
+			case Functionalities::SystemInformationServer:
+			case Functionalities::TaskControllerTramlineServer:
+			case Functionalities::TaskControllerTramlineClient:
 			{
 				serializedValue.resize(1);
 				serializedValue.at(0) = 0x00; // No options
@@ -686,12 +727,16 @@ namespace isobus
 		{
 			messageData.push_back(static_cast<std::uint8_t>(functionality.functionality));
 			messageData.push_back(functionality.generation);
-			messageData.push_back(static_cast<std::uint8_t>(functionality.serializedValue.size()));
 
-			for (const auto &dataByte : functionality.serializedValue)
+			// ISO 11783-12 A.12: trailing zero option bytes are omitted and not counted,
+			// so a functionality without options reports 0 option bytes
+			std::size_t numberOfOptionBytes = functionality.serializedValue.size();
+			while ((numberOfOptionBytes > 0) && (0 == functionality.serializedValue.at(numberOfOptionBytes - 1)))
 			{
-				messageData.push_back(dataByte);
+				numberOfOptionBytes--;
 			}
+			messageData.push_back(static_cast<std::uint8_t>(numberOfOptionBytes));
+			messageData.insert(messageData.end(), functionality.serializedValue.begin(), functionality.serializedValue.begin() + static_cast<std::ptrdiff_t>(numberOfOptionBytes));
 		}
 
 		while (messageData.size() < CAN_DATA_LENGTH)
@@ -839,8 +884,21 @@ namespace isobus
 		return retVal;
 	}
 
+	void ControlFunctionFunctionalities::set_reply_destination(std::shared_ptr<ControlFunction> destination)
+	{
+		LOCK_GUARD(Mutex, functionalitiesMutex);
+		replyDestination = destination;
+	}
+
+	std::shared_ptr<ControlFunction> ControlFunctionFunctionalities::get_reply_destination()
+	{
+		LOCK_GUARD(Mutex, functionalitiesMutex);
+		return replyDestination;
+	}
+
 	bool ControlFunctionFunctionalities::pgn_request_handler(std::uint32_t parameterGroupNumber,
-	                                                         std::shared_ptr<ControlFunction>,
+	                                                         std::shared_ptr<ControlFunction> requestingControlFunction,
+	                                                         std::shared_ptr<ControlFunction> destinationControlFunction,
 	                                                         bool &acknowledge,
 	                                                         AcknowledgementType &,
 	                                                         void *parentPointer)
@@ -852,6 +910,9 @@ namespace isobus
 		if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ControlFunctionFunctionalities) == parameterGroupNumber)
 		{
 			acknowledge = false;
+			// ISO 11783-3: a reply that needs the transport protocol goes to the requester of a destination-specific
+			// request, and to the global address (BAM) for a global one
+			targetInterface->set_reply_destination((nullptr != destinationControlFunction) ? requestingControlFunction : nullptr);
 			targetInterface->txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::ControlFunctionFunctionalitiesMessage));
 			retVal = true;
 		}
@@ -866,13 +927,21 @@ namespace isobus
 
 		if (static_cast<std::uint32_t>(TransmitFlags::ControlFunctionFunctionalitiesMessage) == flag)
 		{
+			std::shared_ptr<ControlFunction> destination = targetInterface->get_reply_destination();
+
 			std::vector<std::uint8_t> messageBuffer;
 			targetInterface->get_message_content(messageBuffer);
+
+			// A single frame of this PDU2 message always goes to the global address
+			if (messageBuffer.size() <= CAN_DATA_LENGTH)
+			{
+				destination = nullptr;
+			}
 			transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ControlFunctionFunctionalities),
 			                                                                    messageBuffer.data(),
 			                                                                    messageBuffer.size(),
 			                                                                    targetInterface->myControlFunction,
-			                                                                    nullptr);
+			                                                                    destination);
 		}
 
 		if (!transmitSuccessful)

@@ -247,6 +247,18 @@ Also, Since the ESP-IDF framework expects app_main to have C-linkage and we have
 
     For decreasing the update rate of the stack, set the update period to your desired value in your init/main function: :code:`isobus::CANHardwareInterface::set_periodic_update_interval(10)` for 10ms update period. This matches the default FreeRTOS tick rate of 100Hz.
 
+    .. tip::
+
+        Instead of using menuconfig, you can put these settings in a :code:`sdkconfig.defaults` file next to your :code:`platformio.ini`:
+
+        .. code-block:: text
+
+            CONFIG_PTHREAD_TASK_STACK_SIZE_DEFAULT=8192
+            CONFIG_FREERTOS_HZ=250
+
+        ESP-IDF applies this file whenever it generates the :code:`sdkconfig.<environment>` file for a PlatformIO environment, so the settings also apply when you add an environment for another board.
+        It does not change an :code:`sdkconfig.<environment>` file that already exists, so delete that file after editing :code:`sdkconfig.defaults`.
+
 #.  Close the menuconfig by pressing :code:`Q` on your keyboard, followed by :code:`Y` to save your changes.
 #.  Add your application code and build your project using the PlatformIO extension. That's it! You should now have a working AgIsoStack project on your ESP32.
 
@@ -264,6 +276,8 @@ To build and run a minimal, but interactive project that will load an ISOBUS obj
 .. note::
 	
     The example's :code:`platformio.ini` file is configured for a WROOM/Denky-32 board, so you may need to edit it to match your board type.
+    The pthread stack size and FreeRTOS tick rate from the previous section are already set in the example's :code:`sdkconfig.defaults`, so they apply to whichever board you choose.
+    Make sure you copy that file into your project too.
 
 .. note::
 

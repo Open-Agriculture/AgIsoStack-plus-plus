@@ -1,0 +1,8 @@
+# PlatformIO / ESP-IDF build output
+.pio/
+
+# sdkconfig.<environment> files are generated from sdkconfig.defaults on the first build
+sdkconfig
+sdkconfig.old
+sdkconfig.*
+!sdkconfig.defaults

@@ -95,14 +95,14 @@ namespace isobus
 		class DeviceDescriptorObjectWithWidth
 		{
 		public:
-			/// @brief Gets the width value with priority order: Actual > Maximum > Default
-			/// @returns The width value with the highest priority, or an empty ObjectPoolValue if none are set
+			/// @brief Gets the first non-zero width in priority order Actual > Maximum > Default, editable only if Actual Working Width is
+			/// @returns The width, or a value that does not exist if no width is non-zero
 			ObjectPoolValue get_width_with_priority() const;
 
 			ObjectPoolValue actualWorkingWidth_mm; ///< The actual working width in mm.
 			ObjectPoolValue maximumWorkingWidth_mm; ///< The maximum working width in mm.
 			ObjectPoolValue defaultWorkingWidth_mm; ///< The default working width in mm.
-			ObjectPoolValue width_mm; ///< The width in mm (set based on priority: Actual > Maximum > Default).
+			ObjectPoolValue width_mm; ///< The width in mm, see get_width_with_priority().
 		};
 
 	public:

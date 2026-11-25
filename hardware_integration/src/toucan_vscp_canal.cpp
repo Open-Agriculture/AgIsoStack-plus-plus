@@ -49,17 +49,25 @@ namespace isobus
 
 	void TouCANPlugin::open()
 	{
+		lastError.clear();
 		long tempHandle = CanalOpen(name.c_str(), 0);
 
-		if (0 != tempHandle)
+		if (0 < tempHandle)
 		{
 			handle = tempHandle;
 			openResult = CANAL_ERROR_SUCCESS;
 		}
 		else
 		{
-			LOG_CRITICAL("[TouCAN]: Error trying to connect to TouCAN probe. Check your device ID and serial number.");
+			openResult = CANAL_ERROR_NOT_OPEN;
+			lastError = "Unable to open TouCAN adapter " + name + ", check that it is plugged in and that the device ID and serial number are right.";
+			LOG_CRITICAL("[TouCAN]: " + lastError);
 		}
+	}
+
+	std::string TouCANPlugin::get_last_error() const
+	{
+		return lastError;
 	}
 
 	bool TouCANPlugin::read_frame(isobus::CANMessageFrame &canFrame)

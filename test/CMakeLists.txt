@@ -32,19 +32,23 @@ endif()
 
 # Set test include files
 set(TEST_INCLUDE helpers/control_function_helpers.hpp
-                 helpers/messaging_helpers.hpp)
+                 helpers/messaging_helpers.hpp helpers/object_pool_helpers.hpp)
 
 # Set test source files
 set(TEST_SRC
     core_network_management_tests.cpp
     identifier_tests.cpp
     transport_protocol_tests.cpp
+    extended_transport_protocol_tests.cpp
     diagnostic_protocol_tests.cpp
     virtual_can_plugin_tests.cpp
     address_claim_tests.cpp
     can_name_tests.cpp
     hardware_interface_tests.cpp
+    candlelight_bittiming_tests.cpp
+    candlelight_io_tests.cpp
     vt_client_tests.cpp
+    vt_server_tests.cpp
     language_command_interface_tests.cpp
     tc_client_tests.cpp
     ddop_tests.cpp
@@ -59,24 +63,43 @@ set(TEST_SRC
     nmea2000_message_tests.cpp
     isobus_data_dictionary_tests.cpp
     can_message_tests.cpp
+    to_string_tests.cpp
+    logger_tests.cpp
     heartbeat_tests.cpp
     tc_server_tests.cpp
-    vt_server_tests.cpp
     helpers/test_time_source.cpp
     vt_server_managed_working_set_tests.cpp
     helpers/control_function_helpers.cpp
     helpers/messaging_helpers.cpp)
 
+if(CAN_STACK_DISABLE_THREADS)
+  # Most tests run on the VirtualCAN driver, which needs threads. Without
+  # threads, build the tests for the single-threaded code paths only.
+  set(TEST_SRC hardware_interface_single_thread_tests.cpp to_string_tests.cpp
+               logger_tests.cpp)
+  set(TEST_INCLUDE "")
+endif()
+
 add_executable(unit_tests ${TEST_SRC} ${TEST_INCLUDE})
+target_include_directories(
+  unit_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../hardware_integration/src)
 set_target_properties(
   unit_tests
-  PROPERTIES CXX_STANDARD 11
+  PROPERTIES CXX_STANDARD 17
              CXX_EXTENSIONS OFF
              CXX_STANDARD_REQUIRED ON)
 target_link_libraries(
   unit_tests
   PRIVATE GTest::gtest_main ${PROJECT_NAME}::Isobus
           ${PROJECT_NAME}::HardwareIntegration ${PROJECT_NAME}::Utility)
+
+# Read the test object pool from the source tree, so the tests work from any
+# working directory and without building the examples
+target_compile_definitions(
+  unit_tests
+  PRIVATE
+    VT3_TEST_POOL_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../examples/virtual_terminal/version3_object_pool/VT3TestPool.iop"
+)
 
 include(GoogleTest)
 gtest_discover_tests(unit_tests name_tests identifier_tests)

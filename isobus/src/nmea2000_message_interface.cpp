@@ -29,6 +29,90 @@ namespace isobus
 {
 	using namespace NMEA2000Messages;
 
+	/// @brief Decodes a message into a copy of its sender's last record and stores the copy in place of that record
+	/// @param[in] messages The received messages, one per sender
+	/// @param[in] receivedMessagesMutex The mutex that guards the received messages
+	/// @param[in] message The message to decode
+	/// @param[out] anySignalChanged Set to true if any decoded signal differs from the sender's last record
+	/// @returns The stored record, which must be treated as read-only
+	template<typename T>
+	static std::shared_ptr<T> receive_message(std::vector<std::shared_ptr<T>> &messages, Mutex &receivedMessagesMutex, const CANMessage &message, bool &anySignalChanged)
+	{
+		(void)receivedMessagesMutex; // Unused when threads are disabled
+		const std::shared_ptr<ControlFunction> source = message.get_source_control_function();
+		auto isFromSource = [&source](const std::shared_ptr<T> &received) {
+			return (nullptr != received) && (received->get_control_function() == source);
+		};
+
+		std::shared_ptr<T> previous;
+		{
+			LOCK_GUARD(Mutex, receivedMessagesMutex);
+			auto result = std::find_if(messages.begin(), messages.end(), isFromSource);
+			if (result != messages.end())
+			{
+				previous = *result;
+			}
+		}
+
+		std::shared_ptr<T> updated;
+		bool stored = false;
+		while (!stored)
+		{
+			// Decoding can log, so it runs without the lock
+			if (nullptr != previous)
+			{
+				updated = std::make_shared<T>(*previous);
+			}
+			else
+			{
+				updated = std::make_shared<T>(source);
+			}
+			anySignalChanged = updated->deserialize(message);
+
+			LOCK_GUARD(Mutex, receivedMessagesMutex);
+			auto result = std::find_if(messages.begin(), messages.end(), isFromSource);
+			std::shared_ptr<T> current;
+			if (result != messages.end())
+			{
+				current = *result;
+			}
+
+			if (current == previous)
+			{
+				if (result != messages.end())
+				{
+					*result = updated;
+				}
+				else
+				{
+					messages.push_back(updated);
+				}
+				stored = true;
+			}
+			else
+			{
+				// update() expired the record while this message was decoded, so decode it again against what is stored now
+				previous = current;
+			}
+		}
+		return updated;
+	}
+
+	/// @brief Erases the records that have not been updated within the timeout
+	/// @param[in] messages The received messages, one per sender
+	/// @param[in] timeout_ms How long a record may go without an update
+	/// @returns The number of records erased
+	template<typename T>
+	static std::size_t erase_timed_out_messages(std::vector<std::shared_ptr<T>> &messages, std::uint32_t timeout_ms)
+	{
+		const std::size_t sizeBefore = messages.size();
+		messages.erase(std::remove_if(messages.begin(), messages.end(), [timeout_ms](const std::shared_ptr<T> &message) {
+			               return SystemTiming::time_expired_ms(message->get_timestamp(), timeout_ms);
+		               }),
+		               messages.end());
+		return sizeBefore - messages.size();
+	}
+
 	NMEA2000MessageInterface::NMEA2000MessageInterface(std::shared_ptr<InternalControlFunction> sendingControlFunction,
 	                                                   bool enableSendingCogSogCyclically,
 	                                                   bool enableSendingDatumCyclically,
@@ -97,42 +181,51 @@ namespace isobus
 
 	std::size_t NMEA2000MessageInterface::get_number_received_course_speed_over_ground_message_sources() const
 	{
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
 		return receivedCogSogMessages.size();
 	}
 
 	std::size_t NMEA2000MessageInterface::get_number_received_datum_message_sources() const
 	{
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
 		return receivedDatumMessages.size();
 	}
 
 	std::size_t NMEA2000MessageInterface::get_number_received_gnss_position_data_message_sources() const
 	{
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
 		return receivedGNSSPositionDataMessages.size();
 	}
 
 	std::size_t NMEA2000MessageInterface::get_number_received_position_delta_high_precision_rapid_update_message_sources() const
 	{
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
 		return receivedPositionDeltaHighPrecisionRapidUpdateMessages.size();
 	}
 
 	std::size_t NMEA2000MessageInterface::get_number_received_position_rapid_update_message_sources() const
 	{
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
 		return receivedPositionRapidUpdateMessages.size();
 	}
 
 	std::size_t NMEA2000MessageInterface::get_number_received_rate_of_turn_message_sources() const
 	{
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
 		return receivedRateOfTurnMessages.size();
 	}
 
 	std::size_t NMEA2000MessageInterface::get_number_received_vessel_heading_message_sources() const
 	{
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
 		return receivedVesselHeadingMessages.size();
 	}
 
 	std::shared_ptr<CourseOverGroundSpeedOverGroundRapidUpdate> NMEA2000MessageInterface::get_received_course_speed_over_ground_message(std::size_t index) const
 	{
 		std::shared_ptr<CourseOverGroundSpeedOverGroundRapidUpdate> retVal = nullptr;
+
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
 
 		if (index < receivedCogSogMessages.size())
 		{
@@ -145,6 +238,8 @@ namespace isobus
 	{
 		std::shared_ptr<Datum> retVal = nullptr;
 
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
+
 		if (index < receivedDatumMessages.size())
 		{
 			retVal = receivedDatumMessages.at(index);
@@ -155,6 +250,8 @@ namespace isobus
 	std::shared_ptr<GNSSPositionData> NMEA2000MessageInterface::get_received_gnss_position_data_message(std::size_t index) const
 	{
 		std::shared_ptr<GNSSPositionData> retVal = nullptr;
+
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
 
 		if (index < receivedGNSSPositionDataMessages.size())
 		{
@@ -167,6 +264,8 @@ namespace isobus
 	{
 		std::shared_ptr<PositionDeltaHighPrecisionRapidUpdate> retVal = nullptr;
 
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
+
 		if (index < receivedPositionDeltaHighPrecisionRapidUpdateMessages.size())
 		{
 			retVal = receivedPositionDeltaHighPrecisionRapidUpdateMessages.at(index);
@@ -177,6 +276,8 @@ namespace isobus
 	std::shared_ptr<PositionRapidUpdate> NMEA2000MessageInterface::get_received_position_rapid_update_message(std::size_t index) const
 	{
 		std::shared_ptr<PositionRapidUpdate> retVal = nullptr;
+
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
 
 		if (index < receivedPositionRapidUpdateMessages.size())
 		{
@@ -189,6 +290,8 @@ namespace isobus
 	{
 		std::shared_ptr<RateOfTurn> retVal = nullptr;
 
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
+
 		if (index < receivedRateOfTurnMessages.size())
 		{
 			retVal = receivedRateOfTurnMessages.at(index);
@@ -199,6 +302,8 @@ namespace isobus
 	std::shared_ptr<VesselHeading> NMEA2000MessageInterface::get_received_vessel_heading_message(std::size_t index) const
 	{
 		std::shared_ptr<VesselHeading> retVal = nullptr;
+
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
 
 		if (index < receivedVesselHeadingMessages.size())
 		{
@@ -502,21 +607,9 @@ namespace isobus
 				{
 					if (message.get_source_control_function() != nullptr)
 					{
-						auto result = std::find_if(targetInterface->receivedCogSogMessages.begin(),
-						                           targetInterface->receivedCogSogMessages.end(),
-						                           [&message](const std::shared_ptr<CourseOverGroundSpeedOverGroundRapidUpdate> &receivedCommand) {
-							                           return (nullptr != receivedCommand) && (receivedCommand->get_control_function() == message.get_source_control_function());
-						                           });
-
-						if (result == targetInterface->receivedCogSogMessages.end())
-						{
-							// There is no existing message object from this control function, so create a new one
-							targetInterface->receivedCogSogMessages.push_back(std::make_shared<CourseOverGroundSpeedOverGroundRapidUpdate>(message.get_source_control_function()));
-							result = targetInterface->receivedCogSogMessages.end() - 1;
-						}
-
-						bool anySignalChanged = (*result)->deserialize(message);
-						targetInterface->cogSogEventPublisher.call(*result, anySignalChanged);
+						bool anySignalChanged = false;
+						const auto updated = receive_message(targetInterface->receivedCogSogMessages, targetInterface->receivedMessagesMutex, message, anySignalChanged);
+						targetInterface->cogSogEventPublisher.call(updated, anySignalChanged);
 					}
 				}
 				break;
@@ -525,21 +618,9 @@ namespace isobus
 				{
 					if (message.get_source_control_function() != nullptr)
 					{
-						auto result = std::find_if(targetInterface->receivedDatumMessages.begin(),
-						                           targetInterface->receivedDatumMessages.end(),
-						                           [&message](const std::shared_ptr<Datum> &receivedCommand) {
-							                           return (nullptr != receivedCommand) && (receivedCommand->get_control_function() == message.get_source_control_function());
-						                           });
-
-						if (result == targetInterface->receivedDatumMessages.end())
-						{
-							// There is no existing message object from this control function, so create a new one
-							targetInterface->receivedDatumMessages.push_back(std::make_shared<Datum>(message.get_source_control_function()));
-							result = targetInterface->receivedDatumMessages.end() - 1;
-						}
-
-						bool anySignalChanged = (*result)->deserialize(message);
-						targetInterface->datumEventPublisher.call(*result, anySignalChanged);
+						bool anySignalChanged = false;
+						const auto updated = receive_message(targetInterface->receivedDatumMessages, targetInterface->receivedMessagesMutex, message, anySignalChanged);
+						targetInterface->datumEventPublisher.call(updated, anySignalChanged);
 					}
 				}
 				break;
@@ -548,21 +629,9 @@ namespace isobus
 				{
 					if (message.get_source_control_function() != nullptr)
 					{
-						auto result = std::find_if(targetInterface->receivedGNSSPositionDataMessages.begin(),
-						                           targetInterface->receivedGNSSPositionDataMessages.end(),
-						                           [&message](const std::shared_ptr<GNSSPositionData> &receivedCommand) {
-							                           return (nullptr != receivedCommand) && (receivedCommand->get_control_function() == message.get_source_control_function());
-						                           });
-
-						if (result == targetInterface->receivedGNSSPositionDataMessages.end())
-						{
-							// There is no existing message object from this control function, so create a new one
-							targetInterface->receivedGNSSPositionDataMessages.push_back(std::make_shared<GNSSPositionData>(message.get_source_control_function()));
-							result = targetInterface->receivedGNSSPositionDataMessages.end() - 1;
-						}
-
-						bool anySignalChanged = (*result)->deserialize(message);
-						targetInterface->gnssPositionDataEventPublisher.call(*result, anySignalChanged);
+						bool anySignalChanged = false;
+						const auto updated = receive_message(targetInterface->receivedGNSSPositionDataMessages, targetInterface->receivedMessagesMutex, message, anySignalChanged);
+						targetInterface->gnssPositionDataEventPublisher.call(updated, anySignalChanged);
 					}
 				}
 				break;
@@ -571,21 +640,9 @@ namespace isobus
 				{
 					if (message.get_source_control_function() != nullptr)
 					{
-						auto result = std::find_if(targetInterface->receivedPositionDeltaHighPrecisionRapidUpdateMessages.begin(),
-						                           targetInterface->receivedPositionDeltaHighPrecisionRapidUpdateMessages.end(),
-						                           [&message](const std::shared_ptr<PositionDeltaHighPrecisionRapidUpdate> &receivedCommand) {
-							                           return (nullptr != receivedCommand) && (receivedCommand->get_control_function() == message.get_source_control_function());
-						                           });
-
-						if (result == targetInterface->receivedPositionDeltaHighPrecisionRapidUpdateMessages.end())
-						{
-							// There is no existing message object from this control function, so create a new one
-							targetInterface->receivedPositionDeltaHighPrecisionRapidUpdateMessages.push_back(std::make_shared<PositionDeltaHighPrecisionRapidUpdate>(message.get_source_control_function()));
-							result = targetInterface->receivedPositionDeltaHighPrecisionRapidUpdateMessages.end() - 1;
-						}
-
-						bool anySignalChanged = (*result)->deserialize(message);
-						targetInterface->positionDeltaHighPrecisionRapidUpdateEventPublisher.call(*result, anySignalChanged);
+						bool anySignalChanged = false;
+						const auto updated = receive_message(targetInterface->receivedPositionDeltaHighPrecisionRapidUpdateMessages, targetInterface->receivedMessagesMutex, message, anySignalChanged);
+						targetInterface->positionDeltaHighPrecisionRapidUpdateEventPublisher.call(updated, anySignalChanged);
 					}
 				}
 				break;
@@ -594,21 +651,9 @@ namespace isobus
 				{
 					if (message.get_source_control_function() != nullptr)
 					{
-						auto result = std::find_if(targetInterface->receivedPositionRapidUpdateMessages.begin(),
-						                           targetInterface->receivedPositionRapidUpdateMessages.end(),
-						                           [&message](const std::shared_ptr<PositionRapidUpdate> &receivedCommand) {
-							                           return (nullptr != receivedCommand) && (receivedCommand->get_control_function() == message.get_source_control_function());
-						                           });
-
-						if (result == targetInterface->receivedPositionRapidUpdateMessages.end())
-						{
-							// There is no existing message object from this control function, so create a new one
-							targetInterface->receivedPositionRapidUpdateMessages.push_back(std::make_shared<PositionRapidUpdate>(message.get_source_control_function()));
-							result = targetInterface->receivedPositionRapidUpdateMessages.end() - 1;
-						}
-
-						bool anySignalChanged = (*result)->deserialize(message);
-						targetInterface->positionRapidUpdateEventPublisher.call(*result, anySignalChanged);
+						bool anySignalChanged = false;
+						const auto updated = receive_message(targetInterface->receivedPositionRapidUpdateMessages, targetInterface->receivedMessagesMutex, message, anySignalChanged);
+						targetInterface->positionRapidUpdateEventPublisher.call(updated, anySignalChanged);
 					}
 				}
 				break;
@@ -617,21 +662,9 @@ namespace isobus
 				{
 					if (message.get_source_control_function() != nullptr)
 					{
-						auto result = std::find_if(targetInterface->receivedRateOfTurnMessages.begin(),
-						                           targetInterface->receivedRateOfTurnMessages.end(),
-						                           [&message](const std::shared_ptr<RateOfTurn> &receivedCommand) {
-							                           return (nullptr != receivedCommand) && (receivedCommand->get_control_function() == message.get_source_control_function());
-						                           });
-
-						if (result == targetInterface->receivedRateOfTurnMessages.end())
-						{
-							// There is no existing message object from this control function, so create a new one
-							targetInterface->receivedRateOfTurnMessages.push_back(std::make_shared<RateOfTurn>(message.get_source_control_function()));
-							result = targetInterface->receivedRateOfTurnMessages.end() - 1;
-						}
-
-						bool anySignalChanged = (*result)->deserialize(message);
-						targetInterface->rateOfTurnEventPublisher.call(*result, anySignalChanged);
+						bool anySignalChanged = false;
+						const auto updated = receive_message(targetInterface->receivedRateOfTurnMessages, targetInterface->receivedMessagesMutex, message, anySignalChanged);
+						targetInterface->rateOfTurnEventPublisher.call(updated, anySignalChanged);
 					}
 				}
 				break;
@@ -640,21 +673,9 @@ namespace isobus
 				{
 					if (message.get_source_control_function() != nullptr)
 					{
-						auto result = std::find_if(targetInterface->receivedVesselHeadingMessages.begin(),
-						                           targetInterface->receivedVesselHeadingMessages.end(),
-						                           [&message](const std::shared_ptr<VesselHeading> &receivedCommand) {
-							                           return (nullptr != receivedCommand) && (receivedCommand->get_control_function() == message.get_source_control_function());
-						                           });
-
-						if (result == targetInterface->receivedVesselHeadingMessages.end())
-						{
-							// There is no existing message object from this control function, so create a new one
-							targetInterface->receivedVesselHeadingMessages.push_back(std::make_shared<VesselHeading>(message.get_source_control_function()));
-							result = targetInterface->receivedVesselHeadingMessages.end() - 1;
-						}
-
-						bool anySignalChanged = (*result)->deserialize(message);
-						targetInterface->vesselHeadingEventPublisher.call(*result, anySignalChanged);
+						bool anySignalChanged = false;
+						const auto updated = receive_message(targetInterface->receivedVesselHeadingMessages, targetInterface->receivedMessagesMutex, message, anySignalChanged);
+						targetInterface->vesselHeadingEventPublisher.call(updated, anySignalChanged);
 					}
 				}
 				break;
@@ -669,83 +690,54 @@ namespace isobus
 	{
 		if (initialized)
 		{
-			receivedCogSogMessages.erase(std::remove_if(receivedCogSogMessages.begin(),
-			                                            receivedCogSogMessages.end(),
-			                                            [](std::shared_ptr<CourseOverGroundSpeedOverGroundRapidUpdate> message) {
-				                                            if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * CourseOverGroundSpeedOverGroundRapidUpdate::get_timeout()))
-				                                            {
-					                                            LOG_WARNING("[NMEA2K]: COG & SOG message Rx timeout.");
-					                                            return true;
-				                                            }
-				                                            return false;
-			                                            }),
-			                             receivedCogSogMessages.end());
-			receivedDatumMessages.erase(std::remove_if(receivedDatumMessages.begin(),
-			                                           receivedDatumMessages.end(),
-			                                           [](std::shared_ptr<Datum> message) {
-				                                           if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * Datum::get_timeout()))
-				                                           {
-					                                           LOG_WARNING("[NMEA2K]: Datum message Rx timeout.");
-					                                           return true;
-				                                           }
-				                                           return false;
-			                                           }),
-			                            receivedDatumMessages.end());
-			receivedGNSSPositionDataMessages.erase(std::remove_if(receivedGNSSPositionDataMessages.begin(),
-			                                                      receivedGNSSPositionDataMessages.end(),
-			                                                      [](std::shared_ptr<GNSSPositionData> message) {
-				                                                      if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * GNSSPositionData::get_timeout()))
-				                                                      {
-					                                                      LOG_WARNING("[NMEA2K]: GNSS position data message Rx timeout.");
-					                                                      return true;
-				                                                      }
-				                                                      return false;
-			                                                      }),
-			                                       receivedGNSSPositionDataMessages.end());
-			receivedPositionDeltaHighPrecisionRapidUpdateMessages.erase(std::remove_if(receivedPositionDeltaHighPrecisionRapidUpdateMessages.begin(),
-			                                                                           receivedPositionDeltaHighPrecisionRapidUpdateMessages.end(),
-			                                                                           [](std::shared_ptr<PositionDeltaHighPrecisionRapidUpdate> message) {
-				                                                                           if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * PositionDeltaHighPrecisionRapidUpdate::get_timeout()))
-				                                                                           {
-					                                                                           LOG_WARNING("[NMEA2K]: Position Delta High Precision Rapid Update Rx timeout.");
-					                                                                           return true;
-				                                                                           }
-				                                                                           return false;
-			                                                                           }),
-			                                                            receivedPositionDeltaHighPrecisionRapidUpdateMessages.end());
-			receivedPositionRapidUpdateMessages.erase(std::remove_if(receivedPositionRapidUpdateMessages.begin(),
-			                                                         receivedPositionRapidUpdateMessages.end(),
-			                                                         [](std::shared_ptr<PositionRapidUpdate> message) {
-				                                                         if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * PositionRapidUpdate::get_timeout()))
-				                                                         {
-					                                                         LOG_WARNING("[NMEA2K]: Position delta high precision rapid update message Rx timeout.");
-					                                                         return true;
-				                                                         }
-				                                                         return false;
-			                                                         }),
-			                                          receivedPositionRapidUpdateMessages.end());
-			receivedRateOfTurnMessages.erase(std::remove_if(receivedRateOfTurnMessages.begin(),
-			                                                receivedRateOfTurnMessages.end(),
-			                                                [](std::shared_ptr<RateOfTurn> message) {
-				                                                if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * RateOfTurn::get_timeout()))
-				                                                {
-					                                                LOG_WARNING("[NMEA2K]: Rate of turn message Rx timeout.");
-					                                                return true;
-				                                                }
-				                                                return false;
-			                                                }),
-			                                 receivedRateOfTurnMessages.end());
-			receivedVesselHeadingMessages.erase(std::remove_if(receivedVesselHeadingMessages.begin(),
-			                                                   receivedVesselHeadingMessages.end(),
-			                                                   [](std::shared_ptr<VesselHeading> message) {
-				                                                   if (SystemTiming::time_expired_ms(message->get_timestamp(), 3 * VesselHeading::get_timeout()))
-				                                                   {
-					                                                   LOG_WARNING("[NMEA2K]: Vessel heading message Rx timeout.");
-					                                                   return true;
-				                                                   }
-				                                                   return false;
-			                                                   }),
-			                                    receivedVesselHeadingMessages.end());
+			std::size_t cogSogTimeouts = 0;
+			std::size_t datumTimeouts = 0;
+			std::size_t gnssPositionDataTimeouts = 0;
+			std::size_t positionDeltaHighPrecisionRapidUpdateTimeouts = 0;
+			std::size_t positionRapidUpdateTimeouts = 0;
+			std::size_t rateOfTurnTimeouts = 0;
+			std::size_t vesselHeadingTimeouts = 0;
+
+			{
+				LOCK_GUARD(Mutex, receivedMessagesMutex);
+				cogSogTimeouts = erase_timed_out_messages(receivedCogSogMessages, 3 * CourseOverGroundSpeedOverGroundRapidUpdate::get_timeout());
+				datumTimeouts = erase_timed_out_messages(receivedDatumMessages, 3 * Datum::get_timeout());
+				gnssPositionDataTimeouts = erase_timed_out_messages(receivedGNSSPositionDataMessages, 3 * GNSSPositionData::get_timeout());
+				positionDeltaHighPrecisionRapidUpdateTimeouts = erase_timed_out_messages(receivedPositionDeltaHighPrecisionRapidUpdateMessages, 3 * PositionDeltaHighPrecisionRapidUpdate::get_timeout());
+				positionRapidUpdateTimeouts = erase_timed_out_messages(receivedPositionRapidUpdateMessages, 3 * PositionRapidUpdate::get_timeout());
+				rateOfTurnTimeouts = erase_timed_out_messages(receivedRateOfTurnMessages, 3 * RateOfTurn::get_timeout());
+				vesselHeadingTimeouts = erase_timed_out_messages(receivedVesselHeadingMessages, 3 * VesselHeading::get_timeout());
+			}
+
+			// Logged after the lock is released, because a log sink may call back into this interface
+			if (0 != cogSogTimeouts)
+			{
+				LOG_WARNING("[NMEA2K]: COG & SOG message Rx timeout.");
+			}
+			if (0 != datumTimeouts)
+			{
+				LOG_WARNING("[NMEA2K]: Datum message Rx timeout.");
+			}
+			if (0 != gnssPositionDataTimeouts)
+			{
+				LOG_WARNING("[NMEA2K]: GNSS position data message Rx timeout.");
+			}
+			if (0 != positionDeltaHighPrecisionRapidUpdateTimeouts)
+			{
+				LOG_WARNING("[NMEA2K]: Position Delta High Precision Rapid Update Rx timeout.");
+			}
+			if (0 != positionRapidUpdateTimeouts)
+			{
+				LOG_WARNING("[NMEA2K]: Position rapid update message Rx timeout.");
+			}
+			if (0 != rateOfTurnTimeouts)
+			{
+				LOG_WARNING("[NMEA2K]: Rate of turn message Rx timeout.");
+			}
+			if (0 != vesselHeadingTimeouts)
+			{
+				LOG_WARNING("[NMEA2K]: Vessel heading message Rx timeout.");
+			}
 		}
 	}
 

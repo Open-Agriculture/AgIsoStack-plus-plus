@@ -1,9 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 project(seeder_example)
 
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 if(NOT BUILD_EXAMPLES)
   find_package(isobus REQUIRED)
 endif()
@@ -21,6 +18,10 @@ add_executable(
   object_pool.hpp
   section_control_implement_sim.hpp
   section_control_implement_sim.cpp)
+
+target_compile_features(SeederExample PUBLIC cxx_std_11)
+set_target_properties(SeederExample PROPERTIES CXX_EXTENSIONS OFF)
+
 target_link_libraries(
   SeederExample PRIVATE isobus::Isobus isobus::HardwareIntegration
                         Threads::Threads isobus::Utility)

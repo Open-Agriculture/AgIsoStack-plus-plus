@@ -3,12 +3,18 @@
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/nmea2000_fast_packet_protocol.hpp"
 #include "isobus/isobus/nmea2000_message_definitions.hpp"
 #include "isobus/isobus/nmea2000_message_interface.hpp"
 #include "isobus/utility/system_timing.hpp"
 
 #include "helpers/control_function_helpers.hpp"
+#include "helpers/messaging_helpers.hpp"
 #include "helpers/test_fixture.hpp"
+
+#include <array>
+#include <atomic>
+#include <thread>
 
 using namespace isobus;
 using namespace NMEA2000Messages;
@@ -632,6 +638,7 @@ TEST_F(NMEA2000Test, NMEA2KInterface)
 		EXPECT_TRUE(wasDatumCallbackHit);
 		EXPECT_EQ(1, interfaceUnderTest.get_number_received_datum_message_sources());
 		EXPECT_NE(nullptr, interfaceUnderTest.get_received_datum_message(0));
+		EXPECT_EQ(SystemTiming::get_timestamp_ms(), interfaceUnderTest.get_received_datum_message(0)->get_timestamp());
 		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 
@@ -713,7 +720,7 @@ TEST_F(NMEA2000Test, NMEA2KInterface)
 		memcpy(lastFastPacketPayload.data() + 34, &testFrame.data[1], 7);
 		time_source.update_for_ms(51);
 		ASSERT_TRUE(testPlugin.read_frame(testFrame)); // FP Payload 7
-		memcpy(lastFastPacketPayload.data() + 41, &testFrame.data[1], 5);
+		memcpy(lastFastPacketPayload.data() + 41, &testFrame.data[1], 6);
 
 		for (std::uint8_t i = 0; i < 47; i++)
 		{
@@ -751,7 +758,7 @@ TEST_F(NMEA2000Test, NMEA2KInterface)
 
 		testFrame.data[0] = 0x06;
 		testFrame.data[7] = 0xFF;
-		memcpy(&testFrame.data[1], lastFastPacketPayload.data() + 41, 7);
+		memcpy(&testFrame.data[1], lastFastPacketPayload.data() + 41, 6);
 		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 		EXPECT_TRUE(wasGNSSPositionDataCallbackHit);
@@ -1004,4 +1011,177 @@ TEST_F(NMEA2000Test, NMEA2KInterface)
 	}
 
 	CANHardwareInterface::stop();
+}
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+TEST_F(NMEA2000Test, ReceiveThreadDoesNotRaceUpdate)
+{
+	test_helpers::force_claim_partnered_control_function(0x52, 0);
+
+	NMEA2000MessageInterface interfaceUnderTest(nullptr, false, false, false, false, false, false, false);
+	interfaceUnderTest.initialize();
+
+	std::atomic<bool> done = { false };
+	std::thread receiver([&done]() {
+		CANMessageFrame cogSogFrame = {};
+		cogSogFrame.isExtendedFrame = true;
+		cogSogFrame.identifier = 0x19F80252;
+		cogSogFrame.dataLength = CAN_DATA_LENGTH;
+		CANMessageFrame positionFrame = {};
+		positionFrame.isExtendedFrame = true;
+		positionFrame.identifier = 0x19F80152;
+		positionFrame.dataLength = CAN_DATA_LENGTH;
+
+		for (std::uint16_t i = 0; i < 500; i++)
+		{
+			const std::uint8_t value = (0 == (i % 2)) ? 10 : 20;
+			cogSogFrame.data[2] = value;
+			positionFrame.data[0] = value;
+			CANNetworkManager::CANNetwork.process_receive_can_message_frame(cogSogFrame);
+			CANNetworkManager::CANNetwork.process_receive_can_message_frame(positionFrame);
+			CANNetworkManager::CANNetwork.update();
+		}
+		done = true;
+	});
+
+	while (!done)
+	{
+		interfaceUnderTest.update();
+		interfaceUnderTest.get_number_received_course_speed_over_ground_message_sources();
+		interfaceUnderTest.get_number_received_datum_message_sources();
+		interfaceUnderTest.get_number_received_gnss_position_data_message_sources();
+		interfaceUnderTest.get_number_received_position_delta_high_precision_rapid_update_message_sources();
+		interfaceUnderTest.get_number_received_position_rapid_update_message_sources();
+		interfaceUnderTest.get_number_received_rate_of_turn_message_sources();
+		interfaceUnderTest.get_number_received_vessel_heading_message_sources();
+		auto cogSog = interfaceUnderTest.get_received_course_speed_over_ground_message(0);
+		interfaceUnderTest.get_received_datum_message(0);
+		interfaceUnderTest.get_received_gnss_position_data_message(0);
+		interfaceUnderTest.get_received_position_delta_high_precision_rapid_update_message(0);
+		auto position = interfaceUnderTest.get_received_position_rapid_update_message(0);
+		interfaceUnderTest.get_received_rate_of_turn_message(0);
+		interfaceUnderTest.get_received_vessel_heading_message(0);
+		if (nullptr != cogSog)
+		{
+			cogSog->get_raw_course_over_ground();
+		}
+		if (nullptr != position)
+		{
+			position->get_raw_latitude();
+		}
+	}
+	receiver.join();
+
+	auto cogSog = interfaceUnderTest.get_received_course_speed_over_ground_message(0);
+	auto position = interfaceUnderTest.get_received_position_rapid_update_message(0);
+	ASSERT_NE(nullptr, cogSog);
+	ASSERT_NE(nullptr, position);
+	EXPECT_EQ(20, cogSog->get_raw_course_over_ground());
+	EXPECT_EQ(20, position->get_raw_latitude());
+}
+#endif
+
+class FastPacketProtocolTest : public AgIsoStackTestFixture
+{
+};
+
+static constexpr std::uint32_t FAST_PACKET_TEST_PGN = 0x1F001;
+static constexpr std::array<std::uint8_t, 13> FAST_PACKET_TEST_DATA = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 };
+
+struct FastPacketTestContext
+{
+	FastPacketProtocol *protocol;
+	std::shared_ptr<InternalControlFunction> source;
+	std::uint32_t firstCallbackCalls;
+	std::uint32_t secondCallbackCalls;
+	std::uint32_t thirdCallbackCalls;
+};
+
+static void send_again_on_complete(std::uint32_t, std::uint32_t, std::shared_ptr<InternalControlFunction>, std::shared_ptr<ControlFunction>, bool successful, void *parentPointer)
+{
+	auto context = static_cast<FastPacketTestContext *>(parentPointer);
+	EXPECT_TRUE(successful);
+	context->firstCallbackCalls++;
+	if (1 == context->firstCallbackCalls)
+	{
+		EXPECT_TRUE(context->protocol->send_multipacket_message(FAST_PACKET_TEST_PGN,
+		                                                        FAST_PACKET_TEST_DATA.data(),
+		                                                        FAST_PACKET_TEST_DATA.size(),
+		                                                        context->source,
+		                                                        nullptr,
+		                                                        CANIdentifier::CANPriority::PriorityDefault6,
+		                                                        send_again_on_complete,
+		                                                        context));
+	}
+}
+
+TEST_F(FastPacketProtocolTest, TransmitCompleteCallbackCanSendAgain)
+{
+	FastPacketProtocol protocol([](std::uint32_t, CANDataSpan, std::shared_ptr<InternalControlFunction>, std::shared_ptr<ControlFunction>, CANIdentifier::CANPriority) {
+		return true;
+	});
+	FastPacketTestContext context{ &protocol, test_helpers::create_mock_internal_control_function(0x80), 0, 0, 0 };
+
+	ASSERT_TRUE(protocol.send_multipacket_message(FAST_PACKET_TEST_PGN,
+	                                              FAST_PACKET_TEST_DATA.data(),
+	                                              FAST_PACKET_TEST_DATA.size(),
+	                                              context.source,
+	                                              nullptr,
+	                                              CANIdentifier::CANPriority::PriorityDefault6,
+	                                              send_again_on_complete,
+	                                              &context));
+	for (std::uint8_t i = 0; i < 10; i++)
+	{
+		protocol.update();
+	}
+	EXPECT_EQ(2u, context.firstCallbackCalls);
+}
+
+TEST_F(FastPacketProtocolTest, DuplicateSendIsRejected)
+{
+	FastPacketProtocol protocol([](std::uint32_t, CANDataSpan, std::shared_ptr<InternalControlFunction>, std::shared_ptr<ControlFunction>, CANIdentifier::CANPriority) {
+		return true;
+	});
+	auto source = test_helpers::create_mock_internal_control_function(0x80);
+
+	for (bool expected : { true, false })
+	{
+		EXPECT_EQ(expected, protocol.send_multipacket_message(FAST_PACKET_TEST_PGN, FAST_PACKET_TEST_DATA.data(), FAST_PACKET_TEST_DATA.size(), source, nullptr, CANIdentifier::CANPriority::PriorityDefault6, nullptr, nullptr));
+	}
+}
+
+static void count_second_on_receive(const CANMessage &, void *parentPointer)
+{
+	static_cast<FastPacketTestContext *>(parentPointer)->secondCallbackCalls++;
+}
+
+static void count_third_on_receive(const CANMessage &, void *parentPointer)
+{
+	static_cast<FastPacketTestContext *>(parentPointer)->thirdCallbackCalls++;
+}
+
+static void remove_first_and_third_on_receive(const CANMessage &, void *parentPointer)
+{
+	auto context = static_cast<FastPacketTestContext *>(parentPointer);
+	context->firstCallbackCalls++;
+	context->protocol->remove_multipacket_message_callback(FAST_PACKET_TEST_PGN, remove_first_and_third_on_receive, context);
+	context->protocol->remove_multipacket_message_callback(FAST_PACKET_TEST_PGN, count_third_on_receive, context);
+}
+
+TEST_F(FastPacketProtocolTest, ReceiveCallbackCanRemoveCallbacks)
+{
+	FastPacketProtocol protocol(nullptr);
+	FastPacketTestContext context{ &protocol, nullptr, 0, 0, 0 };
+	auto originator = test_helpers::create_mock_control_function(0x81);
+
+	protocol.register_multipacket_message_callback(FAST_PACKET_TEST_PGN, remove_first_and_third_on_receive, &context);
+	protocol.register_multipacket_message_callback(FAST_PACKET_TEST_PGN, count_second_on_receive, &context);
+	protocol.register_multipacket_message_callback(FAST_PACKET_TEST_PGN, count_third_on_receive, &context);
+
+	protocol.process_message(test_helpers::create_message_broadcast(6, FAST_PACKET_TEST_PGN, originator, { 0, 13, 1, 2, 3, 4, 5, 6 }));
+	protocol.process_message(test_helpers::create_message_broadcast(6, FAST_PACKET_TEST_PGN, originator, { 1, 7, 8, 9, 10, 11, 12, 13 }));
+
+	EXPECT_EQ(1u, context.firstCallbackCalls);
+	EXPECT_EQ(1u, context.secondCallbackCalls);
+	EXPECT_EQ(0u, context.thirdCallbackCalls);
 }

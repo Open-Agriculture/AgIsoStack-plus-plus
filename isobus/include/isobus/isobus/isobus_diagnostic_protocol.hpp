@@ -68,6 +68,23 @@ namespace isobus
 			NumberOfFields ///< The number of fields currently defined in the ISO standard
 		};
 
+		/// @brief The diagnostic protocols a control function can support in addition to ISO 11783 (ISO 11783-12:2019, A.6)
+		enum class DiagnosticProtocolIdentificationBit : std::uint8_t
+		{
+			J1939_73 = 0x01, ///< SAE J1939-73
+			ISO14230 = 0x02, ///< ISO 14230 (KWP 2000 using ISO 15765-3 transport protocol)
+			ISO14229_3 = 0x04 ///< ISO 14229-3 (UDS on CAN)
+		};
+
+		/// @brief The approving body of the laboratory that certified the control function (ISO 11783-7, SPN 4315)
+		enum class CertificationLaboratoryType : std::uint8_t
+		{
+			NonCertifiedLaboratoryOrSelfCertification = 0, ///< Non-certified laboratory, or self-certification
+			AEFCertifiedLaboratory = 1, ///< AEF certified laboratory
+			SelfCertifiedBasedOnExistingCertification = 2, ///< Self-certified based on an existing certification
+			NotAvailable = 3 ///< Not available (not certified)
+		};
+
 		/// @brief The DTC lamp status as defined in J1939-73. Not used when in ISO11783 mode
 		enum class LampStatus
 		{
@@ -122,6 +139,7 @@ namespace isobus
 			DM22, ///< Process queued up DM22 responses
 			ECUIdentification, ///< A flag to manage sending the ECU ID message
 			SoftwareIdentification, ///< A flag to manage sending the software ID message
+			ComplianceCertification, ///< A flag to manage sending the ISOBUS compliance certification message
 
 			NumberOfFlags ///< The number of flags in the enum
 		};
@@ -189,7 +207,7 @@ namespace isobus
 
 			/// @brief A useful way to compare DTC objects to each other for equality
 			/// @param[in] obj The "rhs" of the comparison
-			/// @returns `true` if the objects were equal
+			/// @returns `true` if the SPN and FMI match. The lamp is not compared, because it does not identify a DTC
 			bool operator==(const DiagnosticTroubleCode &obj) const;
 
 			/// @brief Returns the occurrence count, which will be kept track of by the protocol
@@ -264,10 +282,11 @@ namespace isobus
 		/// @details See ECUIdentificationFields for a brief description of the fields
 		/// @note The fields in this message are optional and separated by an ASCII "*". It is not necessary to include parametric
 		/// data for all fields. Any additional ECU identification fields defined in the future will be appended at the end.
-		/// @attention Do not include the "*" character in your field values and only use HardwareID when not in J1939 mode.
+		/// @attention Only use HardwareID when not in J1939 mode.
 		/// @param[in] field The field to set
-		/// @param[in] value The string value associated with the ECU ID field
-		void set_ecu_id_field(ECUIdentificationFields field, const std::string &value);
+		/// @param[in] value The string value associated with the ECU ID field. It must not contain the "*" delimiter.
+		/// @returns true if the value was set, false if the field is out of range or the value contains a "*"
+		bool set_ecu_id_field(ECUIdentificationFields field, const std::string &value);
 
 		/// @brief Adds a DTC to the active list, or removes one from the active list
 		/// @details When you call this function with a DTC and `true`, it will be added to the DM1 message.
@@ -275,7 +294,7 @@ namespace isobus
 		/// If you get `false` as a return value, either the DTC was already in the target state or the data was not valid
 		/// @param[in] dtc A diagnostic trouble code whose state should be altered
 		/// @param[in] active Sets if the DTC is currently active or not
-		/// @returns True if the DTC was added/removed from the list, false if DTC was not valid or target state is invalid
+		/// @returns True if the DTC was added/removed from the list or the lamp of an active DTC changed, false if DTC was not valid or target state is invalid
 		bool set_diagnostic_trouble_code_active(const DiagnosticTroubleCode &dtc, bool active);
 
 		/// @brief Returns if a DTC is active
@@ -288,22 +307,48 @@ namespace isobus
 		/// type plate of a product. For vehicles, this number can be the same as the VIN. For stand-alone systems, such as VTs,
 		/// this number can be the same as the ECU ID number. The combination of the product identification code and brand shall
 		/// make the product globally unique.
-		/// @param value The ascii product identification code, up to 50 characters long
-		/// @returns true if the value was set, false if the string is too long
+		/// @param value The ascii product identification code, up to 50 characters long, without a "*"
+		/// @returns true if the value was set, false if the string is too long or contains a "*"
 		bool set_product_identification_code(const std::string &value);
 
 		/// @brief Sets the product identification brand used in the diagnostic protocol "Product Identification" message (PGN 0xFC8D)
 		/// @details The product identification brand specifies the brand of a product. The combination of the product ID code and brand
 		/// shall make the product unique in the world.
-		/// @param value The ascii product brand, up to 50 characters long
-		/// @returns true if the value was set, false if the string is too long
+		/// @param value The ascii product brand, up to 50 characters long, without a "*"
+		/// @returns true if the value was set, false if the string is too long or contains a "*"
 		bool set_product_identification_brand(const std::string &value);
 
 		/// @brief Sets the product identification model used in the diagnostic protocol "Product Identification" message (PGN 0xFC8D)
 		/// @details The product identification model specifies a unique product within a brand.
-		/// @param value The ascii model string, up to 50 characters
-		/// @returns true if the value was set, false if the string is too long
+		/// @param value The ascii model string, up to 50 characters, without a "*"
+		/// @returns true if the value was set, false if the string is too long or contains a "*"
 		bool set_product_identification_model(const std::string &value);
+
+		/// @brief Sets the diagnostic protocols that this control function supports in addition to ISO 11783,
+		/// reported in the "Diagnostic Protocol Identification" message (PGN 0xFD32)
+		/// @details By default none are reported in ISO 11783 mode (ISO 11783-12:2019, A.6). In J1939 mode
+		/// J1939-73 is always reported as well.
+		/// @param[in] protocols The protocols, a combination of DiagnosticProtocolIdentificationBit values
+		void set_additional_diagnostic_protocols(std::uint8_t protocols);
+
+		/// @brief Returns the value sent in the "Diagnostic Protocol Identification" message (PGN 0xFD32)
+		/// @returns The additional diagnostic protocols, plus J1939-73 in J1939 mode
+		std::uint8_t get_diagnostic_protocol_identification() const;
+
+		/// @brief Sets the certification data of the "ISOBUS Compliance Certification" message (PGN 0xFD42, ISO 11783-7)
+		/// @details The message is sent in the format of the 3rd and later editions of ISO 11783-7 (SPN 7446).
+		/// Until this is called, every field is sent as "not available".
+		/// @param[in] year The year of the compliance test protocol the certification test was performed to, 2000 to 2061
+		/// @param[in] revision The revision of that test protocol within the year, 0 to 30
+		/// @param[in] laboratoryType The approving body of the certification laboratory
+		/// @param[in] laboratoryID The manufacturer code of the laboratory, or of this ECU when it is self-certified, 0 to 2047
+		/// @param[in] referenceNumber The certification reference number assigned by the laboratory
+		/// @returns true if the values were set, false if any of them is out of range
+		bool set_compliance_certification(std::uint16_t year,
+		                                  std::uint8_t revision,
+		                                  CertificationLaboratoryType laboratoryType,
+		                                  std::uint16_t laboratoryID,
+		                                  std::uint16_t referenceNumber);
 
 		/// @brief Adds an ascii string to this internal control function's software ID
 		/// @details Use this to identify the software version of your application.
@@ -312,10 +357,11 @@ namespace isobus
 		/// that is version 2.00, you could set field `0` to be "App v1.00" and
 		/// field `1` to be "Bootloader v2.00", and it will be transmitted on request as:
 		/// "App v1.00*Bootloader v2.00*" in accordance with ISO 11783-12
-		/// You can remove a field by setting it to ""
-		/// @param[in] index The field index to set
-		/// @param[in] value The software ID string to add
-		void set_software_id_field(std::uint32_t index, const std::string &value);
+		/// You can clear a field by setting it to "". Cleared fields at the end of the list are removed, so they aren't sent.
+		/// @param[in] index The field index to set, 0 to 249, as the message has at most 250 fields (ISO 11783-12:2019 A.3)
+		/// @param[in] value The software ID string to add. It must not contain the "*" delimiter.
+		/// @returns true if the value was set, false if the index is out of range or the value contains a "*"
+		bool set_software_id_field(std::uint32_t index, const std::string &value);
 
 		/// @brief Informs the diagnostic protocol that you are going to suspend broadcasts
 		/// @details When you call this, DM1 and other broadcasts that come from this protocol will be stopped for the duration specified.
@@ -416,7 +462,7 @@ namespace isobus
 
 		/// @brief Sends a DM1 encoded CAN message
 		/// @returns true if the message was sent, otherwise false
-		bool send_diagnostic_message_1() const;
+		bool send_diagnostic_message_1();
 
 		/// @brief Sends a DM2 encoded CAN message
 		/// @returns true if the message was sent, otherwise false
@@ -425,6 +471,10 @@ namespace isobus
 		/// @brief Sends a message that identifies which diagnostic protocols are supported
 		/// @returns true if the message was sent, otherwise false
 		bool send_diagnostic_protocol_identification() const;
+
+		/// @brief Sends the ISOBUS compliance certification message (PGN 0xFD42)
+		/// @returns true if the message was sent, otherwise false
+		bool send_compliance_certification() const;
 
 		/// @brief Sends the DM13 to alert network devices of impending suspended broadcasts
 		/// @param suspendTime_seconds The number of seconds that the broadcast will be suspended for
@@ -465,23 +515,32 @@ namespace isobus
 		/// @brief Handles PGN requests for the diagnostic protocol
 		/// @param[in] parameterGroupNumber The PGN being requested
 		/// @param[in] requestingControlFunction The control function that is requesting the PGN
+		/// @param[in] destinationControlFunction Where the request was sent, nullptr for a global request
 		/// @param[out] acknowledge Tells the PGN request protocol if it should respond to the request
 		/// @param[out] acknowledgementType The type of acknowledgement to send to the requestor
 		/// @returns true if any callback was able to handle the PGN request
 		bool process_parameter_group_number_request(std::uint32_t parameterGroupNumber,
 		                                            std::shared_ptr<ControlFunction> requestingControlFunction,
+		                                            std::shared_ptr<ControlFunction> destinationControlFunction,
 		                                            bool &acknowledge,
 		                                            AcknowledgementType &acknowledgementType);
+
+		/// @brief Checks that a value can be used as a field in the identification messages
+		/// @param[in] value The value to check
+		/// @returns true if the value doesn't contain the "*" field delimiter
+		static bool is_valid_identification_field(const std::string &value);
 
 		// @brief Handles PGN requests for the diagnostic protocol
 		/// @param[in] parameterGroupNumber The PGN being requested
 		/// @param[in] requestingControlFunction The control function that is requesting the PGN
+		/// @param[in] destinationControlFunction Where the request was sent, nullptr for a global request
 		/// @param[out] acknowledge Tells the PGN request protocol if it should respond to the request
 		/// @param[out] acknowledgementType The type of acknowledgement to send to the requestor
 		/// @param[in] parentPointer Generic context variable, usually a pointer to the class that the callback was registered for
 		/// @returns true if any callback was able to handle the PGN request
 		static bool process_parameter_group_number_request(std::uint32_t parameterGroupNumber,
 		                                                   std::shared_ptr<ControlFunction> requestingControlFunction,
+		                                                   std::shared_ptr<ControlFunction> destinationControlFunction,
 		                                                   bool &acknowledge,
 		                                                   AcknowledgementType &acknowledgementType,
 		                                                   void *parentPointer);
@@ -505,10 +564,17 @@ namespace isobus
 		std::string productIdentificationCode; ///< The product identification code for sending the product identification message
 		std::string productIdentificationBrand; ///< The product identification brand for sending the product identification message
 		std::string productIdentificationModel; ///< The product identification model name for sending the product identification message
+		std::uint8_t additionalDiagnosticProtocols = 0; ///< The diagnostic protocols supported in addition to ISO 11783, see DiagnosticProtocolIdentificationBit
+		std::uint8_t certificationYear = 0x3F; ///< The compliance certification year, as years since 2000, or 0x3F for not available
+		std::uint8_t certificationRevision = 0x1F; ///< The compliance certification revision, or 0x1F for not available
+		CertificationLaboratoryType certificationLaboratoryType = CertificationLaboratoryType::NotAvailable; ///< The approving body of the certification laboratory
+		std::uint16_t certificationLaboratoryID = 0x7FF; ///< The manufacturer code of the certification laboratory, or 0x7FF for not available
+		std::uint16_t certificationReferenceNumber = 0xFFFF; ///< The certification reference number
 		std::uint32_t lastDM1SentTimestamp = 0; ///< A timestamp in milliseconds of the last time a DM1 was sent
 		std::uint32_t lastDM13ReceivedTimestamp = 0; ///< A timestamp in milliseconds when we last got a DM13 message
 		std::uint16_t customDM13SuspensionTime = 0; ///< If using a non-standard DM13 suspension time, this tracks that duration in milliseconds
 		bool broadcastState = true; ///< Bitfield for tracking the network broadcast state for DM13
+		bool noFaultsDM1Pending = false; ///< Set when the last active DTC clears, so one DM1 with no faults goes out at the next 1 s tick
 		bool j1939Mode = false; ///< Tells the protocol to operate according to J1939 instead of ISO11783
 		bool initialized = false; ///< Stores if the interface has been initialized
 	};

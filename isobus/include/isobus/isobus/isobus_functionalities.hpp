@@ -52,8 +52,18 @@ namespace isobus
 			TractorImplementManagementClient = 16,
 			FileServer = 17,
 			FileServerClient = 18,
+			SequenceControllerServer = 19,
+			SequenceControllerClient = 20,
+			ShortcutButtonServer = 21,
+			ShortcutButtonClient = 22,
+			DiagnosticTool = 23,
+			DataLoggerServer = 24,
+			DataLoggerClient = 25,
+			SystemInformationServer = 26,
+			TaskControllerTramlineServer = 27,
+			TaskControllerTramlineClient = 28,
 
-			ReservedRangeBegin = 19,
+			ReservedRangeBegin = 29,
 			MaxFunctionalityReserved = 255
 		};
 
@@ -115,6 +125,18 @@ namespace isobus
 			Reserved = 0xFE
 		};
 
+		/// @brief This option byte reports which task controller tramline (TRACK) options are supported by an
+		/// implement working set master
+		enum class TaskControllerTramlineClientOptions : std::uint8_t
+		{
+			NoOptions = 0x00,
+			TramlineRhythmTransition = 0x01,
+			StorageOfImplementTrackParameters = 0x02,
+			TramlineControl = 0x04,
+
+			Reserved = 0xF8
+		};
+
 		/// @brief This parameter reports which tractor ECU class and functionality options are supported by an implement
 		/// working set master or a tractor ECU.
 		enum class BasicTractorECUOptions : std::uint8_t
@@ -169,6 +191,7 @@ namespace isobus
 		/// @param[in] functionality The functionality to change
 		/// @param[in] functionalityGeneration The generation of the functionality to report
 		/// @param[in] isSupported If true, this class will add reporting as such on the ISOBUS. If false, it will not be reported on the bus.
+		/// @details If the functionality is already supported, passing true updates its generation and keeps its options.
 		/// @note Minimum Control Function is enabled by default, and generally should not be disabled.
 		void set_functionality_is_supported(Functionalities functionality, std::uint8_t functionalityGeneration, bool isSupported);
 
@@ -292,6 +315,19 @@ namespace isobus
 		/// @brief Gets the number of supported sections for the TC section control client functionality
 		/// @returns The number of supported sections being reported in the TC section control client functionality
 		std::uint8_t get_task_controller_section_control_client_number_supported_sections();
+
+		/// @brief Sets a task controller tramline (TRACK) client functionality option to a new state.
+		/// @details Options set to true will be reported as "supported" to a requester of your
+		/// control function functionalities within the "task controller tramline client" functionality section of the message.
+		/// The TRACK client functionality has to be supported first, see set_functionality_is_supported().
+		/// @param[in] option The option to set
+		/// @param[in] optionState The state to set for the associated option
+		void set_task_controller_tramline_client_option_state(TaskControllerTramlineClientOptions option, bool optionState);
+
+		/// @brief Gets the state of a task controller tramline (TRACK) client functionality option.
+		/// @param[in] option The option to get
+		/// @returns The state of the option. If true, the option is being reported as "supported".
+		bool get_task_controller_tramline_client_option_state(TaskControllerTramlineClientOptions option);
 
 		/// @brief Sets a tractor ECU server functionality option to a new state.
 		/// @details The values set here will be reported as "supported" to a requester of your CF's functionalities
@@ -445,15 +481,25 @@ namespace isobus
 		/// @returns The bit offset/index of the specified option int the TIM functionality message data
 		std::uint8_t get_tim_option_bit_index(TractorImplementManagementOptions option) const;
 
+		/// @brief Sets where the next multi-frame control function functionalities message goes
+		/// @param[in] destination The requester of a destination-specific request, or nullptr for the global address
+		void set_reply_destination(std::shared_ptr<ControlFunction> destination);
+
+		/// @brief Returns where the next multi-frame control function functionalities message goes
+		/// @returns The requester of a destination-specific request, or nullptr for the global address
+		std::shared_ptr<ControlFunction> get_reply_destination();
+
 		/// @brief Handles PGN requests for the control function functionalities message
 		/// @param[in] parameterGroupNumber The PGN that was requested
 		/// @param[in] requestingControlFunction The control function that is requesting the PGN
+		/// @param[in] destinationControlFunction Where the request was sent, nullptr for a global request
 		/// @param[out] acknowledge Tells the PGN request protocol to ACK ack the request
 		/// @param[out] acknowledgeType Tells the PGN request protocol what kind of ACK to use
 		/// @param[in] parentPointer A generic context variable, usually the "this" pointer of the registrant for callbacks
 		/// @returns true if the PGN was handled, otherwise false
 		static bool pgn_request_handler(std::uint32_t parameterGroupNumber,
 		                                std::shared_ptr<ControlFunction> requestingControlFunction,
+		                                std::shared_ptr<ControlFunction> destinationControlFunction,
 		                                bool &acknowledge,
 		                                AcknowledgementType &acknowledgeType,
 		                                void *parentPointer);
@@ -469,6 +515,7 @@ namespace isobus
 		std::shared_ptr<InternalControlFunction> myControlFunction; ///< The control function to send messages as
 		std::list<FunctionalityData> supportedFunctionalities; ///< A list of all configured functionalities and their data
 		ProcessingFlags txFlags; ///< Handles retries for sending the CF functionalities message
+		std::shared_ptr<ControlFunction> replyDestination; ///< Where a multi-frame reply goes: the requester of a destination-specific request, or nullptr for global
 		Mutex functionalitiesMutex; ///< Since messages come in on a different thread than the main app (probably), this mutex protects the functionality data
 	};
 } // namespace isobus

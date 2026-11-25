@@ -6,13 +6,16 @@
 ///
 /// @copyright 2023 Adrian Del Grosso
 //================================================================================================
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
 #include "isobus/isobus/isobus_virtual_terminal_server_managed_working_set.hpp"
 
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/to_string.hpp"
 
+#include <algorithm>
 #include <cstring>
+#include <map>
 
 namespace isobus
 {
@@ -34,11 +37,23 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalServerManagedWorkingSet::start_parsing_thread()
+	VirtualTerminalServerManagedWorkingSet::~VirtualTerminalServerManagedWorkingSet()
+	{
+		join_parsing_thread();
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::start_parsing_thread(const std::function<void()> &onParsingEnded)
 	{
 		if (nullptr == objectPoolProcessingThread)
 		{
-			objectPoolProcessingThread.reset(new std::thread([this]() { worker_thread_function(); }));
+			set_object_pool_processing_state(ObjectPoolProcessingThreadState::Running);
+			objectPoolProcessingThread.reset(new std::thread([this, onParsingEnded]() {
+				worker_thread_function();
+				if (nullptr != onParsingEnded)
+				{
+					onParsingEnded();
+				}
+			}));
 		}
 	}
 
@@ -78,6 +93,16 @@ namespace isobus
 		workingSetMaintenanceMessageTimestamp_ms = value;
 	}
 
+	std::uint8_t VirtualTerminalServerManagedWorkingSet::get_working_set_version() const
+	{
+		return workingSetVersion;
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::set_working_set_version(std::uint8_t value)
+	{
+		workingSetVersion = value;
+	}
+
 	void VirtualTerminalServerManagedWorkingSet::save_callback_handle(isobus::EventCallbackHandle callbackHandle)
 	{
 		callbackHandles.push_back(callbackHandle);
@@ -93,19 +118,63 @@ namespace isobus
 		return wasLoadedFromNonVolatileMemory;
 	}
 
-	void VirtualTerminalServerManagedWorkingSet::set_was_object_pool_loaded_from_non_volatile_memory(bool value, CANLibBadge<VirtualTerminalServer>)
+	bool VirtualTerminalServerManagedWorkingSet::get_was_object_pool_loaded_with_extended_version_label() const
+	{
+		return wasLoadedWithExtendedVersionLabel;
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::set_was_object_pool_loaded_from_non_volatile_memory(bool value, bool extendedVersionLabel, CANLibBadge<VirtualTerminalServer>)
 	{
 		wasLoadedFromNonVolatileMemory = value;
+		wasLoadedWithExtendedVersionLabel = extendedVersionLabel;
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::clear_object_pool_data(CANLibBadge<VirtualTerminalServer>)
+	{
+		vtObjectTree.clear();
+		iopFilesRawData.clear();
+		transferredIopSize = 0;
+		workingSetID = NULL_OBJECT_ID;
+		focusedObject.store(NULL_OBJECT_ID);
+		openForInputObject.store(NULL_OBJECT_ID);
+		set_object_pool_faulting_object_id(NULL_OBJECT_ID);
+		set_object_pool_processing_state(ObjectPoolProcessingThreadState::None);
+		objectPoolTransferDropped = false;
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::set_object_pool_transfer_dropped()
+	{
+		objectPoolTransferDropped = true;
+	}
+
+	bool VirtualTerminalServerManagedWorkingSet::get_object_pool_transfer_dropped() const
+	{
+		return objectPoolTransferDropped;
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::set_object_focus(std::uint16_t objectID)
 	{
-		focusedObject = objectID;
+		focusedObject.store(objectID);
 	}
 
 	std::uint16_t VirtualTerminalServerManagedWorkingSet::get_object_focus() const
 	{
-		return focusedObject;
+		return focusedObject.load();
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::set_object_open_for_input(std::uint16_t objectID)
+	{
+		openForInputObject.store(objectID);
+	}
+
+	std::uint16_t VirtualTerminalServerManagedWorkingSet::get_object_open_for_input() const
+	{
+		return openForInputObject.load();
+	}
+
+	bool VirtualTerminalServerManagedWorkingSet::was_object_replaced(std::uint16_t objectID) const
+	{
+		return std::binary_search(replacedObjects.begin(), replacedObjects.end(), objectID);
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::set_auxiliary_input_maintenance_timestamp_ms(std::uint32_t value)
@@ -178,8 +247,8 @@ namespace isobus
 		if (!iopFilesRawData.empty())
 		{
 			bool lSuccess = true;
+			const std::map<std::uint16_t, std::shared_ptr<VTObject>> objectsBeforeParse = get_object_tree();
 
-			set_object_pool_processing_state(ObjectPoolProcessingThreadState::Running);
 			LOG_INFO("[WS]: Beginning parsing of object pool. This pool has " +
 			         isobus::to_string(static_cast<int>(iopFilesRawData.size())) +
 			         " IOP components.");
@@ -190,14 +259,26 @@ namespace isobus
 					continue;
 				}
 
-				if (!parse_iop_into_objects(iopFilesRawData[i].data.data(), static_cast<std::uint32_t>(iopFilesRawData[i].data.size())))
+				std::uint32_t objectsLength = 0;
+				if (!parse_iop_into_objects(iopFilesRawData[i].data.data(), static_cast<std::uint32_t>(iopFilesRawData[i].data.size()), &objectsLength))
 				{
 					lSuccess = false;
 					break;
 				}
 				else
 				{
+					// Load Version parses the stored transfers joined together, where this padding would read as objects
+					iopFilesRawData[i].data.resize(objectsLength);
 					iopFilesRawData[i].processed = true;
+				}
+			}
+
+			replacedObjects.clear();
+			for (const auto &object : objectsBeforeParse)
+			{
+				if (object.second != get_object_by_id(object.first))
+				{
+					replacedObjects.push_back(object.first);
 				}
 			}
 
@@ -225,3 +306,4 @@ namespace isobus
 	}
 
 } // namespace isobus
+#endif // !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO

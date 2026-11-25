@@ -1,12 +1,22 @@
 #include <gtest/gtest.h>
 
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
+#include "isobus/hardware_integration/vector_asc_logger.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
 #include "isobus/utility/system_timing.hpp"
 
+#ifdef ISOBUS_SOCKETCAN_AVAILABLE
+#include "isobus/hardware_integration/socket_can_interface.hpp"
+#endif
+
+#include <atomic>
 #include <chrono>
+#include <cstdio>
+#include <ctime>
+#include <fstream>
 #include <future>
 #include <thread>
+#include <vector>
 
 using namespace isobus;
 
@@ -42,6 +52,80 @@ TEST(HARDWARE_INTERFACE_TESTS, SendMessageToHardware)
 	CANHardwareInterface::stop();
 }
 
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+TEST(HARDWARE_INTERFACE_TESTS, MultipleThreadsCanTransmitWithoutLosingFrames)
+{
+	constexpr std::uint32_t PRODUCER_COUNT = 4;
+	constexpr std::uint32_t FRAMES_PER_PRODUCER = 2000;
+
+	auto sender = std::make_shared<VirtualCANPlugin>();
+	auto receiver = std::make_shared<VirtualCANPlugin>();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, sender);
+	ASSERT_TRUE(CANHardwareInterface::start());
+
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+
+	// Every producer sends numbered frames, using its index as the identifier
+	std::vector<std::thread> producers;
+	for (std::uint32_t producer = 0; producer < PRODUCER_COUNT; producer++)
+	{
+		producers.emplace_back([producer, FRAMES_PER_PRODUCER, deadline]() {
+			for (std::uint32_t sequence = 0; sequence < FRAMES_PER_PRODUCER; sequence++)
+			{
+				CANMessageFrame frame;
+				memset(&frame, 0, sizeof(CANMessageFrame));
+				frame.identifier = producer;
+				frame.isExtendedFrame = true;
+				frame.dataLength = 4;
+				memcpy(frame.data, &sequence, sizeof(sequence));
+				frame.channel = 0;
+
+				// The queue is bounded, so a full queue is expected. Wait for the hardware thread to drain it.
+				while (!send_can_message_frame_to_hardware(frame))
+				{
+					if (std::chrono::steady_clock::now() > deadline)
+					{
+						return;
+					}
+					std::this_thread::yield();
+				}
+			}
+		});
+	}
+
+	// The queue keeps the order of each producer, so the sequence numbers must arrive one by one
+	std::vector<std::uint32_t> expectedSequence(PRODUCER_COUNT, 0);
+	std::uint32_t received = 0;
+	bool framesArrivedIntact = true;
+	while ((received < PRODUCER_COUNT * FRAMES_PER_PRODUCER) && (std::chrono::steady_clock::now() < deadline))
+	{
+		CANMessageFrame frame;
+		if (receiver->read_frame(frame, 100))
+		{
+			std::uint32_t sequence = 0;
+			memcpy(&sequence, frame.data, sizeof(sequence));
+			if ((frame.identifier >= PRODUCER_COUNT) || (4 != frame.dataLength) || (sequence != expectedSequence[frame.identifier]))
+			{
+				framesArrivedIntact = false;
+				break;
+			}
+			expectedSequence[frame.identifier]++;
+			received++;
+		}
+	}
+
+	for (auto &producer : producers)
+	{
+		producer.join();
+	}
+	CANHardwareInterface::stop();
+
+	EXPECT_TRUE(framesArrivedIntact);
+	EXPECT_EQ(received, PRODUCER_COUNT * FRAMES_PER_PRODUCER);
+}
+#endif
+
 TEST(HARDWARE_INTERFACE_TESTS, ReceiveMessageFromHardware)
 {
 	auto device = std::make_shared<VirtualCANPlugin>();
@@ -57,7 +141,7 @@ TEST(HARDWARE_INTERFACE_TESTS, ReceiveMessageFromHardware)
 	fakeFrame.data[0] = 0x01;
 	fakeFrame.channel = 0;
 
-	int messageCount = 0;
+	std::atomic_int messageCount = { 0 };
 	std::function<void(const CANMessageFrame &)> receivedCallback = [&messageCount](const CANMessageFrame &frame) {
 		messageCount += 1;
 
@@ -75,6 +159,42 @@ TEST(HARDWARE_INTERFACE_TESTS, ReceiveMessageFromHardware)
 	EXPECT_TRUE(future.wait_for(std::chrono::seconds(5)) != std::future_status::timeout);
 
 	CANHardwareInterface::stop();
+}
+
+TEST(HARDWARE_INTERFACE_TESTS, FrameListenerCanCallTheInterface)
+{
+	auto device = std::make_shared<VirtualCANPlugin>();
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, device);
+	CANHardwareInterface::start(false);
+
+	auto received = std::make_shared<std::atomic_bool>(false);
+	CANHardwareInterface::get_can_frame_received_event_dispatcher().add_listener([received](const CANMessageFrame &) {
+		// Refused while the interface runs, but it takes the interface's lock to check that
+		CANHardwareInterface::set_number_of_can_channels(1);
+		*received = true;
+	});
+
+	CANMessageFrame frame = {};
+	frame.identifier = 0x613;
+	frame.dataLength = 1;
+	device->write_frame_as_if_received(frame);
+
+	// A listener that deadlocks never returns, so update() runs on a thread the test can abandon
+	auto finished = std::make_shared<std::promise<void>>();
+	std::future<void> result = finished->get_future();
+	std::thread([received, finished]() {
+		while (!*received)
+		{
+			CANHardwareInterface::update();
+			std::this_thread::yield();
+		}
+		finished->set_value();
+	}).detach();
+	ASSERT_EQ(std::future_status::ready, result.wait_for(std::chrono::seconds(1)));
+
+	CANHardwareInterface::stop();
+	CANHardwareInterface::set_number_of_can_channels(0);
 }
 
 TEST(HARDWARE_INTERFACE_TESTS, MessageFrameSentEventListener)
@@ -96,7 +216,7 @@ TEST(HARDWARE_INTERFACE_TESTS, MessageFrameSentEventListener)
 	CANMessageFrame receiveFrame;
 	memset(&receiveFrame, 0, sizeof(CANMessageFrame));
 
-	int messageCount = 0;
+	std::atomic_int messageCount = { 0 };
 	std::function<void(const CANMessageFrame &)> sendCallback = [&messageCount](const CANMessageFrame &frame) {
 		messageCount += 1;
 
@@ -120,7 +240,7 @@ TEST(HARDWARE_INTERFACE_TESTS, PeriodicUpdateEventListener)
 {
 	CANHardwareInterface::start();
 
-	int updateCount = 0;
+	std::atomic_int updateCount = { 0 };
 	std::function<void()> periodicCallback = [&updateCount]() {
 		updateCount += 1;
 	};
@@ -153,6 +273,7 @@ TEST(HARDWARE_INTERFACE_TESTS, PeriodicUpdateIntervalSetting)
 
 	CANHardwareInterface::get_periodic_update_event_dispatcher().add_listener(periodicCallback);
 
+	const std::uint32_t originalInterval = CANHardwareInterface::get_periodic_update_interval();
 	CANHardwareInterface::set_periodic_update_interval(10);
 	EXPECT_EQ(CANHardwareInterface::get_periodic_update_interval(), 10);
 
@@ -171,6 +292,7 @@ TEST(HARDWARE_INTERFACE_TESTS, PeriodicUpdateIntervalSetting)
 	EXPECT_TRUE(future.wait_for(std::chrono::seconds(5)) != std::future_status::timeout);
 
 	CANHardwareInterface::stop();
+	CANHardwareInterface::set_periodic_update_interval(originalInterval);
 }
 
 TEST(HARDWARE_INTERFACE_TESTS, StopSetsStartedFalseInNonThreadingMode)
@@ -293,4 +415,157 @@ TEST(HARDWARE_INTERFACE_TESTS, OneDriverCannotBeAssignedToTwoChannels)
 
 	CANHardwareInterface::unassign_can_channel_frame_handler(0);
 	CANHardwareInterface::set_number_of_can_channels(1);
+}
+
+class NeverValidPlugin : public CANHardwarePlugin
+{
+public:
+	std::string get_name() const override
+	{
+		return "NeverValid";
+	}
+	bool get_is_valid() const override
+	{
+		return false;
+	}
+	void close() override
+	{
+	}
+	void open() override
+	{
+	}
+	bool read_frame(CANMessageFrame &) override
+	{
+		return false;
+	}
+	bool write_frame(const CANMessageFrame &) override
+	{
+		return false;
+	}
+	std::string get_last_error() const override
+	{
+		return "";
+	}
+};
+
+TEST(HARDWARE_INTERFACE_TESTS, StartFailsWhenADriverDoesNotOpen)
+{
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<NeverValidPlugin>());
+
+	EXPECT_FALSE(CANHardwareInterface::start());
+
+	// Nothing is rolled back, the caller decides whether to stop
+	EXPECT_TRUE(CANHardwareInterface::is_running());
+
+	CANHardwareInterface::stop();
+}
+
+TEST(HARDWARE_INTERFACE_TESTS, OpenChannelKeepsWorkingWhenAnotherFailsToStart)
+{
+	auto device = std::make_shared<VirtualCANPlugin>("partial-start");
+	auto peer = std::make_shared<VirtualCANPlugin>("partial-start");
+	peer->open();
+	CANHardwareInterface::set_number_of_can_channels(2);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<NeverValidPlugin>());
+	CANHardwareInterface::assign_can_channel_frame_handler(1, device);
+
+	EXPECT_FALSE(CANHardwareInterface::start());
+	EXPECT_TRUE(device->get_is_valid());
+
+	CANMessageFrame frame;
+	memset(&frame, 0, sizeof(CANMessageFrame));
+	frame.identifier = 0x612;
+	frame.dataLength = 1;
+	frame.channel = 1;
+	EXPECT_TRUE(isobus::send_can_message_frame_to_hardware(frame));
+
+	CANMessageFrame peerFrame;
+	memset(&peerFrame, 0, sizeof(CANMessageFrame));
+	EXPECT_TRUE(peer->read_frame(peerFrame, 1000));
+	EXPECT_EQ(0x612u, peerFrame.identifier);
+
+	CANHardwareInterface::stop();
+	CANHardwareInterface::set_number_of_can_channels(1);
+}
+
+TEST(HARDWARE_INTERFACE_TESTS, ChannelWithoutADriverIsNotAStartFailure)
+{
+	CANHardwareInterface::set_number_of_can_channels(2);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+
+	EXPECT_TRUE(CANHardwareInterface::start());
+
+	CANHardwareInterface::stop();
+	CANHardwareInterface::set_number_of_can_channels(1);
+}
+
+#ifdef ISOBUS_SOCKETCAN_AVAILABLE
+TEST(HARDWARE_INTERFACE_TESTS, SocketCANMissingInterfaceIsNotValid)
+{
+	SocketCANInterface missing("agisonotreal0");
+	missing.open();
+
+	EXPECT_FALSE(missing.get_is_valid());
+	EXPECT_NE(std::string::npos, missing.get_last_error().find("agisonotreal0"));
+}
+
+TEST(HARDWARE_INTERFACE_TESTS, SocketCANNameOver15CharactersIsRefused)
+{
+	SocketCANInterface tooLong("agisonotreal0123");
+	tooLong.open();
+
+	EXPECT_FALSE(tooLong.get_is_valid());
+	EXPECT_NE(std::string::npos, tooLong.get_last_error().find("longer than 15 characters"));
+}
+#endif
+
+TEST(HARDWARE_INTERFACE_TESTS, VectorASCLoggerRemovesItsListenersOnDestruction)
+{
+	const std::string fileName = "vector_asc_logger_listener_test.asc";
+	auto receivedListeners = CANHardwareInterface::get_can_frame_received_event_dispatcher().get_listener_count();
+	auto transmittedListeners = CANHardwareInterface::get_can_frame_transmitted_event_dispatcher().get_listener_count();
+
+	{
+		VectorASCLogger logger(fileName);
+		EXPECT_EQ(CANHardwareInterface::get_can_frame_received_event_dispatcher().get_listener_count(), receivedListeners + 1);
+		EXPECT_EQ(CANHardwareInterface::get_can_frame_transmitted_event_dispatcher().get_listener_count(), transmittedListeners + 1);
+	}
+
+	EXPECT_EQ(CANHardwareInterface::get_can_frame_received_event_dispatcher().get_listener_count(), receivedListeners);
+	EXPECT_EQ(CANHardwareInterface::get_can_frame_transmitted_event_dispatcher().get_listener_count(), transmittedListeners);
+	EXPECT_EQ(std::remove(fileName.c_str()), 0);
+}
+
+/// @brief Returns the abbreviated weekday of a time, as std::strftime writes it in the C locale
+static std::string get_weekday_abbreviation(std::time_t time)
+{
+	char weekday[8] = {};
+	std::strftime(weekday, sizeof(weekday), "%a", std::localtime(&time));
+	return weekday;
+}
+
+TEST(HARDWARE_INTERFACE_TESTS, VectorASCLoggerWritesOneDateKeywordAndTheRightWeekday)
+{
+	const std::string fileName = "vector_asc_logger_date_test.asc";
+	const std::string weekdayBefore = get_weekday_abbreviation(std::time(nullptr));
+	{
+		VectorASCLogger logger(fileName);
+	}
+	const std::string weekdayAfter = get_weekday_abbreviation(std::time(nullptr));
+
+	std::string dateLine;
+	{
+		std::ifstream logFile(fileName);
+		std::getline(logFile, dateLine);
+	}
+	EXPECT_EQ(std::remove(fileName.c_str()), 0);
+
+	// "date <weekday> <month> <day> <time> <am or pm> <year>"
+	ASSERT_GE(dateLine.size(), 8U) << dateLine;
+	EXPECT_EQ("date ", dateLine.substr(0, 5)) << dateLine;
+	EXPECT_EQ(std::string::npos, dateLine.find("date date")) << dateLine;
+	// Either weekday, in case the day changed while the file was written
+	const std::string weekday = dateLine.substr(5, 3);
+	EXPECT_TRUE((weekdayBefore == weekday) || (weekdayAfter == weekday)) << dateLine << ", expected " << weekdayBefore;
 }
