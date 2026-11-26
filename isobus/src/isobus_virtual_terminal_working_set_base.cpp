@@ -214,6 +214,9 @@ namespace isobus
 									// Next, parse language list
 									if (iopLength >= static_cast<std::uint16_t>(numberOfLanguagesToFollow * 2))
 									{
+										// Any two letters are kept, as Table B.2 asks to accept all combinations of a-z and A-Z
+										std::vector<std::string> languageCodes;
+										languageCodes.reserve(numberOfLanguagesToFollow);
 										for (std::uint_fast8_t i = 0; i < numberOfLanguagesToFollow; i++)
 										{
 											std::string langCode;
@@ -222,7 +225,9 @@ namespace isobus
 											iopLength -= 2;
 											iopData += 2;
 											LOG_DEBUG("[WS]: IOP Language parsed: " + langCode);
+											languageCodes.push_back(std::move(langCode));
 										}
+										tempObject->set_language_codes(std::move(languageCodes));
 										retVal = true;
 									}
 									else
