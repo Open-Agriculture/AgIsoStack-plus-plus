@@ -367,6 +367,7 @@ namespace isobus
 		virtual void identify_vt();
 
 		/// @brief This function is called when the Screen capture command is received
+		/// @details The default implementation answers that Screen Capture is not enabled.
 		/// @param[in] item Item requested from the Screen Capture command
 		/// @param[in] path Path requested from the Screen Capture command
 		/// @param[in] requestor The control function requesting screen capture
@@ -661,7 +662,7 @@ namespace isobus
 		enum class ScreenCaptureItem
 		{
 			ScreenImage = 0,
-			ManufacturerProprietary_240,
+			ManufacturerProprietary_240 = 240,
 			ManufacturerProprietary_241,
 			ManufacturerProprietary_242,
 			ManufacturerProprietary_243,
@@ -683,7 +684,7 @@ namespace isobus
 		enum class ScreenCapturePath
 		{
 			VT_StorageOrRemovableMedia = 1,
-			ManufacturerProprietary_240,
+			ManufacturerProprietary_240 = 240,
 			ManufacturerProprietary_241,
 			ManufacturerProprietary_242,
 			ManufacturerProprietary_243,
@@ -1038,7 +1039,7 @@ namespace isobus
 		/// @param[in] item Item requested from the Screen Capture command
 		/// @param[in] path Path requested from the Screen Capture command
 		/// @param[in] errorCode Error codes
-		/// @param[in] imageId Error codes
+		/// @param[in] imageId Image identification number, sent as FFFF on error unless the item or path is proprietary
 		/// @param[in] requestor The control function which requested the screen capture
 		/// @returns true if the message was sent, otherwise false
 		bool send_capture_screen_response(std::uint8_t item, std::uint8_t path, std::uint8_t errorCode, std::uint16_t imageId, std::shared_ptr<ControlFunction> requestor) const;
@@ -1070,7 +1071,7 @@ namespace isobus
 		std::uint16_t activeWorkingSetSoftkeyMaskObjectID = NULL_OBJECT_ID; ///< The object ID of the active working set's soft key mask
 		std::uint8_t activeWorkingSetMasterAddress = NULL_CAN_ADDRESS; ///< The address of the active working set's master
 		std::uint8_t busyCodesBitfield = 0; ///< The busy codes bitfield
-		std::uint8_t currentCommandFunctionCode = 0; ///< The current command function code being processed
+		std::uint8_t currentCommandFunctionCode = 0xFF; ///< The function code of the command being executed, 0xFF if none
 		std::uint8_t pointingEventTransactionNumber = 0; ///< The TAN of the next Pointing Event message, VT version 6 and later
 		bool initialized = false; ///< True if the server has been initialized, otherwise false
 
