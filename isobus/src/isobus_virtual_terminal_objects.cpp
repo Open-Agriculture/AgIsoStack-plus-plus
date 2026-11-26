@@ -179,7 +179,7 @@ namespace isobus
 		}
 	}
 
-	bool VTObject::offset_all_children_with_id(std::uint16_t childObjectID, std::int8_t xOffset, std::int8_t yOffset)
+	bool VTObject::offset_all_children_with_id(std::uint16_t childObjectID, std::int16_t xOffset, std::int16_t yOffset)
 	{
 		bool retVal = false;
 
