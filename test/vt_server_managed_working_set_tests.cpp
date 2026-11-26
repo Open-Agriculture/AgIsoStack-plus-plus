@@ -414,3 +414,26 @@ TEST(VirtualTerminalServerTest, LookingUpAnUnknownObjectDoesNotAddItToTheObjectT
 	EXPECT_EQ(nullptr, workingSet.get_object_by_id(0x1234));
 	EXPECT_TRUE(workingSet.get_object_tree().empty());
 }
+
+TEST(VirtualTerminalServerTest, WorkingSetThatFailedToParseDoesNotBlockAnotherOne)
+{
+	// Working Set 1 says it has a child, but the transfer ends before it
+	std::vector<std::uint8_t> truncated = { 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSet), 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00 };
+	// The corrected pool uses Working Set 2
+	std::vector<std::uint8_t> corrected = { 0x02, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSet), 0x00, 0x01, 0xE8, 0x03, 0x00, 0x00, 0x00 };
+	// A second Working Set in the same pool is still refused (ISO 11783-6 B.1)
+	std::vector<std::uint8_t> another = { 0x03, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSet), 0x00, 0x01, 0xE8, 0x03, 0x00, 0x00, 0x00 };
+
+	VirtualTerminalServerManagedWorkingSet workingSet;
+	EXPECT_FALSE(workingSet.parse_iop_into_objects(truncated.data(), static_cast<std::uint32_t>(truncated.size())));
+	EXPECT_EQ(nullptr, workingSet.get_object_by_id(1));
+	EXPECT_EQ(nullptr, workingSet.get_working_set_object());
+
+	ASSERT_TRUE(workingSet.parse_iop_into_objects(corrected.data(), static_cast<std::uint32_t>(corrected.size())));
+	ASSERT_NE(nullptr, workingSet.get_working_set_object());
+	EXPECT_EQ(2u, workingSet.get_working_set_object()->get_id());
+
+	EXPECT_FALSE(workingSet.parse_iop_into_objects(another.data(), static_cast<std::uint32_t>(another.size())));
+	EXPECT_EQ(nullptr, workingSet.get_object_by_id(3));
+	EXPECT_EQ(2u, workingSet.get_working_set_object()->get_id());
+}
