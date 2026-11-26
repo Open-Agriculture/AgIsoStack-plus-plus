@@ -389,6 +389,30 @@ TEST(VirtualTerminalServerTest, WorkingSetSpecialControlsReadsEachLanguagePairOn
 	EXPECT_EQ("DE", codes[1].countryCode);
 }
 
+TEST(VirtualTerminalServerTest, WorkingSetKeepsItsLanguageCodes)
+{
+	// Working Set 1 with no children or macros, and the languages "en", "DE" and "xY"
+	std::vector<std::uint8_t> object = { 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSet), 0x00, 0x01, 0xE8, 0x03, 0x00, 0x00, 0x03, 'e', 'n', 'D', 'E', 'x', 'Y' };
+
+	VirtualTerminalServerManagedWorkingSet workingSet;
+	ASSERT_TRUE(workingSet.parse_iop_into_objects(object.data(), static_cast<std::uint32_t>(object.size())));
+
+	auto workingSetObject = std::static_pointer_cast<WorkingSet>(workingSet.get_object_by_id(1));
+	ASSERT_NE(nullptr, workingSetObject);
+	// Any pair of letters is accepted, not only the codes of ISO 639 (ISO 11783-6 Table B.2)
+	EXPECT_EQ((std::vector<std::string>{ "en", "DE", "xY" }), workingSetObject->get_language_codes());
+
+	std::vector<std::uint8_t> noLanguages = { 0x01, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSet), 0x00, 0x01, 0xE8, 0x03, 0x00, 0x00, 0x00 };
+	VirtualTerminalServerManagedWorkingSet noLanguagesWorkingSet;
+	ASSERT_TRUE(noLanguagesWorkingSet.parse_iop_into_objects(noLanguages.data(), static_cast<std::uint32_t>(noLanguages.size())));
+	auto noLanguagesObject = std::static_pointer_cast<WorkingSet>(noLanguagesWorkingSet.get_object_by_id(1));
+	ASSERT_NE(nullptr, noLanguagesObject);
+	EXPECT_TRUE(noLanguagesObject->get_language_codes().empty());
+
+	noLanguagesObject->set_language_codes({ "fr" });
+	EXPECT_EQ((std::vector<std::string>{ "fr" }), noLanguagesObject->get_language_codes());
+}
+
 TEST(VirtualTerminalServerTest, ObjectOfAnotherTypeDoesNotReplaceAnObject)
 {
 	// Container 1 (10x10), then a Number Variable with the same ID
