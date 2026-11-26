@@ -177,7 +177,6 @@ namespace isobus
 					    ((nullptr != get_object_by_id(workingSetID)) &&
 					     (get_object_by_id(workingSetID)->get_id() == decodedID)))
 					{
-						workingSetID = decodedID;
 						auto tempObject = std::make_shared<WorkingSet>();
 
 						if (iopLength >= tempObject->get_minumum_object_length())
@@ -244,6 +243,13 @@ namespace isobus
 						if (retVal)
 						{
 							retVal = add_or_replace_object(tempObject);
+						}
+
+						// Only a Working Set that is in the object tree counts as the pool's one Working Set (ISO 11783-6 B.1),
+						// so one that failed to parse doesn't block a later one with another ID
+						if (retVal)
+						{
+							workingSetID = decodedID;
 						}
 					}
 					else
