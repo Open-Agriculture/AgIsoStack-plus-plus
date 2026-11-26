@@ -131,15 +131,8 @@ namespace isobus
 
 	VirtualTerminalServerManagedWorkingSet::~VirtualTerminalServerManagedWorkingSet()
 	{
-		try
-		{
-			join_parsing_thread();
-		}
-		catch (...)
-		{
-			// A destructor must not throw, and joining can fail with a system error
-			LOG_ERROR("[WS]: The object pool parsing thread could not be joined.");
-		}
+		// No try/catch, as the library also builds without exceptions (-fno-exceptions, as on the ESP32)
+		join_parsing_thread();
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::start_parsing_thread(const std::function<void()> &onParsingEnded)
