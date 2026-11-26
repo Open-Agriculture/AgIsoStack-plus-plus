@@ -811,7 +811,14 @@ namespace isobus
 		if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == CANIdentifier(rxFrame.identifier).get_parameter_group_number()) &&
 		    (CAN_DATA_LENGTH == rxFrame.dataLength) &&
 		    (rxFrame.channel < CAN_PORT_MAXIMUM) &&
-		    (CANIdentifier(rxFrame.identifier).get_source_address() < NULL_CAN_ADDRESS))
+		    (NULL_CAN_ADDRESS == CANIdentifier(rxFrame.identifier).get_source_address()))
+		{
+			process_cannot_claim(rxFrame);
+		}
+		else if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == CANIdentifier(rxFrame.identifier).get_parameter_group_number()) &&
+		         (CAN_DATA_LENGTH == rxFrame.dataLength) &&
+		         (rxFrame.channel < CAN_PORT_MAXIMUM) &&
+		         (CANIdentifier(rxFrame.identifier).get_source_address() < NULL_CAN_ADDRESS))
 		{
 			LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
 
@@ -992,6 +999,55 @@ namespace isobus
 		if (nullptr != onlineControlFunction)
 		{
 			process_control_function_state_change_callback(onlineControlFunction, ControlFunctionState::Online);
+		}
+	}
+
+	void CANNetworkManager::process_cannot_claim(const CANMessageFrame &rxFrame)
+	{
+		std::uint64_t cannotClaimNAME = 0;
+		for (std::uint8_t byteIndex = 0; byteIndex < CAN_DATA_LENGTH; byteIndex++)
+		{
+			cannotClaimNAME |= (static_cast<std::uint64_t>(rxFrame.data[byteIndex]) << (8 * byteIndex));
+		}
+
+		std::shared_ptr<ControlFunction> offlineControlFunction;
+		bool partnerTookOver = false;
+		{
+			LOCK_GUARD(RecursiveMutex, controlFunctionsMutex);
+
+			// Only a CF in the table is online. The null address is never used as an index, and our own CFs handle their claims themselves.
+			for (auto &tableEntry : controlFunctionTable[rxFrame.channel])
+			{
+				if ((nullptr != tableEntry) &&
+				    (ControlFunction::Type::Internal != tableEntry->get_type()) &&
+				    (tableEntry->get_NAME().get_full_name() == cannotClaimNAME))
+				{
+					offlineControlFunction = tableEntry;
+					LOG_INFO("[NM]: Control function with address %u and NAME %016llx could not claim an address and is now offline on channel %u.",
+					         offlineControlFunction->get_address(),
+					         cannotClaimNAME,
+					         rxFrame.channel);
+					inactiveControlFunctions.push_back(offlineControlFunction);
+					tableEntry = nullptr;
+					offlineControlFunction->address = NULL_CAN_ADDRESS;
+					break;
+				}
+			}
+
+			// The same as for a partner that stops answering requests for address claim
+			if ((nullptr != offlineControlFunction) && (ControlFunction::Type::Partnered == offlineControlFunction->get_type()))
+			{
+				partnerTookOver = take_over_online_external_control_function(std::static_pointer_cast<PartneredControlFunction>(offlineControlFunction), rxFrame.channel);
+			}
+		}
+
+		if (nullptr != offlineControlFunction)
+		{
+			process_control_function_state_change_callback(offlineControlFunction, ControlFunctionState::Offline);
+		}
+		if (partnerTookOver)
+		{
+			process_control_function_state_change_callback(offlineControlFunction, ControlFunctionState::Online);
 		}
 	}
 
