@@ -1317,6 +1317,67 @@ TEST_F(CoreTest, CannotClaimFromAPartnerNameDoesNotTouchTheTable)
 	CANNetworkManager::CANNetwork.deactivate_control_function(partner);
 }
 
+// ISO 11783-5:2019 4.5.3: a CF that gives up its address announces it with a Cannot Claim
+TEST_F(CoreTest, CannotClaimTakesAKnownControlFunctionOffline)
+{
+	constexpr std::uint8_t ADDRESS = 0x9E;
+	CANNetworkManager::CANNetwork.update();
+	const NAME name = test_helpers::find_available_name(0);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(0, ADDRESS, name));
+	auto controlFunction = CANNetworkManager::CANNetwork.get_control_function(0, ADDRESS);
+	ASSERT_NE(nullptr, controlFunction);
+	ASSERT_TRUE(controlFunction->get_address_valid());
+
+	CANNetworkManager::CANNetwork.add_control_function_status_change_callback(test_control_function_state_callback);
+	wasTestStateCallbackHit = false;
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(0, 0xFE, name));
+	CANNetworkManager::CANNetwork.remove_control_function_status_change_callback(test_control_function_state_callback);
+
+	EXPECT_FALSE(controlFunction->get_address_valid());
+	EXPECT_EQ(nullptr, CANNetworkManager::CANNetwork.get_control_function(0, ADDRESS));
+	EXPECT_TRUE(wasTestStateCallbackHit);
+	EXPECT_EQ(controlFunction, testControlFunction);
+	EXPECT_EQ(ControlFunctionState::Offline, testControlFunctionState);
+
+	// When it claims an address again, the same CF is back online
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(0, ADDRESS, name));
+	CANNetworkManager::CANNetwork.update();
+	EXPECT_EQ(controlFunction, CANNetworkManager::CANNetwork.get_control_function(0, ADDRESS));
+	EXPECT_TRUE(controlFunction->get_address_valid());
+}
+
+TEST_F(CoreTest, CannotClaimTakesAPartnerOffline)
+{
+	constexpr std::uint8_t ADDRESS = 0x9F;
+	auto partner = test_helpers::force_claim_partnered_control_function(ADDRESS, 0);
+	ASSERT_TRUE(partner->get_address_valid());
+
+	CANNetworkManager::CANNetwork.add_control_function_status_change_callback(record_partner_state_change);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(0, 0xFE, partner->get_NAME()));
+	CANNetworkManager::CANNetwork.remove_control_function_status_change_callback(record_partner_state_change);
+
+	EXPECT_FALSE(partner->get_address_valid());
+	EXPECT_EQ(nullptr, CANNetworkManager::CANNetwork.get_control_function(0, ADDRESS));
+	ASSERT_EQ(1u, partnerStateChanges.size());
+	EXPECT_EQ(partner, partnerStateChanges[0].first);
+	EXPECT_EQ(ControlFunctionState::Offline, partnerStateChanges[0].second);
+	CANNetworkManager::CANNetwork.deactivate_control_function(partner);
+}
+
+TEST_F(CoreTest, CannotClaimFromAnUnknownNameChangesNothing)
+{
+	constexpr std::uint8_t ADDRESS = 0xA0;
+	CANNetworkManager::CANNetwork.update();
+	const NAME name = test_helpers::find_available_name(0);
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(0, ADDRESS, name));
+	auto controlFunction = CANNetworkManager::CANNetwork.get_control_function(0, ADDRESS);
+	ASSERT_NE(nullptr, controlFunction);
+
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(create_address_claim_frame(0, 0xFE, NAME(name.get_full_name() ^ 0x1)));
+	EXPECT_TRUE(controlFunction->get_address_valid());
+	EXPECT_EQ(controlFunction, CANNetworkManager::CANNetwork.get_control_function(0, ADDRESS));
+}
+
 TEST_F(CoreTest, CommandedAddressOutsideTheValidRangeIsIgnored)
 {
 	start_virtual_can();

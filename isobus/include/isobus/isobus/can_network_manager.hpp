@@ -315,6 +315,12 @@ namespace isobus
 		/// @param[in] rxFrame Raw frames coming in from the bus
 		void update_control_functions(const CANMessageFrame &rxFrame);
 
+		/// @brief Takes a known control function offline when it sends a Cannot Claim (an address claim from the null address)
+		/// @details ISO 11783-5:2019 4.5.3: a CF that has communicated with another CF shall detect that the other CF
+		/// was disabled by monitoring its cannot-claim-source-address message.
+		/// @param[in] rxFrame The address claim frame from the null address
+		void process_cannot_claim(const CANMessageFrame &rxFrame);
+
 		/// @brief Checks if new partners have been created and matches them to existing control functions
 		void update_new_partners();
 
