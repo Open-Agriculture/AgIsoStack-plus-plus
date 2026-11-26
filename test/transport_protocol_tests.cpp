@@ -909,13 +909,13 @@ TEST_F(TransportProtocolTest, DestinationSpecificMessageReceiving)
 	ASSERT_FALSE(manager.has_session(originator, receiver));
 }
 
-void check_abort_message(const CANMessage &message, const std::uint8_t abortReason, const std::uint32_t parameterGroupNumber)
+void check_abort_message(const CANMessage &message, const std::uint8_t abortReason, const std::uint32_t parameterGroupNumber, const std::uint8_t roleOfSenderByte)
 {
 	ASSERT_EQ(message.get_identifier().get_parameter_group_number(), 0xEC00); // Transport Protocol Connection Management
 	ASSERT_EQ(message.get_data_length(), 8);
 	ASSERT_EQ(message.get_data()[0], 255); // Abort control byte
 	ASSERT_EQ(message.get_data()[1], abortReason);
-	ASSERT_EQ(message.get_data()[2], 0xFF); // Reserved
+	ASSERT_EQ(message.get_data()[2], roleOfSenderByte); // Role of Sender, with the reserved bits set
 	ASSERT_EQ(message.get_data()[3], 0xFF); // Reserved
 	ASSERT_EQ(message.get_data()[4], 0xFF); // Reserved
 	ASSERT_EQ(message.get_data()[5], parameterGroupNumber & 0xFF);
@@ -1019,7 +1019,7 @@ TEST_F(TransportProtocolTest, DestinationSpecificTimeoutInitiation)
 
 	// For the receiver side, a connection is established as soon as the CTS is sent, hence we do expect an abort message to be sent
 	ASSERT_EQ(receiverQueue.size(), 1);
-	check_abort_message(receiverQueue.front(), 3, 0xFEEB); // Abort reason 3: Connection timeout
+	check_abort_message(receiverQueue.front(), 3, 0xFEEB, 0xFD); // Abort reason 3: Connection timeout, sent by the receiver
 	receiverQueue.pop_front();
 
 	// Check for correct timeouts, and session removal
@@ -1140,7 +1140,8 @@ TEST_F(TransportProtocolTest, DestinationSpecificTimeoutCompletion)
 	// For both sides, a connection should've been established, hence we expect an abort message to be sent from both the originator and receiver
 	ASSERT_EQ(originatorQueue.size(), 1);
 	ASSERT_EQ(receiverQueue.size(), 1);
-	check_abort_message(receiverQueue.front(), 3, 0xFEEB); // Abort reason 3: Connection timeout
+	check_abort_message(originatorQueue.front(), 3, 0xFEEB, 0xFC); // Abort reason 3: Connection timeout, sent by the originator
+	check_abort_message(receiverQueue.front(), 3, 0xFEEB, 0xFD); // Abort reason 3: Connection timeout, sent by the receiver
 	originatorQueue.pop_front();
 	receiverQueue.pop_front();
 
@@ -1699,7 +1700,7 @@ TEST_F(TransportProtocolTest, DestinationSpecificMultipleCTS)
 				EXPECT_EQ(parameterGroupNumber, 0xEC00);
 				EXPECT_EQ(data[0], 255); // Abort control byte
 				EXPECT_EQ(data[1], 4); // Abort reason 4: Unexpected CTS
-				EXPECT_EQ(data[2], 0xFF); // Reserved
+				EXPECT_EQ(data[2], 0xFC); // Role of Sender: the originator
 				EXPECT_EQ(data[3], 0xFF); // Reserved
 				EXPECT_EQ(data[4], 0xFF); // Reserved
 				EXPECT_EQ(data[5], 0xEB); // PGN LSB
@@ -1891,7 +1892,7 @@ TEST_F(TransportProtocolTest, DestinationSpecificRejectForOutOfResources)
 			EXPECT_EQ(parameterGroupNumber, 0xEC00);
 			EXPECT_EQ(data[0], 255); // Abort control byte
 			EXPECT_EQ(data[1], 1); // Abort reason 1: Cannot support another connection
-			EXPECT_EQ(data[2], 0xFF); // Reserved
+			EXPECT_EQ(data[2], 0xFD); // Role of Sender: the receiver
 			EXPECT_EQ(data[3], 0xFF); // Reserved
 			EXPECT_EQ(data[4], 0xFF); // Reserved
 			EXPECT_EQ(data[5], 0xEB); // PGN LSB
@@ -2254,6 +2255,7 @@ TEST_F(TransportProtocolTest, RequestToSendWithInvalidSizeIsAborted)
 		EXPECT_EQ(parameterGroupNumber, 0xEC00);
 		EXPECT_EQ(destinationControlFunction, originator);
 		EXPECT_EQ(data[0], 255); // Abort control byte
+		EXPECT_EQ(data[2], 0xFD); // Role of Sender: the receiver rejects the RTS
 		abortReasons.push_back(data[1]);
 		return true;
 	};
@@ -2301,5 +2303,51 @@ TEST_F(TransportProtocolTest, BroadcastWithInvalidSizeIsIgnored)
 		                                                                 0xFE,
 		                                                                 0x00 }));
 		EXPECT_FALSE(manager.has_session(originator, nullptr)) << size;
+	}
+}
+
+// ISO 11783-3:2026 5.9.4.5: the Role of Sender picks one of two sessions of the same PGN in opposite directions
+TEST_F(TransportProtocolTest, AbortClosesOnlyTheSessionOfItsRoleOfSender)
+{
+	constexpr std::array<std::uint8_t, 9> dataToSend = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09 };
+	constexpr std::uint32_t PGN = 0xFEEB;
+
+	auto internal = test_helpers::create_mock_internal_control_function(0x0B);
+	auto partner = test_helpers::create_mock_control_function(0x01);
+
+	auto sendFrameCallback = [](std::uint32_t, CANDataSpan, std::shared_ptr<InternalControlFunction>, std::shared_ptr<ControlFunction>, CANIdentifier::CANPriority) {
+		return true;
+	};
+
+	struct Case
+	{
+		std::uint8_t roleOfSenderByte;
+		bool txSessionRemains;
+		bool rxSessionRemains;
+	};
+	const std::vector<Case> cases = {
+		{ 0xFC, true, false }, // The partner aborts as the originator, so only the session it sends to us
+		{ 0xFD, false, true }, // The partner aborts as the receiver, so only the session we send to it
+		{ 0xFE, false, false }, // Reserved, closes both
+		{ 0xFF, false, false } // Not specified, as an earlier edition sends it, closes both
+	};
+
+	for (const auto &testCase : cases)
+	{
+		CANNetworkConfiguration configuration;
+		TransportProtocolManager manager(sendFrameCallback, nullptr, &configuration);
+
+		// We send the PGN to the partner
+		auto data = std::unique_ptr<CANMessageData>(new CANMessageDataView(dataToSend.data(), dataToSend.size()));
+		ASSERT_TRUE(manager.protocol_transmit_message(PGN, data, internal, partner, nullptr, nullptr));
+
+		// And the partner sends the same PGN to us
+		manager.process_message(test_helpers::create_message(7, 0xEC00, internal, partner, { 16, 9, 0, 2, 16, 0xEB, 0xFE, 0x00 }));
+		ASSERT_TRUE(manager.has_session(internal, partner));
+		ASSERT_TRUE(manager.has_session(partner, internal));
+
+		manager.process_message(test_helpers::create_message(7, 0xEC00, internal, partner, { 255, 1, testCase.roleOfSenderByte, 0xFF, 0xFF, 0xEB, 0xFE, 0x00 }));
+		EXPECT_EQ(testCase.txSessionRemains, manager.has_session(internal, partner)) << static_cast<int>(testCase.roleOfSenderByte);
+		EXPECT_EQ(testCase.rxSessionRemains, manager.has_session(partner, internal)) << static_cast<int>(testCase.roleOfSenderByte);
 	}
 }
