@@ -322,6 +322,24 @@ namespace isobus
 		return retVal;
 	}
 
+	void ControlFunctionFunctionalities::set_task_controller_tramline_client_option_state(TaskControllerTramlineClientOptions option, bool optionState)
+	{
+		LOCK_GUARD(Mutex, functionalitiesMutex);
+
+		auto existingFunctionality = get_functionality(Functionalities::TaskControllerTramlineClient);
+
+		if ((supportedFunctionalities.end() != existingFunctionality) &&
+		    (option < TaskControllerTramlineClientOptions::Reserved))
+		{
+			existingFunctionality->set_bit_in_option(0, static_cast<std::uint8_t>(option), optionState);
+		}
+	}
+
+	bool ControlFunctionFunctionalities::get_task_controller_tramline_client_option_state(TaskControllerTramlineClientOptions option)
+	{
+		return get_functionality_byte_option(Functionalities::TaskControllerTramlineClient, 0, static_cast<std::uint8_t>(option));
+	}
+
 	void ControlFunctionFunctionalities::set_basic_tractor_ECU_server_option_state(BasicTractorECUOptions option, bool optionState)
 	{
 		LOCK_GUARD(Mutex, functionalitiesMutex);
@@ -601,6 +619,16 @@ namespace isobus
 			case Functionalities::BasicTractorECUImplementClient:
 			case Functionalities::FileServer:
 			case Functionalities::FileServerClient:
+			case Functionalities::SequenceControllerServer:
+			case Functionalities::SequenceControllerClient:
+			case Functionalities::ShortcutButtonServer:
+			case Functionalities::ShortcutButtonClient:
+			case Functionalities::DiagnosticTool:
+			case Functionalities::DataLoggerServer:
+			case Functionalities::DataLoggerClient:
+			case Functionalities::SystemInformationServer:
+			case Functionalities::TaskControllerTramlineServer:
+			case Functionalities::TaskControllerTramlineClient:
 			{
 				serializedValue.resize(1);
 				serializedValue.at(0) = 0x00; // No options
@@ -856,8 +884,21 @@ namespace isobus
 		return retVal;
 	}
 
+	void ControlFunctionFunctionalities::set_reply_destination(std::shared_ptr<ControlFunction> destination)
+	{
+		LOCK_GUARD(Mutex, functionalitiesMutex);
+		replyDestination = destination;
+	}
+
+	std::shared_ptr<ControlFunction> ControlFunctionFunctionalities::get_reply_destination()
+	{
+		LOCK_GUARD(Mutex, functionalitiesMutex);
+		return replyDestination;
+	}
+
 	bool ControlFunctionFunctionalities::pgn_request_handler(std::uint32_t parameterGroupNumber,
-	                                                         std::shared_ptr<ControlFunction>,
+	                                                         std::shared_ptr<ControlFunction> requestingControlFunction,
+	                                                         std::shared_ptr<ControlFunction> destinationControlFunction,
 	                                                         bool &acknowledge,
 	                                                         AcknowledgementType &,
 	                                                         void *parentPointer)
@@ -869,6 +910,9 @@ namespace isobus
 		if (static_cast<std::uint32_t>(CANLibParameterGroupNumber::ControlFunctionFunctionalities) == parameterGroupNumber)
 		{
 			acknowledge = false;
+			// ISO 11783-3: a reply that needs the transport protocol goes to the requester of a destination-specific
+			// request, and to the global address (BAM) for a global one
+			targetInterface->set_reply_destination((nullptr != destinationControlFunction) ? requestingControlFunction : nullptr);
 			targetInterface->txFlags.set_flag(static_cast<std::uint32_t>(TransmitFlags::ControlFunctionFunctionalitiesMessage));
 			retVal = true;
 		}
@@ -883,13 +927,21 @@ namespace isobus
 
 		if (static_cast<std::uint32_t>(TransmitFlags::ControlFunctionFunctionalitiesMessage) == flag)
 		{
+			std::shared_ptr<ControlFunction> destination = targetInterface->get_reply_destination();
+
 			std::vector<std::uint8_t> messageBuffer;
 			targetInterface->get_message_content(messageBuffer);
+
+			// A single frame of this PDU2 message always goes to the global address
+			if (messageBuffer.size() <= CAN_DATA_LENGTH)
+			{
+				destination = nullptr;
+			}
 			transmitSuccessful = CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::ControlFunctionFunctionalities),
 			                                                                    messageBuffer.data(),
 			                                                                    messageBuffer.size(),
 			                                                                    targetInterface->myControlFunction,
-			                                                                    nullptr);
+			                                                                    destination);
 		}
 
 		if (!transmitSuccessful)

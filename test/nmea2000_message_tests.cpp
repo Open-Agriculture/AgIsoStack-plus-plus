@@ -13,6 +13,8 @@
 #include "helpers/test_fixture.hpp"
 
 #include <array>
+#include <atomic>
+#include <thread>
 
 using namespace isobus;
 using namespace NMEA2000Messages;
@@ -636,6 +638,7 @@ TEST_F(NMEA2000Test, NMEA2KInterface)
 		EXPECT_TRUE(wasDatumCallbackHit);
 		EXPECT_EQ(1, interfaceUnderTest.get_number_received_datum_message_sources());
 		EXPECT_NE(nullptr, interfaceUnderTest.get_received_datum_message(0));
+		EXPECT_EQ(SystemTiming::get_timestamp_ms(), interfaceUnderTest.get_received_datum_message(0)->get_timestamp());
 		CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 		CANNetworkManager::CANNetwork.update();
 
@@ -1009,6 +1012,74 @@ TEST_F(NMEA2000Test, NMEA2KInterface)
 
 	CANHardwareInterface::stop();
 }
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+TEST_F(NMEA2000Test, ReceiveThreadDoesNotRaceUpdate)
+{
+	test_helpers::force_claim_partnered_control_function(0x52, 0);
+
+	NMEA2000MessageInterface interfaceUnderTest(nullptr, false, false, false, false, false, false, false);
+	interfaceUnderTest.initialize();
+
+	std::atomic<bool> done = { false };
+	std::thread receiver([&done]() {
+		CANMessageFrame cogSogFrame = {};
+		cogSogFrame.isExtendedFrame = true;
+		cogSogFrame.identifier = 0x19F80252;
+		cogSogFrame.dataLength = CAN_DATA_LENGTH;
+		CANMessageFrame positionFrame = {};
+		positionFrame.isExtendedFrame = true;
+		positionFrame.identifier = 0x19F80152;
+		positionFrame.dataLength = CAN_DATA_LENGTH;
+
+		for (std::uint16_t i = 0; i < 500; i++)
+		{
+			const std::uint8_t value = (0 == (i % 2)) ? 10 : 20;
+			cogSogFrame.data[2] = value;
+			positionFrame.data[0] = value;
+			CANNetworkManager::CANNetwork.process_receive_can_message_frame(cogSogFrame);
+			CANNetworkManager::CANNetwork.process_receive_can_message_frame(positionFrame);
+			CANNetworkManager::CANNetwork.update();
+		}
+		done = true;
+	});
+
+	while (!done)
+	{
+		interfaceUnderTest.update();
+		interfaceUnderTest.get_number_received_course_speed_over_ground_message_sources();
+		interfaceUnderTest.get_number_received_datum_message_sources();
+		interfaceUnderTest.get_number_received_gnss_position_data_message_sources();
+		interfaceUnderTest.get_number_received_position_delta_high_precision_rapid_update_message_sources();
+		interfaceUnderTest.get_number_received_position_rapid_update_message_sources();
+		interfaceUnderTest.get_number_received_rate_of_turn_message_sources();
+		interfaceUnderTest.get_number_received_vessel_heading_message_sources();
+		auto cogSog = interfaceUnderTest.get_received_course_speed_over_ground_message(0);
+		interfaceUnderTest.get_received_datum_message(0);
+		interfaceUnderTest.get_received_gnss_position_data_message(0);
+		interfaceUnderTest.get_received_position_delta_high_precision_rapid_update_message(0);
+		auto position = interfaceUnderTest.get_received_position_rapid_update_message(0);
+		interfaceUnderTest.get_received_rate_of_turn_message(0);
+		interfaceUnderTest.get_received_vessel_heading_message(0);
+		if (nullptr != cogSog)
+		{
+			cogSog->get_raw_course_over_ground();
+		}
+		if (nullptr != position)
+		{
+			position->get_raw_latitude();
+		}
+	}
+	receiver.join();
+
+	auto cogSog = interfaceUnderTest.get_received_course_speed_over_ground_message(0);
+	auto position = interfaceUnderTest.get_received_position_rapid_update_message(0);
+	ASSERT_NE(nullptr, cogSog);
+	ASSERT_NE(nullptr, position);
+	EXPECT_EQ(20, cogSog->get_raw_course_over_ground());
+	EXPECT_EQ(20, position->get_raw_latitude());
+}
+#endif
 
 class FastPacketProtocolTest : public AgIsoStackTestFixture
 {

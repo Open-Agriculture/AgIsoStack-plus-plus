@@ -11,6 +11,7 @@
 
 #include <array>
 #include <atomic>
+#include <functional>
 #include <map>
 #include <mutex>
 #include <thread>
@@ -55,7 +56,8 @@ namespace isobus
 		/// @brief Starts a thread to parse the received object pool files
 		/// @details The thread parses into an object tree of its own, which holds only the objects of the transfers it parses,
 		/// so neither the object tree nor the transfers that the server and the application use change while it runs.
-		void start_parsing_thread();
+		/// @param[in] onParsingEnded Called on the parsing thread after the processing state becomes Success or Fail, can be nullptr
+		void start_parsing_thread(const std::function<void()> &onParsingEnded = nullptr);
 
 		/// @brief Joins the parsing thread
 		/// @details If the pool was parsed successfully, its objects are added to the current object tree here,
@@ -86,6 +88,14 @@ namespace isobus
 		/// @param[in] value New timestamp value in milliseconds
 		void set_working_set_maintenance_message_timestamp_ms(std::uint32_t value);
 
+		/// @brief Returns the VT version the working set master reported in its last Working Set Maintenance message
+		/// @returns The version byte, which is 0xFF for a version 2 or prior working set or before any maintenance message
+		std::uint8_t get_working_set_version() const;
+
+		/// @brief Sets the VT version the working set master reported in its Working Set Maintenance message
+		/// @param[in] value The version byte of the maintenance message
+		void set_working_set_version(std::uint8_t value);
+
 		/// @brief Saves an event callback handle for the lifetime of this object
 		/// which is useful for keeping track of callback lifetimes in a VT server
 		/// @param[in] callbackHandle The event callback handle to save
@@ -110,6 +120,13 @@ namespace isobus
 
 		/// @brief Discards the object pool so that a loaded version can overwrite it or the client can transfer a new one, keeping the callback handles
 		void clear_object_pool_data(CANLibBadge<VirtualTerminalServer>);
+
+		/// @brief Records that an Object Pool Transfer from this working set was dropped, so its object pool is incomplete. Deleting the object pool clears it.
+		void set_object_pool_transfer_dropped();
+
+		/// @brief Tells the server whether an Object Pool Transfer from this working set was dropped
+		/// @returns True if a transfer was dropped and the object pool has not been deleted since
+		bool get_object_pool_transfer_dropped() const;
 
 		/// @brief Sets the object ID of the currently focused object
 		/// @param[in] objectID The object ID to set as the focused object
@@ -187,6 +204,7 @@ namespace isobus
 		std::vector<isobus::EventCallbackHandle> callbackHandles; ///< A convenient way to associate callback handles to a working set
 		ObjectPoolProcessingThreadState processingState = ObjectPoolProcessingThreadState::None; ///< Stores the state of processing the object pool
 		std::uint32_t workingSetMaintenanceMessageTimestamp_ms = 0; ///< A timestamp (in ms) to track sending of the maintenance message
+		std::uint8_t workingSetVersion = 0xFF; ///< The VT version the working set master reported in its last maintenance message
 		std::uint32_t auxiliaryInputMaintenanceMessageTimestamp_ms = 0; ///< A timestamp (in ms) to track if/when the working set sent an auxiliary input maintenance message
 		std::atomic<std::uint16_t> focusedObject = { NULL_OBJECT_ID }; ///< Stores the object ID of the currently focused object
 		std::atomic<std::uint16_t> openForInputObject = { NULL_OBJECT_ID }; ///< Stores the object ID of the input object currently open for editing
@@ -194,6 +212,7 @@ namespace isobus
 		bool wasLoadedFromNonVolatileMemory = false; ///< Used to tell the server how this object pool was obtained
 		bool wasLoadedWithExtendedVersionLabel = false; ///< Used to tell the server which load version command restored this object pool
 		bool workingSetDeletionRequested = false; ///< Used to tell the server to delete this working set
+		bool objectPoolTransferDropped = false; ///< Set when an Object Pool Transfer from this working set was dropped, only used on the thread that calls update()
 	};
 } // namespace isobus
 

@@ -9,8 +9,11 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
+#include <cstdio>
 #include <functional>
+#include <string>
 #include <thread>
 
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
@@ -33,6 +36,15 @@ static constexpr std::uint32_t JUST_PAST_MAINTENANCE_TIMEOUT_MS = 3001;
 class DerivedTestVTServer : public VirtualTerminalServer
 {
 public:
+	struct Suspension
+	{
+		std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet;
+		std::uint8_t errorCodes;
+		std::uint16_t parentIDOfFaultingObject;
+		std::uint16_t faultingObjectID;
+		std::uint8_t objectPoolErrorCodes;
+	};
+
 	explicit DerivedTestVTServer(std::shared_ptr<InternalControlFunction> controlFunctionToUse) :
 	  VirtualTerminalServer(controlFunctionToUse)
 	{
@@ -83,8 +95,17 @@ public:
 		return 0;
 	}
 
-	void suspend_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>) override
+	void suspend_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet,
+	                         std::uint8_t errorCodes,
+	                         std::uint16_t parentIDOfFaultingObject,
+	                         std::uint16_t faultingObjectID,
+	                         std::uint8_t objectPoolErrorCodes) override
 	{
+		suspensions.push_back({ workingSet, errorCodes, parentIDOfFaultingObject, faultingObjectID, objectPoolErrorCodes });
+		if (onSuspendWorkingSet)
+		{
+			onSuspendWorkingSet(workingSet);
+		}
 	}
 
 	SupportedWideCharsErrorCode get_supported_wide_chars(std::uint8_t, std::uint16_t, std::uint16_t, std::uint8_t &numberOfRanges, std::vector<std::uint8_t> &) override
@@ -95,7 +116,7 @@ public:
 
 	std::vector<std::array<std::uint8_t, 7>> get_versions(NAME) override
 	{
-		return {};
+		return versions;
 	}
 
 	std::vector<std::array<std::uint8_t, 32>> get_extended_versions(NAME) override
@@ -120,6 +141,15 @@ public:
 		if (saveSucceeds)
 		{
 			storedVersion.push_back(objectPool);
+
+			// A version stored again moves to the end, as get_versions() lists them in the order they were stored
+			if (versionLabel.size() == VERSION_LABEL_SIZE)
+			{
+				std::array<std::uint8_t, VERSION_LABEL_SIZE> label;
+				std::copy(versionLabel.begin(), versionLabel.end(), label.begin());
+				versions.erase(std::remove(versions.begin(), versions.end(), label), versions.end());
+				versions.push_back(label);
+			}
 		}
 		return saveSucceeds;
 	}
@@ -129,6 +159,13 @@ public:
 		lastVersionLabel = versionLabel;
 		deletedVersionLabels.push_back(versionLabel);
 		storedVersion.clear();
+		if (deleteSucceeds)
+		{
+			versions.erase(std::remove_if(versions.begin(), versions.end(), [&versionLabel](const std::array<std::uint8_t, VERSION_LABEL_SIZE> &label) {
+				               return std::equal(label.begin(), label.end(), versionLabel.begin(), versionLabel.end());
+			               }),
+			               versions.end());
+		}
 		return deleteSucceeds;
 	}
 
@@ -211,6 +248,11 @@ public:
 		audioVolumeSources.push_back(source);
 	}
 
+	void on_update_needed() override
+	{
+		updateNeededCalls++;
+	}
+
 	void run_update()
 	{
 		update();
@@ -242,8 +284,11 @@ public:
 	}
 
 	using VirtualTerminalServer::busyCodesBitfield;
+	using VirtualTerminalServer::DEFAULT_MAX_RX_QUEUE_SIZE_BYTES;
 	using VirtualTerminalServer::managedWorkingSetList;
+	using VirtualTerminalServer::process_rx_messages;
 	using VirtualTerminalServer::send_status_message;
+	using VirtualTerminalServer::store_rx_message;
 
 	std::vector<std::uint8_t> versionToLoad;
 	VTVersion version = VTVersion::Version3;
@@ -251,8 +296,10 @@ public:
 	bool deleteSucceeds = true;
 	std::uint8_t deletedAllVersionsLabelLength = 0;
 	std::vector<std::array<std::uint8_t, 32>> extendedVersions;
+	static constexpr std::size_t VERSION_LABEL_SIZE = 7;
 	std::vector<std::uint8_t> lastVersionLabel;
 	std::vector<std::vector<std::uint8_t>> storedVersion;
+	std::vector<std::array<std::uint8_t, VERSION_LABEL_SIZE>> versions; ///< The 7 byte labels stored, in the order they were stored
 	std::vector<std::vector<std::uint8_t>> deletedVersionLabels;
 	std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> shutDownWorkingSets;
 	std::vector<UnexpectedShutdownReason> shutdownReasons;
@@ -263,24 +310,28 @@ public:
 	bool selectOfferedWorkingSets = true;
 	std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> deletedObjectPools;
 	std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> activeWorkingSetsWhenDeleted;
+	std::vector<Suspension> suspensions;
 	std::uint_fast8_t abortInputCount = 0;
 	std::uint16_t inputOpenOnlyInApp = NULL_OBJECT_ID; ///< An input the app has open without calling set_object_open_for_input(), like a VT built against an older stack
 	std::function<void(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>)> onObjectPoolParseFinished;
 	std::function<void(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>)> onObjectPoolDeleted;
+	std::function<void(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>)> onSuspendWorkingSet;
 	std::uint_fast8_t objectPoolDeletionRequests = 0;
 	std::vector<std::uint8_t> supportedObjects;
 	std::vector<std::array<std::uint16_t, 4>> audioSignals;
 	std::vector<std::shared_ptr<ControlFunction>> audioSignalSources;
 	std::vector<std::uint8_t> audioVolumes;
 	std::vector<std::shared_ptr<ControlFunction>> audioVolumeSources;
+	std::atomic<std::uint32_t> updateNeededCalls = { 0 };
 };
 
 class VirtualTerminalServerMessagingTest : public AgIsoStackTestFixture
 {
 protected:
-	static void receive_from_client(std::shared_ptr<InternalControlFunction> server,
-	                                std::shared_ptr<ControlFunction> client,
-	                                std::initializer_list<std::uint8_t> data)
+	/// @brief Injects a message from the client and lets the network manager deliver it, without the server processing it
+	static void receive_from_client_without_processing(std::shared_ptr<InternalControlFunction> server,
+	                                                   std::shared_ptr<ControlFunction> client,
+	                                                   std::initializer_list<std::uint8_t> data)
 	{
 		CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame(7,
 		                                                                                                   static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
@@ -290,19 +341,29 @@ protected:
 		CANNetworkManager::CANNetwork.update();
 	}
 
+	void receive_from_client(std::shared_ptr<InternalControlFunction> server,
+	                         std::shared_ptr<ControlFunction> client,
+	                         std::initializer_list<std::uint8_t> data)
+	{
+		receive_from_client_without_processing(server, client, data);
+		serverToDrain->process_rx_messages();
+	}
+
 	// Version 2 and prior clients have to send this before they can be managed
-	static void receive_working_set_master_from_client(std::shared_ptr<ControlFunction> client)
+	void receive_working_set_master_from_client(std::shared_ptr<ControlFunction> client)
 	{
 		CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(5,
 		                                                                                                             static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster),
 		                                                                                                             client,
 		                                                                                                             { 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
 		CANNetworkManager::CANNetwork.update();
+		serverToDrain->process_rx_messages();
 	}
 
-	static void receive_tp_from_client(std::shared_ptr<InternalControlFunction> server,
-	                                   std::shared_ptr<ControlFunction> client,
-	                                   const std::vector<std::uint8_t> &payload)
+	/// @brief Sends a payload through the transport protocol and lets the network manager deliver it, without the server processing it
+	static void receive_tp_from_client_without_processing(std::shared_ptr<InternalControlFunction> server,
+	                                                      std::shared_ptr<ControlFunction> client,
+	                                                      const std::vector<std::uint8_t> &payload)
 	{
 		const auto size = static_cast<std::uint16_t>(payload.size());
 		const auto numberOfPackets = static_cast<std::uint8_t>((size + 6) / 7);
@@ -328,6 +389,14 @@ protected:
 			CANNetworkManager::CANNetwork.process_receive_can_message_frame(frame);
 			CANNetworkManager::CANNetwork.update();
 		}
+	}
+
+	void receive_tp_from_client(std::shared_ptr<InternalControlFunction> server,
+	                            std::shared_ptr<ControlFunction> client,
+	                            const std::vector<std::uint8_t> &payload)
+	{
+		receive_tp_from_client_without_processing(server, client, payload);
+		serverToDrain->process_rx_messages();
 	}
 
 	static std::vector<std::uint8_t> extended_version_command(std::uint8_t function, const std::string &label)
@@ -405,12 +474,13 @@ protected:
 	bool poll_for_response(DerivedTestVTServer &server,
 	                       VirtualCANPlugin &plugin,
 	                       std::uint8_t function,
-	                       CANMessageFrame &responseFrame)
+	                       CANMessageFrame &responseFrame,
+	                       std::uint_fast8_t attempts = 50)
 	{
 		bool foundResponse = false;
 
 		// The pool is parsed on a worker thread, so the response only goes out once that thread finishes
-		for (std::uint_fast8_t attempt = 0; (attempt < 50) && (!foundResponse); attempt++)
+		for (std::uint_fast8_t attempt = 0; (attempt < attempts) && (!foundResponse); attempt++)
 		{
 			server.run_update();
 			time_source.update_for_ms(5);
@@ -462,6 +532,84 @@ protected:
 		return !is_nacked(server, client, plugin, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
 	}
 
+	void receive_working_set_member_from_client(std::shared_ptr<ControlFunction> master, std::shared_ptr<ControlFunction> member)
+	{
+		const std::uint64_t memberName = member->get_NAME().get_full_name();
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(5,
+		                                                                                                             static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMember),
+		                                                                                                             master,
+		                                                                                                             { static_cast<std::uint8_t>(memberName),
+		                                                                                                               static_cast<std::uint8_t>(memberName >> 8),
+		                                                                                                               static_cast<std::uint8_t>(memberName >> 16),
+		                                                                                                               static_cast<std::uint8_t>(memberName >> 24),
+		                                                                                                               static_cast<std::uint8_t>(memberName >> 32),
+		                                                                                                               static_cast<std::uint8_t>(memberName >> 40),
+		                                                                                                               static_cast<std::uint8_t>(memberName >> 48),
+		                                                                                                               static_cast<std::uint8_t>(memberName >> 56) }));
+		CANNetworkManager::CANNetwork.update();
+		serverToDrain->process_rx_messages();
+	}
+
+	void receive_working_set_master_with_members_from_client(std::shared_ptr<ControlFunction> master, std::uint8_t workingSetSize)
+	{
+		CANNetworkManager::CANNetwork.process_receive_can_message_frame(test_helpers::create_message_frame_broadcast(5,
+		                                                                                                             static_cast<std::uint32_t>(CANLibParameterGroupNumber::WorkingSetMaster),
+		                                                                                                             master,
+		                                                                                                             { workingSetSize, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
+		CANNetworkManager::CANNetwork.update();
+		serverToDrain->process_rx_messages();
+	}
+
+	// A master announces one member and starts its working set with the given version, then the member asks for the number of soft keys
+	bool read_soft_keys_response_destination_for_member(std::uint8_t serverAddress,
+	                                                    VirtualTerminalBase::VTVersion vtVersion,
+	                                                    std::uint8_t workingSetVersion,
+	                                                    bool announceMember,
+	                                                    std::uint8_t &masterAddress,
+	                                                    std::uint8_t &memberAddress,
+	                                                    std::uint8_t &destination,
+	                                                    std::function<void(DerivedTestVTServer &, std::shared_ptr<ControlFunction>, std::shared_ptr<ControlFunction>)> beforeRequest = nullptr)
+	{
+		VirtualCANPlugin testPlugin;
+		testPlugin.open();
+
+		CANHardwareInterface::set_number_of_can_channels(1);
+		CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+		CANHardwareInterface::start(false);
+
+		auto internalECU = test_helpers::claim_internal_control_function(serverAddress, 0, time_source);
+		auto master = test_helpers::force_claim_partnered_control_function(serverAddress + 1, 0);
+		auto member = test_helpers::force_claim_partnered_control_function(serverAddress + 2, 0);
+		masterAddress = master->get_address();
+		memberAddress = member->get_address();
+
+		DerivedTestVTServer serverUnderTest(internalECU);
+		serverUnderTest.version = vtVersion;
+		serverUnderTest.initialize();
+		serverToDrain = &serverUnderTest;
+
+		receive_working_set_master_with_members_from_client(master, 0x02);
+		if (announceMember)
+		{
+			receive_working_set_member_from_client(master, member);
+		}
+		receive_from_client(internalECU, master, { 0xFF, 0x01, workingSetVersion, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+		if (beforeRequest)
+		{
+			beforeRequest(serverUnderTest, master, member);
+		}
+
+		testPlugin.clear_queue();
+		receive_from_client(internalECU, member, { 0xC2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+
+		CANMessageFrame response = {};
+		const bool foundResponse = poll_for_response(serverUnderTest, testPlugin, 0xC2, response);
+		destination = static_cast<std::uint8_t>(response.identifier >> 8);
+		CANHardwareInterface::stop();
+		serverToDrain = nullptr;
+		return foundResponse;
+	}
+
 	bool read_status_busy_codes(const DerivedTestVTServer &server, VirtualCANPlugin &plugin, std::uint8_t &busyCodes)
 	{
 		CANMessageFrame statusFrame = {};
@@ -469,6 +617,8 @@ protected:
 		busyCodes = statusFrame.data[6];
 		return foundStatus;
 	}
+
+	DerivedTestVTServer *serverToDrain = nullptr; ///< The server the receive helpers drain, set by fixtures that own one
 };
 
 /// @brief An object pool with a selectable Working Set
@@ -495,12 +645,15 @@ protected:
 		client = test_helpers::force_claim_partnered_control_function(0x81, 0);
 		server.reset(new DerivedTestVTServer(internalECU));
 		server->initialize();
+		serverToDrain = server.get();
 		testPlugin.clear_queue();
 	}
 
 	void TearDown() override
 	{
 		CANHardwareInterface::stop();
+		serverToDrain = nullptr;
+		server->join_parsing_threads();
 		server.reset();
 		VirtualTerminalServerMessagingTest::TearDown();
 	}
@@ -521,6 +674,17 @@ protected:
 		return poll_for_response(*server, testPlugin, 0x12, response) && (0x00 == response.data[1]);
 	}
 
+	/// @brief Waits until the server's on_update_needed() was called at least expectedCalls times in total
+	/// @details Waits in real time, not on the test time source, because the parsing thread calls the hook
+	bool wait_for_pending_hook_calls(std::uint32_t expectedCalls)
+	{
+		for (std::uint_fast16_t attempt = 0; (attempt < 1000) && (server->updateNeededCalls < expectedCalls); attempt++)
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
+		return server->updateNeededCalls >= expectedCalls;
+	}
+
 	/// @brief Makes the server answer Load Version with the VT3 test pool
 	void load_vt3_pool_into_server()
 	{
@@ -533,6 +697,62 @@ protected:
 	{
 		receive_from_client(internalECU, client, command);
 		return poll_for_response(*server, testPlugin, (0 == responseFunction) ? *command.begin() : responseFunction, response);
+	}
+
+	/// @brief Runs update() a few times and counts the VT to ECU frames with this function code and the NACKs the server sent
+	void count_responses_and_nacks(std::uint8_t function, std::uint32_t &responses, std::uint32_t &nacks)
+	{
+		CANMessageFrame frame = {};
+
+		responses = 0;
+		nacks = 0;
+		for (std::uint_fast8_t attempt = 0; attempt < 10; attempt++)
+		{
+			server->run_update();
+			time_source.update_for_ms(5);
+			while (testPlugin.read_frame(frame, 10))
+			{
+				if ((0xE6 == get_pdu_format(frame)) && (function == frame.data[0]))
+				{
+					responses++;
+				}
+				else if ((0xE8 == get_pdu_format(frame)) && (0x01 == frame.data[0]))
+				{
+					nacks++;
+				}
+			}
+		}
+	}
+
+	/// @brief Connects the client and drops its object pool transfer, as if the queue was full
+	void drop_object_pool_transfer()
+	{
+		receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+		server->set_max_rx_queue_size(1);
+		receive_from_client_without_processing(internalECU, client, { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF });
+		receive_tp_from_client_without_processing(internalECU, client, SELECTABLE_OBJECT_POOL);
+		server->process_rx_messages();
+		server->set_max_rx_queue_size(DerivedTestVTServer::DEFAULT_MAX_RX_QUEUE_SIZE_BYTES);
+	}
+
+	/// @brief Checks that suspend_working_set() was called once, for the only working set, with the given response fields
+	void expect_single_suspension(std::uint8_t errorCodes, std::uint16_t parentIDOfFaultingObject, std::uint16_t faultingObjectID, std::uint8_t objectPoolErrorCodes) const
+	{
+		ASSERT_EQ(1U, server->suspensions.size());
+		EXPECT_EQ(server->managedWorkingSetList.front(), server->suspensions.front().workingSet);
+		EXPECT_EQ(errorCodes, server->suspensions.front().errorCodes);
+		EXPECT_EQ(parentIDOfFaultingObject, server->suspensions.front().parentIDOfFaultingObject);
+		EXPECT_EQ(faultingObjectID, server->suspensions.front().faultingObjectID);
+		EXPECT_EQ(objectPoolErrorCodes, server->suspensions.front().objectPoolErrorCodes);
+	}
+
+	/// @brief Names a hook call for the order log, like "deleted:82" for the working set at address 0x82
+	static std::string describe_hook_call(const char *hook, const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet)
+	{
+		char text[32];
+
+		std::snprintf(text, sizeof(text), "%s:%x", hook, static_cast<unsigned>(workingSet->get_control_function()->get_address()));
+		return text;
 	}
 
 	VirtualCANPlugin testPlugin;
@@ -572,6 +792,7 @@ TEST_F(VirtualTerminalServerBusTest, BroadcastFromUnmanagedClientIsNotNacked)
 	                                                                                                             client,
 	                                                                                                             { 0x23, 0x34, 0x12, 0x00, 0xFF, 0xFF, 0xFF, 0xFF }));
 	CANNetworkManager::CANNetwork.update();
+	server->process_rx_messages();
 	time_source.update_for_ms(5);
 
 	CANMessageFrame frame = {};
@@ -586,6 +807,186 @@ TEST_F(VirtualTerminalServerBusTest, BroadcastFromUnmanagedClientIsNotNacked)
 	EXPECT_TRUE(is_nacked(internalECU, client, testPlugin, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }));
 }
 
+TEST_F(VirtualTerminalServerBusTest, CommandsAreDroppedWhenTheQueueIsFull)
+{
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	server->set_max_rx_queue_size(1);
+	testPlugin.clear_queue();
+
+	receive_from_client_without_processing(internalECU, client, { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF });
+	receive_from_client_without_processing(internalECU, client, { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF });
+
+	std::uint32_t responses = 0;
+	std::uint32_t nacks = 0;
+	count_responses_and_nacks(0xC0, responses, nacks);
+
+	EXPECT_EQ(1U, responses);
+	EXPECT_EQ(0U, nacks);
+}
+
+TEST_F(VirtualTerminalServerBusTest, AMessageLargerThanTheLimitIsQueuedWhenTheQueueIsEmpty)
+{
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	server->set_max_rx_queue_size(1);
+	testPlugin.clear_queue();
+
+	receive_from_client_without_processing(internalECU, client, { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF });
+
+	std::uint32_t responses = 0;
+	std::uint32_t nacks = 0;
+	count_responses_and_nacks(0xC0, responses, nacks);
+
+	EXPECT_EQ(1U, responses);
+	EXPECT_EQ(0U, nacks);
+}
+
+TEST_F(VirtualTerminalServerBusTest, DroppedObjectPoolTransferFailsEndOfObjectPool)
+{
+	drop_object_pool_transfer();
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+
+	CANMessageFrame response = {};
+	ASSERT_TRUE(poll_for_response(*server, testPlugin, 0x12, response));
+	EXPECT_EQ(0x02, response.data[1]); // VT ran out of memory during transfer
+	EXPECT_EQ(0x08, response.data[6]); // Object pool was deleted from volatile memory
+	EXPECT_EQ(1U, server->deletedObjectPools.size());
+	EXPECT_TRUE(server->parsedWorkingSets.empty());
+	expect_single_suspension(0x02, NULL_OBJECT_ID, NULL_OBJECT_ID, 0x08);
+}
+
+TEST_F(VirtualTerminalServerBusTest, UploadWorksAgainAfterADroppedTransferFailed)
+{
+	drop_object_pool_transfer();
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	CANMessageFrame response = {};
+	ASSERT_TRUE(poll_for_response(*server, testPlugin, 0x12, response));
+
+	receive_tp_from_client(internalECU, client, SELECTABLE_OBJECT_POOL);
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+
+	ASSERT_TRUE(poll_for_response(*server, testPlugin, 0x12, response));
+	EXPECT_EQ(0x00, response.data[1]);
+	EXPECT_EQ(1U, server->suspensions.size());
+}
+
+TEST_F(VirtualTerminalServerBusTest, DeleteObjectPoolAfterADroppedTransferAllowsANewUpload)
+{
+	drop_object_pool_transfer();
+	ASSERT_EQ(1U, server->managedWorkingSetList.size());
+	EXPECT_TRUE(server->managedWorkingSetList.front()->get_object_pool_transfer_dropped());
+
+	receive_from_client(internalECU, client, { 0xB2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	EXPECT_FALSE(server->managedWorkingSetList.front()->get_object_pool_transfer_dropped());
+
+	receive_tp_from_client(internalECU, client, SELECTABLE_OBJECT_POOL);
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+
+	CANMessageFrame response = {};
+	ASSERT_TRUE(poll_for_response(*server, testPlugin, 0x12, response));
+	EXPECT_EQ(0x00, response.data[1]);
+}
+
+TEST_F(VirtualTerminalServerBusTest, AClientsMessagesAfterItsDroppedTransferAreDroppedUntilTheDrain)
+{
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	server->set_max_rx_queue_size(1);
+	receive_from_client_without_processing(internalECU, client, { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF });
+	receive_tp_from_client_without_processing(internalECU, client, SELECTABLE_OBJECT_POOL);
+	server->set_max_rx_queue_size(DerivedTestVTServer::DEFAULT_MAX_RX_QUEUE_SIZE_BYTES);
+	receive_from_client_without_processing(internalECU, client, { 0xB2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	server->process_rx_messages();
+
+	ASSERT_EQ(1U, server->managedWorkingSetList.size());
+	EXPECT_TRUE(server->managedWorkingSetList.front()->get_object_pool_transfer_dropped());
+
+	CANMessageFrame response = {};
+	EXPECT_FALSE(poll_for_response(*server, testPlugin, 0xB2, response));
+}
+
+TEST_F(VirtualTerminalServerBusTest, OtherClientsMessagesAreQueuedAfterADroppedTransfer)
+{
+	auto otherClient = test_helpers::force_claim_partnered_control_function(0x82, 0);
+	receive_from_client(internalECU, otherClient, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	server->set_max_rx_queue_size(1);
+	receive_from_client_without_processing(internalECU, client, { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF });
+	receive_tp_from_client_without_processing(internalECU, client, SELECTABLE_OBJECT_POOL);
+	server->set_max_rx_queue_size(DerivedTestVTServer::DEFAULT_MAX_RX_QUEUE_SIZE_BYTES);
+	receive_from_client_without_processing(internalECU, otherClient, { 0xB2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	server->process_rx_messages();
+
+	CANMessageFrame response = {};
+	EXPECT_TRUE(poll_for_response(*server, testPlugin, 0xB2, response));
+}
+
+TEST_F(VirtualTerminalServerBusTest, DroppedObjectPoolTransferFromAnUnmanagedSourceChangesNothing)
+{
+	server->set_max_rx_queue_size(1);
+
+	receive_from_client_without_processing(internalECU, client, { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF });
+	receive_tp_from_client_without_processing(internalECU, client, SELECTABLE_OBJECT_POOL);
+	testPlugin.clear_queue();
+
+	std::uint32_t responses = 0;
+	std::uint32_t nacks = 0;
+	count_responses_and_nacks(0x12, responses, nacks);
+
+	EXPECT_EQ(0U, responses);
+	EXPECT_EQ(0U, nacks);
+	EXPECT_TRUE(server->managedWorkingSetList.empty());
+}
+
+TEST_F(VirtualTerminalServerBusTest, PendingHookIsCalledOncePerDrain)
+{
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const std::uint32_t before = server->updateNeededCalls;
+
+	receive_from_client_without_processing(internalECU, client, { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF });
+	receive_from_client_without_processing(internalECU, client, { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF });
+	EXPECT_EQ(before + 1, server->updateNeededCalls);
+
+	server->process_rx_messages();
+	receive_from_client_without_processing(internalECU, client, { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF });
+	EXPECT_EQ(before + 2, server->updateNeededCalls);
+}
+
+TEST_F(VirtualTerminalServerBusTest, PendingHookIsCalledWhenAnObjectPoolFailsToParse)
+{
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_from_client(internalECU, client, { 0x11, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA });
+	const std::uint32_t before = server->updateNeededCalls;
+
+	// One call for queuing End of Object Pool, one when the parsing thread ends
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	ASSERT_TRUE(wait_for_pending_hook_calls(before + 2));
+	testPlugin.clear_queue();
+
+	// The state is final when the hook is called, so one update() answers
+	CANMessageFrame responseFrame = {};
+	ASSERT_TRUE(poll_for_response(*server, testPlugin, 0x12, responseFrame, 1));
+	EXPECT_EQ(0x01, responseFrame.data[1]); // Error in object pool
+}
+
+TEST_F(VirtualTerminalServerBusTest, PendingHookIsCalledWhenARestoredObjectPoolParses)
+{
+	load_vt3_pool_into_server();
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	const std::uint32_t before = server->updateNeededCalls;
+
+	receive_from_client(internalECU, client, { 0xD1, 'V', 'E', 'R', 'S', 'I', 'O', 'N' });
+	ASSERT_TRUE(wait_for_pending_hook_calls(before + 2));
+	testPlugin.clear_queue();
+
+	CANMessageFrame responseFrame = {};
+	ASSERT_TRUE(poll_for_response(*server, testPlugin, 0xD1, responseFrame, 1));
+	EXPECT_EQ(0x00, responseFrame.data[5]); // No error
+}
+
 TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsAnErrorWhenTheObjectPoolFailsToParse)
 {
 	// A working set maintenance message with the initiate bit set connects this client to the server
@@ -596,6 +997,13 @@ TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsAnErrorWhenTh
 
 	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
 	testPlugin.clear_queue();
+	std::vector<std::string> order;
+	server->onObjectPoolParseFinished = [&](std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet) {
+		order.push_back(describe_hook_call("parsed", workingSet));
+	};
+	server->onSuspendWorkingSet = [&](std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet) {
+		order.push_back(describe_hook_call("suspended", workingSet));
+	};
 
 	CANMessageFrame responseFrame = {};
 	const bool foundResponse = poll_for_response(*server, testPlugin, 0x12, responseFrame);
@@ -605,6 +1013,10 @@ TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsAnErrorWhenTh
 	EXPECT_EQ(0x04, responseFrame.data[6]); // Any other error
 	ASSERT_EQ(1U, server->parseResults.size());
 	EXPECT_FALSE(server->parseResults.front());
+	ASSERT_EQ(1U, server->suspensions.size());
+	EXPECT_EQ(0x01, server->suspensions.front().errorCodes);
+	EXPECT_EQ(0x04, server->suspensions.front().objectPoolErrorCodes);
+	EXPECT_EQ((std::vector<std::string>{ "parsed:81", "suspended:81" }), order);
 }
 
 TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsAnErrorWhenTheObjectPoolHasNoWorkingSetObject)
@@ -623,6 +1035,7 @@ TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsAnErrorWhenTh
 	ASSERT_TRUE(foundResponse);
 	EXPECT_EQ(0x01, responseFrame.data[1]); // Error in object pool
 	EXPECT_EQ(0x04, responseFrame.data[6]); // Any other error
+	expect_single_suspension(0x01, NULL_OBJECT_ID, NULL_OBJECT_ID, 0x04);
 }
 
 TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsTheParentOfTheFaultyObject)
@@ -640,6 +1053,7 @@ TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsTheParentOfTh
 	EXPECT_EQ(0x01, responseFrame.data[1]);
 	EXPECT_EQ(258, responseFrame.data[2] | (responseFrame.data[3] << 8));
 	EXPECT_EQ(1, responseFrame.data[4] | (responseFrame.data[5] << 8));
+	expect_single_suspension(0x01, 258, 1, 0x04);
 }
 
 TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsNoParentWhenTheFaultyObjectHasNoID)
@@ -684,6 +1098,16 @@ TEST_F(VirtualTerminalServerBusTest, FirstSelectableWorkingSetIsSelectedAutomati
 	ASSERT_TRUE(foundStatusAfterSelectable);
 	EXPECT_EQ(0x82, statusAfterSelectable.data[1]);
 	EXPECT_EQ(0x03E8, statusAfterSelectable.data[2] | (statusAfterSelectable.data[3] << 8));
+}
+
+// The server reads the object with the Working Set's ID as the Working Set when it answers the pool
+TEST_F(VirtualTerminalServerBusTest, PoolThatGivesTheWorkingSetIdToAnotherObjectTypeIsRejected)
+{
+	auto pool = SELECTABLE_OBJECT_POOL;
+	pool.insert(pool.end(), { 0x00, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::NumberVariable), 0x2A, 0x00, 0x00, 0x00 });
+
+	EXPECT_FALSE(upload_pool(pool));
+	EXPECT_EQ(nullptr, server->get_active_working_set());
 }
 
 TEST_F(VirtualTerminalServerBusTest, ObjectPoolParseFinishedIsCalledWithTheWorkingSetAlreadyActive)
@@ -765,6 +1189,7 @@ TEST_F(VirtualTerminalServerBusTest, DeleteObjectPoolDeletesThePoolAndKeepsTheWo
 	EXPECT_EQ(0x00, reloadResponse.data[1]);
 	EXPECT_EQ(2U, server->parseResults.size());
 	EXPECT_TRUE(server->shutDownWorkingSets.empty());
+	EXPECT_TRUE(server->suspensions.empty());
 }
 
 TEST_F(VirtualTerminalServerBusTest, ObjectPoolDeletedIsCalledFromUpdate)
@@ -843,6 +1268,64 @@ TEST_F(VirtualTerminalServerBusTest, ObjectPoolDeletedIsCalledBeforeTheNextPoolO
 	EXPECT_EQ(server->managedWorkingSetList.front(), server->deletedObjectPools.back());
 	EXPECT_EQ(nullptr, server->activeWorkingSetsWhenDeleted.back());
 	EXPECT_EQ(server->managedWorkingSetList.front(), server->get_active_working_set());
+}
+
+TEST_F(VirtualTerminalServerBusTest, SuspendWorkingSetFollowsTheDeletionOfThePoolItReports)
+{
+	auto otherClient = test_helpers::force_claim_partnered_control_function(0x82, 0);
+	std::vector<std::string> order;
+
+	const bool otherPoolLoaded = upload_pool(SELECTABLE_OBJECT_POOL, otherClient);
+	receive_from_client(internalECU, otherClient, { 0xB2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	server->onObjectPoolDeleted = [&](std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet) {
+		order.push_back(describe_hook_call("deleted", workingSet));
+		if (0x82 == workingSet->get_control_function()->get_address())
+		{
+			drop_object_pool_transfer();
+			receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+		}
+	};
+	server->onSuspendWorkingSet = [&](std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet) {
+		order.push_back(describe_hook_call("suspended", workingSet));
+	};
+
+	server->run_update();
+	const std::vector<std::string> afterFirstUpdate = order;
+	server->run_update();
+
+	ASSERT_TRUE(otherPoolLoaded);
+	EXPECT_EQ((std::vector<std::string>{ "deleted:82" }), afterFirstUpdate);
+	EXPECT_EQ((std::vector<std::string>{ "deleted:82", "deleted:81", "suspended:81" }), order);
+}
+
+TEST_F(VirtualTerminalServerBusTest, SuspendWorkingSetIsNotRaisedForTheDeletionOfAnEarlierPoolOfTheSameWorkingSet)
+{
+	ASSERT_TRUE(upload_pool(SELECTABLE_OBJECT_POOL));
+	const auto workingSet = server->managedWorkingSetList.front();
+	server->onObjectPoolDeleted = [&](std::shared_ptr<VirtualTerminalServerManagedWorkingSet> deleted) {
+		EXPECT_EQ(workingSet, deleted);
+		if (1U == server->deletedObjectPools.size())
+		{
+			server->set_max_rx_queue_size(1);
+			receive_from_client_without_processing(internalECU, client, { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF });
+			receive_tp_from_client_without_processing(internalECU, client, SELECTABLE_OBJECT_POOL);
+			server->process_rx_messages();
+			server->set_max_rx_queue_size(DerivedTestVTServer::DEFAULT_MAX_RX_QUEUE_SIZE_BYTES);
+			receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+		}
+	};
+	receive_from_client_without_processing(internalECU, client, { 0xB2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+
+	server->run_update();
+	ASSERT_EQ(1U, server->deletedObjectPools.size());
+	EXPECT_TRUE(server->suspensions.empty());
+
+	server->run_update();
+	ASSERT_EQ(2U, server->deletedObjectPools.size());
+	ASSERT_EQ(1U, server->suspensions.size());
+	EXPECT_EQ(workingSet, server->suspensions.front().workingSet);
+	EXPECT_EQ(0x02, server->suspensions.front().errorCodes);
+	EXPECT_EQ(0x08, server->suspensions.front().objectPoolErrorCodes);
 }
 
 TEST_F(VirtualTerminalServerBusTest, DeleteObjectPoolIsRejectedUntilThePoolIsAnswered)
@@ -1741,7 +2224,9 @@ TEST_F(VirtualTerminalServerBusTest, DeleteVersionWildcardDeletesAllVersionsOnly
 
 	ASSERT_TRUE(foundVersion5Response);
 	EXPECT_EQ(0, version5DeletedAllLength);
-	EXPECT_EQ(32U, version5Label.size());
+	// Before VT version 6 "*" is not a wildcard, and a label can't contain it (ISO 11783-6:2018 E.1), so it is not correct
+	EXPECT_TRUE(version5Label.empty());
+	EXPECT_EQ(0x02, version5Frame.data[5]);
 	ASSERT_TRUE(foundVersion6Response);
 	EXPECT_EQ(0x00, version6Frame.data[5]);
 	EXPECT_EQ(32, version6DeletedAllLength);
@@ -1943,6 +2428,96 @@ TEST_F(VirtualTerminalServerBusTest, Version2ClientIsOnlyManagedAfterAWorkingSet
 	EXPECT_TRUE(managedAfterRestart);
 }
 
+// ISO 11783-06-003 Test #4a, configuration 1
+TEST_F(VirtualTerminalServerMessagingTest, ResponseToAWorkingSetMemberGoesToTheMasterWhenBothAreVersion3)
+{
+	std::uint8_t master = 0;
+	std::uint8_t member = 0;
+	std::uint8_t destination = 0;
+	ASSERT_TRUE(read_soft_keys_response_destination_for_member(0x02, VirtualTerminalBase::VTVersion::Version3, 3, true, master, member, destination));
+	EXPECT_EQ(master, destination);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ResponseToAWorkingSetMemberGoesToTheMasterWhenTheWorkingSetIsVersion3)
+{
+	std::uint8_t master = 0;
+	std::uint8_t member = 0;
+	std::uint8_t destination = 0;
+	ASSERT_TRUE(read_soft_keys_response_destination_for_member(0x05, VirtualTerminalBase::VTVersion::Version4, 3, true, master, member, destination));
+	EXPECT_EQ(master, destination);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ResponseToAWorkingSetMemberGoesToTheMasterWhenTheVTIsVersion3)
+{
+	std::uint8_t master = 0;
+	std::uint8_t member = 0;
+	std::uint8_t destination = 0;
+	ASSERT_TRUE(read_soft_keys_response_destination_for_member(0x08, VirtualTerminalBase::VTVersion::Version3, 4, true, master, member, destination));
+	EXPECT_EQ(master, destination);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ResponseToAWorkingSetMemberGoesToTheMemberWhenBothAreVersion4OrLater)
+{
+	std::uint8_t master = 0;
+	std::uint8_t member = 0;
+	std::uint8_t destination = 0;
+	ASSERT_TRUE(read_soft_keys_response_destination_for_member(0x0B, VirtualTerminalBase::VTVersion::Version6, 5, true, master, member, destination));
+	EXPECT_EQ(member, destination);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ResponseGoesToTheSenderWhenNoMasterAnnouncedIt)
+{
+	std::uint8_t master = 0;
+	std::uint8_t member = 0;
+	std::uint8_t destination = 0;
+	ASSERT_TRUE(read_soft_keys_response_destination_for_member(0x0E, VirtualTerminalBase::VTVersion::Version3, 3, false, master, member, destination));
+	EXPECT_EQ(member, destination);
+}
+
+// ISO 11783-7 10.2 d: a new Working Set Master message replaces the old definition
+TEST_F(VirtualTerminalServerMessagingTest, ResponseGoesToTheSenderWhenItsMasterRedefinesTheSetWithoutIt)
+{
+	std::uint8_t master = 0;
+	std::uint8_t member = 0;
+	std::uint8_t destination = 0;
+	ASSERT_TRUE(read_soft_keys_response_destination_for_member(0x11, VirtualTerminalBase::VTVersion::Version3, 3, true, master, member, destination, [this](DerivedTestVTServer &, std::shared_ptr<ControlFunction> workingSetMaster, std::shared_ptr<ControlFunction>) {
+		receive_working_set_master_with_members_from_client(workingSetMaster, 0x01);
+	}));
+	EXPECT_EQ(member, destination);
+}
+
+// ISO 11783-7 10.2 d: a control function is a member of one working set only
+TEST_F(VirtualTerminalServerMessagingTest, ResponseGoesToTheNewMasterWhenAMemberMovesToAnotherWorkingSet)
+{
+	std::uint8_t master = 0;
+	std::uint8_t member = 0;
+	std::uint8_t destination = 0;
+	std::uint8_t newMaster = 0;
+	ASSERT_TRUE(read_soft_keys_response_destination_for_member(0x14, VirtualTerminalBase::VTVersion::Version3, 3, true, master, member, destination, [this, &newMaster](DerivedTestVTServer &, std::shared_ptr<ControlFunction>, std::shared_ptr<ControlFunction> workingSetMember) {
+		auto otherMaster = test_helpers::force_claim_partnered_control_function(0x17, 0);
+		newMaster = otherMaster->get_address();
+		receive_working_set_master_with_members_from_client(otherMaster, 0x02);
+		receive_working_set_member_from_client(otherMaster, workingSetMember);
+	}));
+	EXPECT_NE(master, destination);
+	EXPECT_EQ(newMaster, destination);
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, ResponseGoesToTheSenderWhenItsMasterShutsDown)
+{
+	std::uint8_t master = 0;
+	std::uint8_t member = 0;
+	std::uint8_t destination = 0;
+	std::size_t shutdowns = 0;
+	ASSERT_TRUE(read_soft_keys_response_destination_for_member(0x18, VirtualTerminalBase::VTVersion::Version3, 3, true, master, member, destination, [this, &shutdowns](DerivedTestVTServer &server, std::shared_ptr<ControlFunction>, std::shared_ptr<ControlFunction>) {
+		time_source.simulate_delay_ms(JUST_PAST_MAINTENANCE_TIMEOUT_MS);
+		server.run_update();
+		shutdowns = server.shutdownReasons.size();
+	}));
+	EXPECT_EQ(1U, shutdowns);
+	EXPECT_EQ(member, destination);
+}
+
 class TestWorkingSet : public VirtualTerminalServerManagedWorkingSet
 {
 public:
@@ -2102,6 +2677,82 @@ TEST_F(VirtualTerminalServerBusTest, UnsupportedCommandRunByAMacroIsNotAnsweredW
 	EXPECT_FALSE(answered);
 }
 
+TEST_F(VirtualTerminalServerBusTest, MaintenanceQueuedDuringAStallKeepsTheWorkingSet)
+{
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	time_source.simulate_delay_ms(2900);
+	receive_from_client_without_processing(internalECU, client, { 0xFF, 0x00, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	time_source.simulate_delay_ms(600);
+	server->run_update();
+
+	EXPECT_TRUE(server->shutdownReasons.empty());
+	EXPECT_TRUE(is_managed(internalECU, client, testPlugin));
+}
+
+TEST_F(VirtualTerminalServerBusTest, MaintenanceQueuedBeforeAStallTimesOut)
+{
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_from_client_without_processing(internalECU, client, { 0xFF, 0x00, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	time_source.simulate_delay_ms(5000);
+	server->run_update();
+
+	ASSERT_EQ(1U, server->shutdownReasons.size());
+	EXPECT_EQ(VirtualTerminalServer::UnexpectedShutdownReason::MaintenanceTimeout, server->shutdownReasons.front());
+}
+
+TEST_F(VirtualTerminalServerBusTest, MaintenanceQueuedDuringAStallInsideUpdateKeepsTheWorkingSet)
+{
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	// The maintenance message arrives while a hook inside update() stalls, after update() drained the queue
+	server->onObjectPoolDeleted = [&](std::shared_ptr<VirtualTerminalServerManagedWorkingSet>) {
+		time_source.simulate_delay_ms(2900);
+		receive_from_client_without_processing(internalECU, client, { 0xFF, 0x00, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+		time_source.simulate_delay_ms(600);
+	};
+	receive_from_client_without_processing(internalECU, client, { 0xB2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	server->run_update();
+	server->run_update();
+
+	EXPECT_TRUE(server->shutdownReasons.empty());
+	EXPECT_TRUE(is_managed(internalECU, client, testPlugin));
+}
+
+TEST_F(VirtualTerminalServerBusTest, MessagesCanBeStoredFromAnotherThreadWhileUpdating)
+{
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+
+	const CANIdentifier identifier(CANIdentifier::Type::Extended,
+	                               static_cast<std::uint32_t>(CANLibParameterGroupNumber::ECUtoVirtualTerminal),
+	                               CANIdentifier::CANPriority::PriorityLowest7,
+	                               internalECU->get_address(),
+	                               client->get_address());
+	const CANMessage message(CANMessage::Type::Receive,
+	                         identifier,
+	                         { 0xC0, 0xFF, 0x00, 0x10, 0x00, 0x00, 0xFF, 0xFF },
+	                         client,
+	                         internalECU,
+	                         0);
+	std::atomic<bool> done = { false };
+
+	std::thread receiver([&]() {
+		for (std::uint32_t i = 0; i < 1000; i++)
+		{
+			DerivedTestVTServer::store_rx_message(message, server.get());
+		}
+		done = true;
+	});
+
+	while (!done)
+	{
+		server->run_update();
+	}
+	receiver.join();
+	server->run_update();
+
+	EXPECT_TRUE(is_managed(internalECU, client, testPlugin));
+}
+
 /// @brief A server that runs macro 1 of another working set the first time it is told to set the audio volume
 class NestingTestVTServer : public DerivedTestVTServer
 {
@@ -2233,15 +2884,13 @@ TEST_F(VirtualTerminalServerBusTest, FunctionsTheVTAcceptsWithoutAnAnswerOrAnswe
 	EXPECT_FALSE(answered);
 }
 
-// Working Set 0 with active mask 1000 and Container 2000 as its one object, Data Mask 1000, Container 2000, and Number Variable 2,
-// as the parser wants more bytes after a Data Mask than an empty one has
+// Working Set 0 with active mask 1000 and Container 2000 as its one object, Data Mask 1000, and Container 2000
 static std::vector<std::uint8_t> create_small_pool()
 {
 	constexpr auto WORKING_SET = static_cast<std::uint8_t>(VirtualTerminalObjectType::WorkingSet);
 	constexpr auto DATA_MASK = static_cast<std::uint8_t>(VirtualTerminalObjectType::DataMask);
 	constexpr auto CONTAINER = static_cast<std::uint8_t>(VirtualTerminalObjectType::Container);
-	constexpr auto NUMBER_VARIABLE = static_cast<std::uint8_t>(VirtualTerminalObjectType::NumberVariable);
-	return { 0x00, 0x00, WORKING_SET, 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0xD0, 0x07, 0x00, 0x00, 0x00, 0x00, 0xE8, 0x03, DATA_MASK, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xD0, 0x07, CONTAINER, 0x0A, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, NUMBER_VARIABLE, 0x00, 0x00, 0x00, 0x00 };
+	return { 0x00, 0x00, WORKING_SET, 0x00, 0x01, 0xE8, 0x03, 0x01, 0x00, 0x00, 0xD0, 0x07, 0x00, 0x00, 0x00, 0x00, 0xE8, 0x03, DATA_MASK, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xD0, 0x07, CONTAINER, 0x0A, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x00 };
 }
 
 // Waits a bounded time for the parsing thread to finish, without joining it
@@ -2547,6 +3196,62 @@ TEST_F(VirtualTerminalServerMaskChangeMacroTest, ChangeSoftKeyMaskUsesTheVisibil
 	EXPECT_EQ((std::vector<std::uint16_t>{ 10, 12, 13, 16, 17, 18 }), macrosThatRan);
 }
 
+TEST_F(VirtualTerminalServerBusTest, VersionCommandsCheckTheLabelAndUseTheLastStoredVersionForABlankLabel)
+{
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	receive_from_client(internalECU, client, { 0x11, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 });
+	testPlugin.clear_queue();
+
+	const std::vector<std::uint8_t> storedLabel = { 'A', 'B', '-', '1', '2', '_', '3' };
+	CANMessageFrame response = {};
+	const auto errorCodeOf = [&](std::uint8_t function) {
+		return poll_for_response(*server, testPlugin, function, response) ? static_cast<int>(response.data[5]) : -1;
+	};
+
+	// ISO 11783-6:2018 E.4: a blank label overwrites the last stored version, and is an error when there is none
+	receive_from_client(internalECU, client, { 0xD0, ' ', ' ', ' ', ' ', ' ', ' ', ' ' });
+	const int blankStoreWithoutAVersion = errorCodeOf(0xD0);
+
+	// E.1: '*' and '>' can't be used in a version label (ISO 11783-06-001 Test #5, 5y)
+	receive_from_client(internalECU, client, { 0xD0, 'A', 'B', 'C', '1', '2', '*', '>' });
+	const int invalidStore = errorCodeOf(0xD0);
+	const auto deletesAfterInvalidStore = server->deletedVersionLabels.size();
+
+	receive_from_client(internalECU, client, { 0xD0, 'A', 'B', '-', '1', '2', '_', '3' });
+	const int store = errorCodeOf(0xD0);
+
+	// The blank label now overwrites AB-12_3 (5t), instead of storing a second version with a blank label
+	server->lastVersionLabel.clear();
+	receive_from_client(internalECU, client, { 0xD0, ' ', ' ', ' ', ' ', ' ', ' ', ' ' });
+	const int blankStore = errorCodeOf(0xD0);
+	const auto blankStoreLabel = server->lastVersionLabel;
+
+	// E.6: a blank label loads the last stored version
+	server->lastVersionLabel.clear();
+	receive_from_client(internalECU, client, { 0xD1, ' ', ' ', ' ', ' ', ' ', ' ', ' ' });
+	poll_for_response(*server, testPlugin, 0xD1, response);
+	const auto blankLoadLabel = server->lastVersionLabel;
+
+	// E.8: an invalid label is not correct, and a blank one deletes the last stored version
+	receive_from_client(internalECU, client, { 0xD2, 'A', 'B', ':', '1', '2', ' ', ' ' });
+	const int invalidDelete = errorCodeOf(0xD2);
+	server->lastVersionLabel.clear();
+	receive_from_client(internalECU, client, { 0xD2, ' ', ' ', ' ', ' ', ' ', ' ', ' ' });
+	const int blankDelete = errorCodeOf(0xD2);
+	const auto blankDeleteLabel = server->lastVersionLabel;
+
+	EXPECT_EQ(0x02, blankStoreWithoutAVersion); // Version label is not correct
+	EXPECT_EQ(0x02, invalidStore);
+	EXPECT_EQ(0U, deletesAfterInvalidStore); // Nothing was stored or replaced
+	EXPECT_EQ(0x00, store);
+	EXPECT_EQ(0x00, blankStore);
+	EXPECT_EQ(storedLabel, blankStoreLabel);
+	EXPECT_EQ(storedLabel, blankLoadLabel);
+	EXPECT_EQ(0x02, invalidDelete); // Version label is not correct or unknown
+	EXPECT_EQ(0x00, blankDelete);
+	EXPECT_EQ(storedLabel, blankDeleteLabel);
+}
+
 TEST_F(VirtualTerminalServerMessagingTest, MacroWithMoreThan255CommandsRunsAllOfThem)
 {
 	VirtualCANPlugin testPlugin;
@@ -2786,6 +3491,16 @@ protected:
 
 	std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet;
 };
+
+TEST_F(VirtualTerminalServerOpenInputTest, PoolUpdateCannotGiveTheWorkingSetIdToAnotherObjectType)
+{
+	// Number Variable 31, then a Number Variable with the Working Set's ID
+	send_pool_update({ 0x1F, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::NumberVariable), 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::NumberVariable), 0x2A, 0x00, 0x00, 0x00 });
+
+	EXPECT_FALSE(pool_update_succeeded());
+	ASSERT_NE(nullptr, workingSet->get_working_set_object());
+	EXPECT_EQ(VirtualTerminalObjectType::WorkingSet, workingSet->get_working_set_object()->get_object_type());
+}
 
 TEST_F(VirtualTerminalServerOpenInputTest, DisablingTheOpenInputIsRefused)
 {
@@ -3063,6 +3778,26 @@ TEST_F(VirtualTerminalServerOpenInputTest, ReplacingAListItemThatDoesNotHoldTheO
 	EXPECT_EQ(11, workingSet->get_object_open_for_input());
 }
 
+TEST_F(VirtualTerminalServerOpenInputTest, CommandsAreOnlyProcessedInUpdate)
+{
+	std::uint32_t repaints = 0;
+	server->get_on_repaint_event_dispatcher().add_listener([&repaints](std::shared_ptr<VirtualTerminalServerManagedWorkingSet>) { repaints++; });
+
+	receive_from_client_without_processing(internalECU, client, { 0xA8, 0x14, 0x00, 0xFF, 0x07, 0x00, 0x00, 0x00 }); // Change Numeric Value, Input Number 20 to 7
+	const auto framesBefore = read_vt_frames();
+
+	EXPECT_TRUE(functions_of(framesBefore).empty());
+	EXPECT_EQ(5U, input_number_value());
+	EXPECT_EQ(0U, repaints);
+
+	server->run_update();
+	const auto framesAfter = read_vt_frames();
+
+	EXPECT_EQ((std::vector<std::uint8_t>{ 0xA8 }), functions_of(framesAfter));
+	EXPECT_EQ(7U, input_number_value());
+	EXPECT_GT(repaints, 0U);
+}
+
 TEST_F(VirtualTerminalServerMessagingTest, OutputMeterAndInputBooleanStaySquare)
 {
 	VirtualCANPlugin testPlugin;
@@ -3103,17 +3838,17 @@ TEST_F(VirtualTerminalServerMessagingTest, OutputMeterAndInputBooleanStaySquare)
 	if (parsed)
 	{
 		// Change Attribute width: the height follows (ISO 11783-6:2018, B.8.2 and B.11.2)
-		receive_from_client(internalECU, client, { 0xAF, 0x06, 0x00, 0x01, 0x50, 0x00, 0x00, 0x00 });
+		receive_from_client_without_processing(internalECU, client, { 0xAF, 0x06, 0x00, 0x01, 0x50, 0x00, 0x00, 0x00 });
 		poll_for_response(serverUnderTest, testPlugin, 0xAF, response);
 		meterAfterAttribute[0] = meter->get_width();
 		meterAfterAttribute[1] = meter->get_height();
-		receive_from_client(internalECU, client, { 0xAF, 0x07, 0x00, 0x02, 0x1E, 0x00, 0x00, 0x00 });
+		receive_from_client_without_processing(internalECU, client, { 0xAF, 0x07, 0x00, 0x02, 0x1E, 0x00, 0x00, 0x00 });
 		poll_for_response(serverUnderTest, testPlugin, 0xAF, response);
 		booleanAfterAttribute[0] = inputBoolean->get_width();
 		booleanAfterAttribute[1] = inputBoolean->get_height();
 
 		// Change Size with a height of 0: the size is 0 and the object is not drawn (F.18). The command is accepted.
-		receive_from_client(internalECU, client, { 0xA6, 0x06, 0x00, 0x64, 0x00, 0x00, 0x00, 0xFF });
+		receive_from_client_without_processing(internalECU, client, { 0xA6, 0x06, 0x00, 0x64, 0x00, 0x00, 0x00, 0xFF });
 		if (poll_for_response(serverUnderTest, testPlugin, 0xA6, response))
 		{
 			sizeZeroError = response.data[3];
@@ -3122,11 +3857,11 @@ TEST_F(VirtualTerminalServerMessagingTest, OutputMeterAndInputBooleanStaySquare)
 		meterAfterSizeZero[1] = meter->get_height();
 
 		// Change Size to a size that is not square: the width is the side of the square
-		receive_from_client(internalECU, client, { 0xA6, 0x06, 0x00, 0x64, 0x00, 0x3C, 0x00, 0xFF });
+		receive_from_client_without_processing(internalECU, client, { 0xA6, 0x06, 0x00, 0x64, 0x00, 0x3C, 0x00, 0xFF });
 		poll_for_response(serverUnderTest, testPlugin, 0xA6, response);
 		meterAfterSize[0] = meter->get_width();
 		meterAfterSize[1] = meter->get_height();
-		receive_from_client(internalECU, client, { 0xA6, 0x07, 0x00, 0x28, 0x00, 0x14, 0x00, 0xFF });
+		receive_from_client_without_processing(internalECU, client, { 0xA6, 0x07, 0x00, 0x28, 0x00, 0x14, 0x00, 0xFF });
 		poll_for_response(serverUnderTest, testPlugin, 0xA6, response);
 		booleanAfterSize[0] = inputBoolean->get_width();
 		booleanAfterSize[1] = inputBoolean->get_height();
@@ -3152,8 +3887,11 @@ TEST_F(VirtualTerminalServerMessagingTest, OutputMeterAndInputBooleanStaySquare)
 
 TEST(VirtualTerminalServerManagedWorkingSetTest, ParsedObjectsReplaceTheObjectTreeOnlyWhenTheThreadIsJoined)
 {
+	constexpr auto NUMBER_VARIABLE = static_cast<std::uint8_t>(VirtualTerminalObjectType::NumberVariable);
+	auto pool = create_small_pool();
+	pool.insert(pool.end(), { 0x02, 0x00, NUMBER_VARIABLE, 0x00, 0x00, 0x00, 0x00 });
 	TestWorkingSet workingSet(nullptr);
-	workingSet.add_iop_raw_data(create_small_pool());
+	workingSet.add_iop_raw_data(pool);
 	workingSet.start_parsing_thread();
 	workingSet.join_parsing_thread();
 	ASSERT_NE(nullptr, workingSet.get_working_set_object());
@@ -3161,7 +3899,6 @@ TEST(VirtualTerminalServerManagedWorkingSetTest, ParsedObjectsReplaceTheObjectTr
 	ASSERT_NE(nullptr, numberVariable2);
 
 	// A later transfer adds Number Variable 3 and replaces Number Variable 2, with 0xFF padding after them
-	constexpr auto NUMBER_VARIABLE = static_cast<std::uint8_t>(VirtualTerminalObjectType::NumberVariable);
 	workingSet.add_iop_raw_data({ 0x03, 0x00, NUMBER_VARIABLE, 0x07, 0x00, 0x00, 0x00, 0x02, 0x00, NUMBER_VARIABLE, 0x09, 0x00, 0x00, 0x00, 0xFF, 0xFF });
 	workingSet.start_parsing_thread();
 	ASSERT_EQ(VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Success, wait_for_parsing_thread(workingSet));
@@ -3227,4 +3964,25 @@ TEST(VirtualTerminalServerManagedWorkingSetTest, TheParentOfAFaultingObjectCanBe
 	workingSet.join_parsing_thread();
 	EXPECT_EQ(2000, workingSet.get_object_pool_faulting_object_id());
 	EXPECT_EQ(0, workingSet.get_object_pool_faulting_parent_object_id());
+}
+
+TEST(VirtualTerminalServerManagedWorkingSetTest, ALaterTransferCannotReplaceAnObjectWithAnotherType)
+{
+	TestWorkingSet workingSet(nullptr);
+	workingSet.add_iop_raw_data(create_small_pool());
+	workingSet.start_parsing_thread();
+	workingSet.join_parsing_thread();
+	ASSERT_NE(nullptr, workingSet.get_working_set_object());
+	const auto objectsBefore = workingSet.get_object_tree();
+
+	// Number Variable 2000 would replace Container 2000, which the parser's own object tree doesn't hold
+	constexpr auto NUMBER_VARIABLE = static_cast<std::uint8_t>(VirtualTerminalObjectType::NumberVariable);
+	workingSet.add_iop_raw_data({ 0xD0, 0x07, NUMBER_VARIABLE, 0x00, 0x00, 0x00, 0x00 });
+	workingSet.start_parsing_thread();
+	ASSERT_EQ(VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Fail, wait_for_parsing_thread(workingSet));
+	workingSet.join_parsing_thread();
+	EXPECT_EQ(2000, workingSet.get_object_pool_faulting_object_id());
+	EXPECT_EQ(0, workingSet.get_object_pool_faulting_parent_object_id());
+	EXPECT_EQ(objectsBefore, workingSet.get_object_tree());
+	EXPECT_EQ(VirtualTerminalObjectType::Container, workingSet.get_object_by_id(2000)->get_object_type());
 }

@@ -9,7 +9,9 @@
 #include "helpers/control_function_helpers.hpp"
 #include "helpers/test_fixture.hpp"
 
+#include <atomic>
 #include <cmath>
+#include <thread>
 
 using namespace isobus;
 
@@ -29,6 +31,11 @@ public:
 	void test_wrapper_set_flag(std::uint32_t flag)
 	{
 		txFlags.set_flag(flag);
+	}
+
+	static void test_wrapper_process_rx_message(const CANMessage &message, void *parentPointer)
+	{
+		process_rx_message(message, parentPointer);
 	}
 
 	static void test_maintain_power_callback(const std::shared_ptr<MaintainPowerData>, bool)
@@ -129,6 +136,7 @@ TEST_F(MaintainPowerTest, MessageParsing)
 	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
 	CANNetworkManager::CANNetwork.update();
 
+	receivedData = interfaceUnderTest.get_received_maintain_power(0);
 	EXPECT_EQ(1, interfaceUnderTest.get_number_received_maintain_power_sources());
 	EXPECT_NE(nullptr, interfaceUnderTest.get_received_maintain_power(0));
 	EXPECT_EQ(MaintainPowerInterface::MaintainPowerData::ImplementInWorkState::ImplementNotInWorkState, receivedData->get_implement_in_work_state());
@@ -315,3 +323,140 @@ TEST_F(MaintainPowerTest, MessageEncoding)
 	CANNetworkManager::CANNetwork.deactivate_control_function(testECU);
 	CANHardwareInterface::stop();
 }
+
+TEST_F(MaintainPowerTest, LateUpdateAfterKeyOffSendsOnce)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto testECU = test_helpers::claim_internal_control_function(0x83, 0, time_source);
+	TestMaintainPowerInterface interfaceUnderTest(testECU);
+	interfaceUnderTest.initialize();
+	interfaceUnderTest.set_maintain_power_time(3000);
+	test_helpers::force_claim_partnered_control_function(0x49, 0);
+
+	CANMessageFrame testFrame;
+	memset(&testFrame, 0, sizeof(testFrame));
+	testFrame.isExtendedFrame = true;
+	testFrame.identifier = 0x0CFE4849;
+	testFrame.dataLength = 8;
+	testFrame.data[7] = 0x55; // Key switch not off
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.update();
+	testFrame.data[7] = 0x00; // Key switch off
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(5);
+
+	while (!testPlugin.get_queue_empty())
+	{
+		testPlugin.read_frame(testFrame);
+	}
+
+	// The first update comes more than half the repeat period after the key-off frame
+	time_source.simulate_delay_ms(1500);
+	interfaceUnderTest.update();
+	time_source.update_for_ms(5);
+	ASSERT_TRUE(testPlugin.read_frame(testFrame));
+	EXPECT_EQ(0x18FE4783, testFrame.identifier);
+	EXPECT_TRUE(testPlugin.get_queue_empty());
+
+	interfaceUnderTest.update();
+	time_source.update_for_ms(5);
+	EXPECT_TRUE(testPlugin.get_queue_empty());
+
+	testPlugin.close();
+}
+
+TEST_F(MaintainPowerTest, KeyOnBeforeUpdateSendsNoRequest)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto testECU = test_helpers::claim_internal_control_function(0x84, 0, time_source);
+	TestMaintainPowerInterface interfaceUnderTest(testECU);
+	interfaceUnderTest.initialize();
+	interfaceUnderTest.set_maintain_power_time(3000);
+	test_helpers::force_claim_partnered_control_function(0x49, 0);
+
+	CANMessageFrame testFrame;
+	memset(&testFrame, 0, sizeof(testFrame));
+	testFrame.isExtendedFrame = true;
+	testFrame.identifier = 0x0CFE4849;
+	testFrame.dataLength = 8;
+	testFrame.data[7] = 0x55; // Key switch not off
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.update();
+	testFrame.data[7] = 0x00; // Key switch off
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.update();
+	testFrame.data[7] = 0x55; // Key switch back on before the interface updates
+	CANNetworkManager::CANNetwork.process_receive_can_message_frame(testFrame);
+	CANNetworkManager::CANNetwork.update();
+	time_source.update_for_ms(5);
+
+	while (!testPlugin.get_queue_empty())
+	{
+		testPlugin.read_frame(testFrame);
+	}
+
+	interfaceUnderTest.update();
+	time_source.update_for_ms(5);
+	EXPECT_TRUE(testPlugin.get_queue_empty());
+
+	time_source.simulate_delay_ms(1100);
+	interfaceUnderTest.update();
+	time_source.update_for_ms(5);
+	EXPECT_TRUE(testPlugin.get_queue_empty());
+
+	testPlugin.close();
+}
+
+#if !defined CAN_STACK_DISABLE_THREADS && !defined ARDUINO
+TEST_F(MaintainPowerTest, ReceiveThreadDoesNotRaceUpdate)
+{
+	TestMaintainPowerInterface interfaceUnderTest(nullptr);
+	interfaceUnderTest.initialize();
+	auto sender = test_helpers::force_claim_partnered_control_function(0x49, 0);
+
+	std::atomic<bool> done = { false };
+	std::thread receiver([&interfaceUnderTest, &sender, &done]() {
+		const CANIdentifier wbsIdentifier(CANIdentifier::Type::Extended, 0xFE48, CANIdentifier::CANPriority::Priority3, 0xFF, 0x49);
+		const CANIdentifier maintainPowerIdentifier(CANIdentifier::Type::Extended, 0xFE47, CANIdentifier::CANPriority::PriorityDefault6, 0xFF, 0x49);
+
+		for (std::uint16_t i = 0; i < 500; i++)
+		{
+			const bool odd = (1 == (i % 2));
+			const std::vector<std::uint8_t> wbsData = { 0, 0, 0, 0, 0, 0, 0, static_cast<std::uint8_t>(odd ? 0x00 : 0x04) };
+			const std::vector<std::uint8_t> maintainPowerData = { static_cast<std::uint8_t>(odd ? 0x1F : 0x0F), 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+			TestMaintainPowerInterface::test_wrapper_process_rx_message(CANMessage(CANMessage::Type::Receive, wbsIdentifier, wbsData, sender, nullptr, 0), &interfaceUnderTest);
+			TestMaintainPowerInterface::test_wrapper_process_rx_message(CANMessage(CANMessage::Type::Receive, maintainPowerIdentifier, maintainPowerData, sender, nullptr, 0), &interfaceUnderTest);
+		}
+		done = true;
+	});
+
+	while (!done)
+	{
+		interfaceUnderTest.update();
+		interfaceUnderTest.get_number_received_maintain_power_sources();
+		auto data = interfaceUnderTest.get_received_maintain_power(0);
+		if (nullptr != data)
+		{
+			data->get_maintain_actuator_power();
+		}
+	}
+	receiver.join();
+
+	auto data = interfaceUnderTest.get_received_maintain_power(0);
+	ASSERT_NE(nullptr, data);
+	EXPECT_EQ(MaintainPowerInterface::MaintainPowerData::MaintainActuatorPower::RequirementFor2SecondsMoreForPWR, data->get_maintain_actuator_power());
+}
+#endif

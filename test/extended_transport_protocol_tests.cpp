@@ -118,6 +118,65 @@ TEST_F(ExtendedTransportProtocolTest, RequestToSendWithInvalidSizeIsAborted)
 	EXPECT_EQ(abortReasons, std::vector<std::uint8_t>({ 250, 250 }));
 }
 
+TEST_F(ExtendedTransportProtocolTest, RequestToSendAboveTheConfiguredReceiveSizeIsAborted)
+{
+	auto originator = test_helpers::create_mock_control_function(0x01);
+	auto receiver = test_helpers::create_mock_internal_control_function(0x0B);
+
+	std::vector<std::uint8_t> sentControlBytes;
+	auto sendFrameCallback = [&](std::uint32_t parameterGroupNumber,
+	                             CANDataSpan data,
+	                             std::shared_ptr<InternalControlFunction>,
+	                             std::shared_ptr<ControlFunction>,
+	                             CANIdentifier::CANPriority) {
+		if (0xC800 == parameterGroupNumber)
+		{
+			sentControlBytes.push_back(data[0]);
+			if (255 == data[0])
+			{
+				sentControlBytes.push_back(data[1]); // Abort reason
+			}
+		}
+		return true;
+	};
+
+	CANNetworkConfiguration configuration;
+	EXPECT_EQ(117440505U, configuration.get_max_extended_transport_protocol_receive_size()); // The protocol maximum by default
+	configuration.set_max_extended_transport_protocol_receive_size(100000);
+	EXPECT_EQ(100000U, configuration.get_max_extended_transport_protocol_receive_size());
+	ExtendedTransportProtocolManager manager(sendFrameCallback, nullptr, &configuration);
+
+	const auto request_to_send = [&](std::uint32_t size) {
+		manager.process_message(test_helpers::create_message(7,
+		                                                     0xC800,
+		                                                     receiver,
+		                                                     originator,
+		                                                     { 20, // RTS control byte
+		                                                       static_cast<std::uint8_t>(size & 0xFF),
+		                                                       static_cast<std::uint8_t>((size >> 8) & 0xFF),
+		                                                       static_cast<std::uint8_t>((size >> 16) & 0xFF),
+		                                                       static_cast<std::uint8_t>(size >> 24),
+		                                                       0xEB,
+		                                                       0xFE,
+		                                                       0x00 }));
+	};
+
+	// Above the limit: aborted before anything is allocated
+	request_to_send(100001);
+	EXPECT_FALSE(manager.has_session(originator, receiver));
+	EXPECT_EQ(sentControlBytes, std::vector<std::uint8_t>({ 255, 250 }));
+
+	// At the limit: accepted
+	sentControlBytes.clear();
+	request_to_send(100000);
+	EXPECT_TRUE(manager.has_session(originator, receiver));
+	EXPECT_EQ(std::vector<std::uint8_t>({ 21 }), sentControlBytes); // Answered with a CTS, not an abort
+
+	// A limit above the protocol maximum is capped
+	configuration.set_max_extended_transport_protocol_receive_size(0xFFFFFFFF);
+	EXPECT_EQ(117440505U, configuration.get_max_extended_transport_protocol_receive_size());
+}
+
 // The DPO covers as many packets as the receiver's CTS allows, whatever that is. Some VTs reject
 // an object pool sent with fewer packets per DPO than their CTS allowed, even though the
 // transfer itself completes.

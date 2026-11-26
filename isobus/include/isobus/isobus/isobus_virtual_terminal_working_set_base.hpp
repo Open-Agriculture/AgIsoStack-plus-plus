@@ -69,9 +69,9 @@ namespace isobus
 
 	protected:
 		/// @brief Adds an object to the object tree, and replaces an object
-		/// if there's already one in the tree with the same ID.
+		/// if there's already one in the tree with the same ID and of the same type.
 		/// @param[in] objectToAdd The object to add to the object tree
-		/// @returns true if the object was added or replaced, otherwise false
+		/// @returns true if the object was added or replaced, false if it is nullptr or the object with its ID is of another type
 		bool add_or_replace_object(std::shared_ptr<VTObject> objectToAdd);
 
 		/// @brief Parses one object in the remaining object pool data

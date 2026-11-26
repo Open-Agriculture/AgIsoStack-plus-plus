@@ -653,9 +653,9 @@ namespace isobus
 		else if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::ParameterGroupNumberRequest) == message.get_identifier().get_parameter_group_number()) &&
 		         (channelIndex < CAN_PORT_MAXIMUM))
 		{
-			auto requestedPGN = message.get_uint24_at(0);
-
-			if ((static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == requestedPGN) &&
+			// The requested PGN is in the first 3 bytes (ISO 11783-3), so a shorter request is ignored
+			if ((message.get_data_length() >= 3) &&
+			    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim) == message.get_uint24_at(0)) &&
 			    (CANIdentifier::GLOBAL_ADDRESS == message.get_identifier().get_destination_address()))
 			{
 				lastAddressClaimRequestTimestamp_ms.at(channelIndex) = SystemTiming::get_timestamp_ms();

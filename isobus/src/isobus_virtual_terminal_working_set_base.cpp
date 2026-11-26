@@ -140,8 +140,21 @@ namespace isobus
 
 		if (nullptr != objectToAdd)
 		{
-			vtObjectTree[objectToAdd->get_id()] = objectToAdd;
-			retVal = true;
+			const auto existingObject = vtObjectTree.find(objectToAdd->get_id());
+
+			// A replaced object shall be of the same type (ISO 11783-6:2018 4.6.10.3). Objects refer to each other by ID,
+			// and the server reads the object with the Working Set's ID as the Working Set
+			if ((vtObjectTree.end() == existingObject) ||
+			    (nullptr == existingObject->second) ||
+			    (existingObject->second->get_object_type() == objectToAdd->get_object_type()))
+			{
+				vtObjectTree[objectToAdd->get_id()] = objectToAdd;
+				retVal = true;
+			}
+			else
+			{
+				LOG_ERROR("[WS]: Object %u can't replace the object of another type with the same ID", objectToAdd->get_id());
+			}
 		}
 		return retVal;
 	}

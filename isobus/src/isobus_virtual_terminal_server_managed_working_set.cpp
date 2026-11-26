@@ -29,8 +29,12 @@ namespace isobus
 		/// @param[in] existingObjects The objects of the current object tree that parsing needs to check against,
 		/// which are the working set object and any Working Set Special Controls object
 		/// @param[in] existingWorkingSetID The object ID of the working set object in the current object tree
-		ObjectPoolParser(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &existingObjects, std::uint16_t existingWorkingSetID) :
-		  existingObjects(existingObjects)
+		/// @param[in] existingObjectTypes The type of each object in the current object tree
+		ObjectPoolParser(const std::map<std::uint16_t, std::shared_ptr<VTObject>> &existingObjects,
+		                 std::uint16_t existingWorkingSetID,
+		                 std::map<std::uint16_t, VirtualTerminalObjectType> existingObjectTypes) :
+		  existingObjects(existingObjects),
+		  existingObjectTypes(std::move(existingObjectTypes))
 		{
 			vtObjectTree = existingObjects;
 			workingSetID = existingWorkingSetID;
@@ -46,6 +50,28 @@ namespace isobus
 			return (existingObjects.end() == existing) || (existing->second != object);
 		}
 
+		/// @brief Checks that no parsed object replaces an object of another type in the current object tree
+		/// @details A replaced object shall be of the same type (ISO 11783-6:2018 4.6.10.3). The parser's own object tree
+		/// only holds the objects of this run, so add_or_replace_object() can't check this against the current pool.
+		/// The lowest such object ID is set as the faulting object.
+		/// @returns true if no parsed object replaces an object of another type
+		bool check_replaced_object_types()
+		{
+			for (const auto &object : get_object_tree())
+			{
+				const auto existing = existingObjectTypes.find(object.first);
+				if ((nullptr != object.second) &&
+				    (existingObjectTypes.end() != existing) &&
+				    (existing->second != object.second->get_object_type()))
+				{
+					LOG_ERROR("[WS]: Object %u can't replace the object of another type with the same ID", object.first);
+					set_object_pool_faulting_object_id(object.first);
+					return false;
+				}
+			}
+			return true;
+		}
+
 		/// @brief Returns the object ID of the working set object, after parsing
 		/// @returns The object ID of the working set object, or NULL_OBJECT_ID
 		std::uint16_t get_working_set_id() const
@@ -54,6 +80,7 @@ namespace isobus
 		}
 
 		const std::map<std::uint16_t, std::shared_ptr<VTObject>> existingObjects; ///< The objects copied from the current object tree
+		const std::map<std::uint16_t, VirtualTerminalObjectType> existingObjectTypes; ///< The type of each object in the current object tree
 		std::vector<std::pair<std::size_t, std::uint32_t>> parsedTransfers; ///< The index of each transfer parsed by this run, and the length of its objects without the padding after the last one
 	};
 
@@ -115,24 +142,35 @@ namespace isobus
 		}
 	}
 
-	void VirtualTerminalServerManagedWorkingSet::start_parsing_thread()
+	void VirtualTerminalServerManagedWorkingSet::start_parsing_thread(const std::function<void()> &onParsingEnded)
 	{
 		if (nullptr == objectPoolProcessingThread)
 		{
 			// Parsing checks a later Working Set object against the current one, and allows only one Working Set Special Controls object
+			// A parsed object must not replace an object of another type, so the parser gets the type of every current object
 			std::map<std::uint16_t, std::shared_ptr<VTObject>> existingObjects;
+			std::map<std::uint16_t, VirtualTerminalObjectType> existingObjectTypes;
 			for (const auto &object : vtObjectTree)
 			{
-				if ((nullptr != object.second) &&
-				    ((workingSetID == object.first) || (VirtualTerminalObjectType::WorkingSetSpecialControls == object.second->get_object_type())))
+				if (nullptr != object.second)
 				{
-					existingObjects.insert(object);
+					existingObjectTypes.emplace_hint(existingObjectTypes.end(), object.first, object.second->get_object_type());
+					if ((workingSetID == object.first) || (VirtualTerminalObjectType::WorkingSetSpecialControls == object.second->get_object_type()))
+					{
+						existingObjects.insert(object);
+					}
 				}
 			}
 
-			objectPoolParser.reset(new ObjectPoolParser(existingObjects, workingSetID));
+			objectPoolParser.reset(new ObjectPoolParser(existingObjects, workingSetID, std::move(existingObjectTypes)));
 			set_object_pool_processing_state(ObjectPoolProcessingThreadState::Running);
-			objectPoolProcessingThread.reset(new std::thread([this]() { worker_thread_function(); }));
+			objectPoolProcessingThread.reset(new std::thread([this, onParsingEnded]() {
+				worker_thread_function();
+				if (nullptr != onParsingEnded)
+				{
+					onParsingEnded();
+				}
+			}));
 		}
 	}
 
@@ -226,6 +264,16 @@ namespace isobus
 		workingSetMaintenanceMessageTimestamp_ms = value;
 	}
 
+	std::uint8_t VirtualTerminalServerManagedWorkingSet::get_working_set_version() const
+	{
+		return workingSetVersion;
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::set_working_set_version(std::uint8_t value)
+	{
+		workingSetVersion = value;
+	}
+
 	void VirtualTerminalServerManagedWorkingSet::save_callback_handle(isobus::EventCallbackHandle callbackHandle)
 	{
 		callbackHandles.push_back(callbackHandle);
@@ -262,6 +310,17 @@ namespace isobus
 		openForInputObject.store(NULL_OBJECT_ID);
 		set_object_pool_faulting_object_id(NULL_OBJECT_ID);
 		set_object_pool_processing_state(ObjectPoolProcessingThreadState::None);
+		objectPoolTransferDropped = false;
+	}
+
+	void VirtualTerminalServerManagedWorkingSet::set_object_pool_transfer_dropped()
+	{
+		objectPoolTransferDropped = true;
+	}
+
+	bool VirtualTerminalServerManagedWorkingSet::get_object_pool_transfer_dropped() const
+	{
+		return objectPoolTransferDropped;
 	}
 
 	void VirtualTerminalServerManagedWorkingSet::set_object_focus(std::uint16_t objectID)
@@ -378,6 +437,11 @@ namespace isobus
 				}
 				// Applied in join_parsing_thread(), as the server can read the transfers while this thread runs
 				objectPoolParser->parsedTransfers.emplace_back(i, objectsLength);
+			}
+
+			if (lSuccess)
+			{
+				lSuccess = objectPoolParser->check_replaced_object_types();
 			}
 
 			if (lSuccess)

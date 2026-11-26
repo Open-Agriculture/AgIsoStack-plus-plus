@@ -24,10 +24,12 @@
 #define ISOBUS_SHORTCUT_BUTTON_INTERFACE_HPP
 
 #include "isobus/isobus/can_NAME.hpp"
+#include "isobus/isobus/can_constants.hpp"
 #include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/can_message.hpp"
 #include "isobus/utility/event_dispatcher.hpp"
 #include "isobus/utility/processing_flags.hpp"
+#include "isobus/utility/thread_synchronization.hpp"
 
 #include <array>
 #include <functional>
@@ -60,6 +62,8 @@ namespace isobus
 	/// The Working Set shall monitor the number of transitions for each ISB server upon receiving first
 	/// the message from a given ISB server. A Working Set shall consider an increase in the transitions
 	/// without detecting a corresponding transition of the Stop all implement operations state as an error and react accordingly.
+	///
+	/// A permit after a stop does not restart an implement. Only the operator can restart it, e.g. with a master ON/OFF switch.
 	class ShortcutButtonInterface
 	{
 	public:
@@ -89,6 +93,7 @@ namespace isobus
 
 		/// @brief Gets the event dispatcher for when the assigned bus' ISB state changes.
 		/// The assigned bus is determined by which internal control function you pass into the constructor.
+		/// @details Listeners are called from update().
 		/// @returns The event dispatcher which can be used to register callbacks/listeners to
 		EventDispatcher<StopAllImplementOperationsState> &get_stop_all_implement_operations_state_event_dispatcher();
 
@@ -102,8 +107,8 @@ namespace isobus
 		/// @returns The current ISB state for the bus associated with the interface's internal control function
 		StopAllImplementOperationsState get_state() const;
 
-		/// @brief This must be called cyclically to update the interface.
-		/// This processes transmits and timeouts.
+		/// @brief This must be called cyclically to update the interface. Parses the messages received since the last call, then processes timeouts and transmits.
+		/// @details Received messages reach get_state() and the listeners only from here.
 		void update();
 
 	private:
@@ -115,9 +120,21 @@ namespace isobus
 			ISBServerData() = default;
 
 			NAME ISONAME; ///< The ISONAME of the sender, used as a lookup key
-			StopAllImplementOperationsState commandedState; ///< The last state we received from this ISB
+			StopAllImplementOperationsState commandedState = StopAllImplementOperationsState::NotAvailable; ///< The state this ISB commands: as sent, Stop after a missed transition, or NotAvailable after a timeout
+			StopAllImplementOperationsState reportedState = StopAllImplementOperationsState::NotAvailable; ///< The last state this ISB sent, used to check its transition count
 			std::uint32_t messageReceivedTimestamp_ms = 0; ///< Tracks the last time we received a message from this ISB so we can time them out if needed
 			std::uint8_t stopAllImplementOperationsTransitionNumber = 0; ///< Number of transitions from Permit (01) to Stop (00) since power up of the stop all implement operations parameter
+			bool reportedSwitchState = false; ///< Whether this ISB has ever sent a state other than NotAvailable, so its transition count is checked
+		};
+
+		/// @brief An ISB message copied on the CAN thread, for update() to parse
+		struct ReceivedFrame
+		{
+			NAME ISONAME; ///< The NAME of the sender
+			std::uint32_t timestamp_ms = 0; ///< When the message was received, in milliseconds
+			std::uint8_t sourceAddress = NULL_CAN_ADDRESS; ///< The address of the sender, for logging
+			std::uint8_t transitionNumber = 0; ///< The sender's Permit to Stop transition count
+			StopAllImplementOperationsState state = StopAllImplementOperationsState::NotAvailable; ///< The state the sender commands
 		};
 
 		/// @brief Enumerates a set of flags that the interface uses to know if it should transmit a message
@@ -128,7 +145,8 @@ namespace isobus
 			NumberOfFlags ///< The number of flags defined in this enumeration
 		};
 
-		/// @brief Parses incoming CAN messages for the interface
+		/// @brief Copies a received ISB message into receivedFrames for update() to parse
+		/// @details Runs on the thread that calls CANNetworkManager::update().
 		/// @param message The CAN message to parse
 		/// @param parentPointer A generic context variable, usually the `this` pointer for this interface instance
 		static void process_rx_message(const CANMessage &message, void *parentPointer);
@@ -138,9 +156,9 @@ namespace isobus
 		/// @param[in] parent A context variable to find the relevant interface class
 		static void process_flags(std::uint32_t flag, void *parent);
 
-		/// @brief A generic way for a protocol to process a received message
-		/// @param[in] message A received CAN message
-		void process_message(const CANMessage &message);
+		/// @brief Parses one received message into its sender's record and calls the event listeners
+		/// @param[in] frame The message to parse
+		void process_received_frame(const ReceivedFrame &frame);
 
 		/// @brief Sends the Stop all implement operations switch state message
 		/// @returns true if the message was sent, otherwise false
@@ -150,11 +168,12 @@ namespace isobus
 		static constexpr std::uint32_t TRANSMISSION_TIMEOUT_MS = 3000; ///< Amount of time between messages until we consider an ISB stale (arbitrary, but similar to VT timeout)
 
 		std::list<ISBServerData> isobusShorcutButtonList; ///< A list of all senders of the ISB messages used to track transition counts
+		Queue<ReceivedFrame> receivedFrames; ///< Received messages waiting for update(), unbounded so a Stop is never dropped
 		std::shared_ptr<InternalControlFunction> sourceControlFunction = nullptr; ///< The internal control function that the interface is assigned to and will use to transmit
 		EventDispatcher<StopAllImplementOperationsState> ISBEventDispatcher; ///< Manages callbacks about ISB states
 		ProcessingFlags txFlags; ///< A set of flags to manage retries while sending messages
 		std::uint32_t allImplementsStopOperationsSwitchStateTimestamp_ms = 0; ///< A timestamp to track the need for cyclic transmission of PGN 0xFD02
-		std::uint8_t stopAllImplementOperationsTransitionNumber = 0; ///< A counter used to track our transitions from "stop" to "permit" when acting as a server
+		std::uint8_t stopAllImplementOperationsTransitionNumber = 0; ///< A counter used to track our transitions from Permit to Stop when acting as a server
 		StopAllImplementOperationsState commandedState = StopAllImplementOperationsState::NotAvailable; ///< The state set by the user to transmit if we're acting as a server
 		bool actAsISBServer = false; ///< A setting that enables sending the ISB messages rather than just receiving them
 		bool initialized = false; ///< Stores if the interface has been initialized

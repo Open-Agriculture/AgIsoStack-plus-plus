@@ -24,10 +24,30 @@
 #include "isobus/isobus/can_stack_logger.hpp"
 #include "isobus/utility/system_timing.hpp"
 
+#include <algorithm>
 #include <cassert>
 
 namespace isobus
 {
+	/// @brief Finds the record a control function last sent, adding a new one for a new sender
+	/// @param[in] messages The received messages, one per sender
+	/// @param[in] source The control function that sent the message
+	/// @returns The stored record. Replace it with an updated copy, never change it in place, since the application may hold it.
+	template<typename T>
+	static std::shared_ptr<T> &find_or_add_received_message(std::vector<std::shared_ptr<T>> &messages, const std::shared_ptr<ControlFunction> &source)
+	{
+		auto result = std::find_if(messages.begin(), messages.end(), [&source](const std::shared_ptr<T> &received) {
+			return (nullptr != received) && (received->get_sender_control_function() == source);
+		});
+
+		if (result == messages.end())
+		{
+			messages.push_back(std::make_shared<T>(source));
+			result = messages.end() - 1;
+		}
+		return *result;
+	}
+
 	SpeedMessagesInterface::SpeedMessagesInterface(std::shared_ptr<InternalControlFunction> source,
 	                                               bool enableSendingGroundBasedSpeedPeriodically,
 	                                               bool enableSendingWheelBasedSpeedPeriodically,
@@ -75,21 +95,25 @@ namespace isobus
 
 	std::size_t SpeedMessagesInterface::get_number_received_wheel_based_speed_sources() const
 	{
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
 		return receivedWheelBasedSpeedMessages.size();
 	}
 
 	std::size_t SpeedMessagesInterface::get_number_received_ground_based_speed_sources() const
 	{
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
 		return receivedGroundBasedSpeedMessages.size();
 	}
 
 	std::size_t SpeedMessagesInterface::get_number_received_machine_selected_speed_sources() const
 	{
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
 		return receivedMachineSelectedSpeedMessages.size();
 	}
 
 	std::size_t SpeedMessagesInterface::get_number_received_machine_selected_speed_command_sources() const
 	{
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
 		return receivedMachineSelectedSpeedCommandMessages.size();
 	}
 
@@ -97,6 +121,7 @@ namespace isobus
 	{
 		std::shared_ptr<MachineSelectedSpeedData> retVal = nullptr;
 
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
 		if (index < receivedMachineSelectedSpeedMessages.size())
 		{
 			retVal = receivedMachineSelectedSpeedMessages.at(index);
@@ -108,6 +133,7 @@ namespace isobus
 	{
 		std::shared_ptr<WheelBasedMachineSpeedData> retVal = nullptr;
 
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
 		if (index < receivedWheelBasedSpeedMessages.size())
 		{
 			retVal = receivedWheelBasedSpeedMessages.at(index);
@@ -119,6 +145,7 @@ namespace isobus
 	{
 		std::shared_ptr<GroundBasedSpeedData> retVal = nullptr;
 
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
 		if (index < receivedGroundBasedSpeedMessages.size())
 		{
 			retVal = receivedGroundBasedSpeedMessages.at(index);
@@ -130,6 +157,7 @@ namespace isobus
 	{
 		std::shared_ptr<MachineSelectedSpeedCommandData> retVal = nullptr;
 
+		LOCK_GUARD(Mutex, receivedMessagesMutex);
 		if (index < receivedMachineSelectedSpeedCommandMessages.size())
 		{
 			retVal = receivedMachineSelectedSpeedCommandMessages.at(index);
@@ -161,30 +189,33 @@ namespace isobus
 	{
 		if (initialized)
 		{
-			receivedMachineSelectedSpeedMessages.erase(std::remove_if(receivedMachineSelectedSpeedMessages.begin(),
-			                                                          receivedMachineSelectedSpeedMessages.end(),
-			                                                          [](std::shared_ptr<MachineSelectedSpeedData> messageInfo) {
-				                                                          return SystemTiming::time_expired_ms(messageInfo->get_timestamp_ms(), SPEED_DISTANCE_MESSAGE_RX_TIMEOUT_MS);
-			                                                          }),
-			                                           receivedMachineSelectedSpeedMessages.end());
-			receivedWheelBasedSpeedMessages.erase(std::remove_if(receivedWheelBasedSpeedMessages.begin(),
-			                                                     receivedWheelBasedSpeedMessages.end(),
-			                                                     [](std::shared_ptr<WheelBasedMachineSpeedData> messageInfo) {
-				                                                     return SystemTiming::time_expired_ms(messageInfo->get_timestamp_ms(), SPEED_DISTANCE_MESSAGE_RX_TIMEOUT_MS);
-			                                                     }),
-			                                      receivedWheelBasedSpeedMessages.end());
-			receivedGroundBasedSpeedMessages.erase(std::remove_if(receivedGroundBasedSpeedMessages.begin(),
-			                                                      receivedGroundBasedSpeedMessages.end(),
-			                                                      [](std::shared_ptr<GroundBasedSpeedData> messageInfo) {
-				                                                      return SystemTiming::time_expired_ms(messageInfo->get_timestamp_ms(), SPEED_DISTANCE_MESSAGE_RX_TIMEOUT_MS);
-			                                                      }),
-			                                       receivedGroundBasedSpeedMessages.end());
-			receivedMachineSelectedSpeedCommandMessages.erase(std::remove_if(receivedMachineSelectedSpeedCommandMessages.begin(),
-			                                                                 receivedMachineSelectedSpeedCommandMessages.end(),
-			                                                                 [](std::shared_ptr<MachineSelectedSpeedCommandData> messageInfo) {
-				                                                                 return SystemTiming::time_expired_ms(messageInfo->get_timestamp_ms(), SPEED_DISTANCE_MESSAGE_RX_TIMEOUT_MS);
-			                                                                 }),
-			                                                  receivedMachineSelectedSpeedCommandMessages.end());
+			{
+				LOCK_GUARD(Mutex, receivedMessagesMutex);
+				receivedMachineSelectedSpeedMessages.erase(std::remove_if(receivedMachineSelectedSpeedMessages.begin(),
+				                                                          receivedMachineSelectedSpeedMessages.end(),
+				                                                          [](std::shared_ptr<MachineSelectedSpeedData> messageInfo) {
+					                                                          return SystemTiming::time_expired_ms(messageInfo->get_timestamp_ms(), SPEED_DISTANCE_MESSAGE_RX_TIMEOUT_MS);
+				                                                          }),
+				                                           receivedMachineSelectedSpeedMessages.end());
+				receivedWheelBasedSpeedMessages.erase(std::remove_if(receivedWheelBasedSpeedMessages.begin(),
+				                                                     receivedWheelBasedSpeedMessages.end(),
+				                                                     [](std::shared_ptr<WheelBasedMachineSpeedData> messageInfo) {
+					                                                     return SystemTiming::time_expired_ms(messageInfo->get_timestamp_ms(), SPEED_DISTANCE_MESSAGE_RX_TIMEOUT_MS);
+				                                                     }),
+				                                      receivedWheelBasedSpeedMessages.end());
+				receivedGroundBasedSpeedMessages.erase(std::remove_if(receivedGroundBasedSpeedMessages.begin(),
+				                                                      receivedGroundBasedSpeedMessages.end(),
+				                                                      [](std::shared_ptr<GroundBasedSpeedData> messageInfo) {
+					                                                      return SystemTiming::time_expired_ms(messageInfo->get_timestamp_ms(), SPEED_DISTANCE_MESSAGE_RX_TIMEOUT_MS);
+				                                                      }),
+				                                       receivedGroundBasedSpeedMessages.end());
+				receivedMachineSelectedSpeedCommandMessages.erase(std::remove_if(receivedMachineSelectedSpeedCommandMessages.begin(),
+				                                                                 receivedMachineSelectedSpeedCommandMessages.end(),
+				                                                                 [](std::shared_ptr<MachineSelectedSpeedCommandData> messageInfo) {
+					                                                                 return SystemTiming::time_expired_ms(messageInfo->get_timestamp_ms(), SPEED_DISTANCE_MESSAGE_RX_TIMEOUT_MS);
+				                                                                 }),
+				                                                  receivedMachineSelectedSpeedCommandMessages.end());
+			}
 
 			if (SystemTiming::time_expired_ms(machineSelectedSpeedTransmitTimestamp_ms, SPEED_DISTANCE_MESSAGE_TX_INTERVAL_MS) &&
 			    (nullptr != machineSelectedSpeedTransmitData.get_sender_control_function()))
@@ -266,6 +297,8 @@ namespace isobus
 	{
 		assert(nullptr != parentPointer);
 		auto targetInterface = static_cast<SpeedMessagesInterface *>(parentPointer);
+		Mutex &receivedMessagesMutex = targetInterface->receivedMessagesMutex;
+		(void)receivedMessagesMutex; // Unused when threads are disabled
 
 		switch (message.get_identifier().get_parameter_group_number())
 		{
@@ -275,31 +308,24 @@ namespace isobus
 				{
 					if (nullptr != message.get_source_control_function())
 					{
-						auto result = std::find_if(targetInterface->receivedMachineSelectedSpeedMessages.cbegin(),
-						                           targetInterface->receivedMachineSelectedSpeedMessages.cend(),
-						                           [&message](const std::shared_ptr<MachineSelectedSpeedData> &receivedInfo) {
-							                           return (nullptr != receivedInfo) && (receivedInfo->get_sender_control_function() == message.get_source_control_function());
-						                           });
-
-						if (result == targetInterface->receivedMachineSelectedSpeedMessages.end())
-						{
-							// There is no existing message object from this control function, so create a new one
-							targetInterface->receivedMachineSelectedSpeedMessages.push_back(std::make_shared<MachineSelectedSpeedData>(message.get_source_control_function()));
-							result = targetInterface->receivedMachineSelectedSpeedMessages.end() - 1;
-						}
-
-						auto &mssMessage = *result;
+						std::shared_ptr<MachineSelectedSpeedData> updated;
 						bool changed = false;
 
-						changed |= mssMessage->set_machine_speed(message.get_uint16_at(0));
-						changed |= mssMessage->set_machine_distance(message.get_uint32_at(2));
-						changed |= mssMessage->set_exit_reason_code(message.get_uint8_at(6) & 0x3F);
-						changed |= mssMessage->set_machine_direction_of_travel(static_cast<MachineDirection>(message.get_uint8_at(7) & 0x03));
-						changed |= mssMessage->set_speed_source(static_cast<MachineSelectedSpeedData::SpeedSource>((message.get_uint8_at(7) >> 2) & 0x07));
-						changed |= mssMessage->set_limit_status(static_cast<MachineSelectedSpeedData::LimitStatus>((message.get_uint8_at(7) >> 5) & 0x03));
-						mssMessage->set_timestamp_ms(SystemTiming::get_timestamp_ms());
+						{
+							LOCK_GUARD(Mutex, receivedMessagesMutex);
+							std::shared_ptr<MachineSelectedSpeedData> &stored = find_or_add_received_message(targetInterface->receivedMachineSelectedSpeedMessages, message.get_source_control_function());
+							updated = std::make_shared<MachineSelectedSpeedData>(*stored);
+							changed |= updated->set_machine_speed(message.get_uint16_at(0));
+							changed |= updated->set_machine_distance(message.get_uint32_at(2));
+							changed |= updated->set_exit_reason_code(message.get_uint8_at(6) & 0x3F);
+							changed |= updated->set_machine_direction_of_travel(static_cast<MachineDirection>(message.get_uint8_at(7) & 0x03));
+							changed |= updated->set_speed_source(static_cast<MachineSelectedSpeedData::SpeedSource>((message.get_uint8_at(7) >> 2) & 0x07));
+							changed |= updated->set_limit_status(static_cast<MachineSelectedSpeedData::LimitStatus>((message.get_uint8_at(7) >> 5) & 0x03));
+							updated->set_timestamp_ms(SystemTiming::get_timestamp_ms());
+							stored = updated;
+						}
 
-						targetInterface->machineSelectedSpeedDataEventPublisher.call(mssMessage, changed);
+						targetInterface->machineSelectedSpeedDataEventPublisher.call(updated, changed);
 					}
 				}
 				else
@@ -315,32 +341,25 @@ namespace isobus
 				{
 					if (nullptr != message.get_source_control_function())
 					{
-						auto result = std::find_if(targetInterface->receivedWheelBasedSpeedMessages.cbegin(),
-						                           targetInterface->receivedWheelBasedSpeedMessages.cend(),
-						                           [&message](const std::shared_ptr<WheelBasedMachineSpeedData> &receivedInfo) {
-							                           return (nullptr != receivedInfo) && (receivedInfo->get_sender_control_function() == message.get_source_control_function());
-						                           });
-
-						if (result == targetInterface->receivedWheelBasedSpeedMessages.end())
-						{
-							// There is no existing message object from this control function, so create a new one
-							targetInterface->receivedWheelBasedSpeedMessages.push_back(std::make_shared<WheelBasedMachineSpeedData>(message.get_source_control_function()));
-							result = targetInterface->receivedWheelBasedSpeedMessages.end() - 1;
-						}
-
-						auto &wheelSpeedMessage = *result;
+						std::shared_ptr<WheelBasedMachineSpeedData> updated;
 						bool changed = false;
 
-						changed |= wheelSpeedMessage->set_machine_speed(message.get_uint16_at(0));
-						changed |= wheelSpeedMessage->set_machine_distance(message.get_uint32_at(2));
-						changed |= wheelSpeedMessage->set_maximum_time_of_tractor_power(message.get_uint8_at(6));
-						changed |= wheelSpeedMessage->set_machine_direction_of_travel(static_cast<MachineDirection>(message.get_uint8_at(7) & 0x03));
-						changed |= wheelSpeedMessage->set_key_switch_state(static_cast<WheelBasedMachineSpeedData::KeySwitchState>((message.get_uint8_at(7) >> 2) & 0x03));
-						changed |= wheelSpeedMessage->set_implement_start_stop_operations_state(static_cast<WheelBasedMachineSpeedData::ImplementStartStopOperations>((message.get_uint8_at(7) >> 4) & 0x03));
-						changed |= wheelSpeedMessage->set_operator_direction_reversed_state(static_cast<WheelBasedMachineSpeedData::OperatorDirectionReversed>((message.get_uint8_at(7) >> 6) & 0x03));
-						wheelSpeedMessage->set_timestamp_ms(SystemTiming::get_timestamp_ms());
+						{
+							LOCK_GUARD(Mutex, receivedMessagesMutex);
+							std::shared_ptr<WheelBasedMachineSpeedData> &stored = find_or_add_received_message(targetInterface->receivedWheelBasedSpeedMessages, message.get_source_control_function());
+							updated = std::make_shared<WheelBasedMachineSpeedData>(*stored);
+							changed |= updated->set_machine_speed(message.get_uint16_at(0));
+							changed |= updated->set_machine_distance(message.get_uint32_at(2));
+							changed |= updated->set_maximum_time_of_tractor_power(message.get_uint8_at(6));
+							changed |= updated->set_machine_direction_of_travel(static_cast<MachineDirection>(message.get_uint8_at(7) & 0x03));
+							changed |= updated->set_key_switch_state(static_cast<WheelBasedMachineSpeedData::KeySwitchState>((message.get_uint8_at(7) >> 2) & 0x03));
+							changed |= updated->set_implement_start_stop_operations_state(static_cast<WheelBasedMachineSpeedData::ImplementStartStopOperations>((message.get_uint8_at(7) >> 4) & 0x03));
+							changed |= updated->set_operator_direction_reversed_state(static_cast<WheelBasedMachineSpeedData::OperatorDirectionReversed>((message.get_uint8_at(7) >> 6) & 0x03));
+							updated->set_timestamp_ms(SystemTiming::get_timestamp_ms());
+							stored = updated;
+						}
 
-						targetInterface->wheelBasedMachineSpeedDataEventPublisher.call(wheelSpeedMessage, changed);
+						targetInterface->wheelBasedMachineSpeedDataEventPublisher.call(updated, changed);
 					}
 				}
 				else
@@ -356,28 +375,21 @@ namespace isobus
 				{
 					if (nullptr != message.get_source_control_function())
 					{
-						auto result = std::find_if(targetInterface->receivedGroundBasedSpeedMessages.cbegin(),
-						                           targetInterface->receivedGroundBasedSpeedMessages.cend(),
-						                           [&message](const std::shared_ptr<GroundBasedSpeedData> &receivedInfo) {
-							                           return (nullptr != receivedInfo) && (receivedInfo->get_sender_control_function() == message.get_source_control_function());
-						                           });
-
-						if (result == targetInterface->receivedGroundBasedSpeedMessages.end())
-						{
-							// There is no existing message object from this control function, so create a new one
-							targetInterface->receivedGroundBasedSpeedMessages.push_back(std::make_shared<GroundBasedSpeedData>(message.get_source_control_function()));
-							result = targetInterface->receivedGroundBasedSpeedMessages.end() - 1;
-						}
-
-						auto &groundSpeedMessage = *result;
+						std::shared_ptr<GroundBasedSpeedData> updated;
 						bool changed = false;
 
-						changed |= groundSpeedMessage->set_machine_speed(message.get_uint16_at(0));
-						changed |= groundSpeedMessage->set_machine_distance(message.get_uint32_at(2));
-						changed |= groundSpeedMessage->set_machine_direction_of_travel(static_cast<MachineDirection>(message.get_uint8_at(7) & 0x03));
-						groundSpeedMessage->set_timestamp_ms(SystemTiming::get_timestamp_ms());
+						{
+							LOCK_GUARD(Mutex, receivedMessagesMutex);
+							std::shared_ptr<GroundBasedSpeedData> &stored = find_or_add_received_message(targetInterface->receivedGroundBasedSpeedMessages, message.get_source_control_function());
+							updated = std::make_shared<GroundBasedSpeedData>(*stored);
+							changed |= updated->set_machine_speed(message.get_uint16_at(0));
+							changed |= updated->set_machine_distance(message.get_uint32_at(2));
+							changed |= updated->set_machine_direction_of_travel(static_cast<MachineDirection>(message.get_uint8_at(7) & 0x03));
+							updated->set_timestamp_ms(SystemTiming::get_timestamp_ms());
+							stored = updated;
+						}
 
-						targetInterface->groundBasedSpeedDataEventPublisher.call(groundSpeedMessage, changed);
+						targetInterface->groundBasedSpeedDataEventPublisher.call(updated, changed);
 					}
 				}
 				else
@@ -393,28 +405,21 @@ namespace isobus
 				{
 					if (nullptr != message.get_source_control_function())
 					{
-						auto result = std::find_if(targetInterface->receivedMachineSelectedSpeedCommandMessages.cbegin(),
-						                           targetInterface->receivedMachineSelectedSpeedCommandMessages.cend(),
-						                           [&message](const std::shared_ptr<MachineSelectedSpeedCommandData> &receivedInfo) {
-							                           return (nullptr != receivedInfo) && (receivedInfo->get_sender_control_function() == message.get_source_control_function());
-						                           });
-
-						if (result == targetInterface->receivedMachineSelectedSpeedCommandMessages.end())
-						{
-							// There is no existing message object from this control function, so create a new one
-							targetInterface->receivedMachineSelectedSpeedCommandMessages.push_back(std::make_shared<MachineSelectedSpeedCommandData>(message.get_source_control_function()));
-							result = targetInterface->receivedMachineSelectedSpeedCommandMessages.end() - 1;
-						}
-
-						auto &commandMessage = *result;
+						std::shared_ptr<MachineSelectedSpeedCommandData> updated;
 						bool changed = false;
 
-						commandMessage->set_machine_speed_setpoint_command(message.get_uint16_at(0));
-						commandMessage->set_machine_selected_speed_setpoint_limit(message.get_uint16_at(2));
-						commandMessage->set_machine_direction_of_travel(static_cast<MachineDirection>(message.get_uint8_at(7) & 0x03));
-						commandMessage->set_timestamp_ms(SystemTiming::get_timestamp_ms());
+						{
+							LOCK_GUARD(Mutex, receivedMessagesMutex);
+							std::shared_ptr<MachineSelectedSpeedCommandData> &stored = find_or_add_received_message(targetInterface->receivedMachineSelectedSpeedCommandMessages, message.get_source_control_function());
+							updated = std::make_shared<MachineSelectedSpeedCommandData>(*stored);
+							changed |= updated->set_machine_speed_setpoint_command(message.get_uint16_at(0));
+							changed |= updated->set_machine_selected_speed_setpoint_limit(message.get_uint16_at(2));
+							changed |= updated->set_machine_direction_of_travel(static_cast<MachineDirection>(message.get_uint8_at(7) & 0x03));
+							updated->set_timestamp_ms(SystemTiming::get_timestamp_ms());
+							stored = updated;
+						}
 
-						targetInterface->machineSelectedSpeedCommandDataEventPublisher.call(commandMessage, changed);
+						targetInterface->machineSelectedSpeedCommandDataEventPublisher.call(updated, changed);
 					}
 				}
 				else

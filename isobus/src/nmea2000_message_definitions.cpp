@@ -1140,6 +1140,7 @@ namespace isobus
 				tempString.push_back(static_cast<char>(receivedMessage.get_uint8_at(18)));
 				tempString.push_back(static_cast<char>(receivedMessage.get_uint8_at(19)));
 				retVal |= set_reference_datum(tempString);
+				set_timestamp(SystemTiming::get_timestamp_ms());
 			}
 			else
 			{

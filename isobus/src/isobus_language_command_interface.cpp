@@ -11,6 +11,7 @@
 
 #include "isobus/isobus/can_constants.hpp"
 #include "isobus/isobus/can_general_parameter_group_numbers.hpp"
+#include "isobus/isobus/can_internal_control_function.hpp"
 #include "isobus/isobus/can_parameter_group_number_request_protocol.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
@@ -44,6 +45,11 @@ namespace isobus
 			{
 				myControlFunction->get_pgn_request_protocol().lock()->remove_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), on_language_request, this);
 			}
+
+			if (hasAddressClaimedListener)
+			{
+				myControlFunction->get_address_claimed_event_dispatcher().remove_listener(addressClaimedListener);
+			}
 		}
 	}
 
@@ -60,6 +66,22 @@ namespace isobus
 					myControlFunction->get_pgn_request_protocol().lock()->register_pgn_request_callback(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), on_language_request, this);
 				}
 				initialized = true;
+
+				// A VT reports the selected language, formats and units at power up, once it has claimed its address
+				// (ISO 11783-6:2018 4.6.5, ISO 11783-7:2009 B.21). A new claim after losing the address counts too.
+				if (respondToRequests && sendOnAddressClaim)
+				{
+					addressClaimedListener = myControlFunction->get_address_claimed_event_dispatcher().add_listener([this](const std::uint8_t &) {
+						send_language_command_if_set();
+					});
+					hasAddressClaimedListener = true;
+
+					if (myControlFunction->get_address_valid())
+					{
+						// Initialized after the address was claimed
+						send_language_command_if_set();
+					}
+				}
 			}
 			else
 			{
@@ -72,13 +94,36 @@ namespace isobus
 		}
 	}
 
+	void LanguageCommandInterface::set_send_on_address_claim(bool value)
+	{
+		sendOnAddressClaim = value;
+	}
+
+	void LanguageCommandInterface::send_language_command_if_set()
+	{
+		bool hasLanguageCode = false;
+
+		{
+			LOCK_GUARD(Mutex, localizationMutex);
+			hasLanguageCode = (languageCode.length() >= 2);
+		}
+
+		// Without a language code there is nothing to report yet, and that's not an error at an address claim
+		if (hasLanguageCode)
+		{
+			send_language_command();
+		}
+	}
+
 	void LanguageCommandInterface::set_partner(std::shared_ptr<PartneredControlFunction> filteredControlFunction)
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		myPartner = filteredControlFunction;
 	}
 
 	std::shared_ptr<PartneredControlFunction> LanguageCommandInterface::get_partner() const
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		return myPartner;
 	}
 
@@ -93,7 +138,13 @@ namespace isobus
 
 		if (initialized)
 		{
-			retVal = ParameterGroupNumberRequestProtocol::request_parameter_group_number(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), myControlFunction, myPartner);
+			std::shared_ptr<PartneredControlFunction> partner;
+
+			{
+				LOCK_GUARD(Mutex, localizationMutex);
+				partner = myPartner;
+			}
+			retVal = ParameterGroupNumberRequestProtocol::request_parameter_group_number(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand), myControlFunction, partner);
 		}
 		else
 		{
@@ -105,28 +156,40 @@ namespace isobus
 
 	bool LanguageCommandInterface::send_language_command()
 	{
-		if ((languageCode.length() < 2) || (countryCode.length() < 2))
+		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer = { 0 };
+		bool hasLanguageCode = false;
+
 		{
-			LOG_ERROR("[VT/TC]: Language command interface is missing language or country code, and will not send a language command.");
+			LOCK_GUARD(Mutex, localizationMutex);
+			hasLanguageCode = (languageCode.length() >= 2);
+
+			if (hasLanguageCode)
+			{
+				// The country code is recommended, not required (ISO 11783-6:2018 4.6.5). Without one, bytes 7 and 8 are not available.
+				const bool hasCountryCode = (countryCode.length() >= 2);
+				buffer = std::array<std::uint8_t, CAN_DATA_LENGTH>{ { static_cast<std::uint8_t>(languageCode[0]),
+					                                                    static_cast<std::uint8_t>(languageCode[1]),
+					                                                    static_cast<std::uint8_t>((static_cast<std::uint8_t>(timeFormat) << 4) |
+					                                                                              (static_cast<std::uint8_t>(decimalSymbol) << 6)),
+					                                                    static_cast<std::uint8_t>(dateFormat),
+					                                                    static_cast<std::uint8_t>(static_cast<std::uint8_t>(massUnitSystem) |
+					                                                                              (static_cast<std::uint8_t>(volumeUnitSystem) << 2) |
+					                                                                              (static_cast<std::uint8_t>(areaUnitSystem) << 4) |
+					                                                                              (static_cast<std::uint8_t>(distanceUnitSystem) << 6)),
+					                                                    static_cast<std::uint8_t>(static_cast<std::uint8_t>(genericUnitSystem) |
+					                                                                              (static_cast<std::uint8_t>(forceUnitSystem) << 2) |
+					                                                                              (static_cast<std::uint8_t>(pressureUnitSystem) << 4) |
+					                                                                              (static_cast<std::uint8_t>(temperatureUnitSystem) << 6)),
+					                                                    hasCountryCode ? static_cast<std::uint8_t>(countryCode[0]) : static_cast<std::uint8_t>(0xFF),
+					                                                    hasCountryCode ? static_cast<std::uint8_t>(countryCode[1]) : static_cast<std::uint8_t>(0xFF) } };
+			}
+		}
+
+		if (!hasLanguageCode)
+		{
+			LOG_ERROR("[VT/TC]: Language command interface is missing a language code, and will not send a language command.");
 			return false;
 		}
-		std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
-			static_cast<std::uint8_t>(languageCode[0]),
-			static_cast<std::uint8_t>(languageCode[1]),
-			static_cast<std::uint8_t>((static_cast<std::uint8_t>(timeFormat) << 4) |
-			                          (static_cast<std::uint8_t>(decimalSymbol) << 6)),
-			static_cast<std::uint8_t>(dateFormat),
-			static_cast<std::uint8_t>(static_cast<std::uint8_t>(massUnitSystem) |
-			                          (static_cast<std::uint8_t>(volumeUnitSystem) << 2) |
-			                          (static_cast<std::uint8_t>(areaUnitSystem) << 4) |
-			                          (static_cast<std::uint8_t>(distanceUnitSystem) << 6)),
-			static_cast<std::uint8_t>(static_cast<std::uint8_t>(genericUnitSystem) |
-			                          (static_cast<std::uint8_t>(forceUnitSystem) << 2) |
-			                          (static_cast<std::uint8_t>(pressureUnitSystem) << 4) |
-			                          (static_cast<std::uint8_t>(temperatureUnitSystem) << 6)),
-			static_cast<std::uint8_t>(countryCode[0]),
-			static_cast<std::uint8_t>(countryCode[1])
-		};
 		return CANNetworkManager::CANNetwork.send_can_message(static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand),
 		                                                      buffer.data(),
 		                                                      static_cast<std::uint32_t>(buffer.size()),
@@ -136,11 +199,20 @@ namespace isobus
 
 	std::string LanguageCommandInterface::get_country_code() const
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		return countryCode;
 	}
 
 	void LanguageCommandInterface::set_country_code(std::string country)
 	{
+		if (country.empty())
+		{
+			// No country code: the language command is sent with bytes 7 and 8 not available
+			LOCK_GUARD(Mutex, localizationMutex);
+			countryCode.clear();
+			return;
+		}
+
 		if (country.length() > 2)
 		{
 			LOG_WARNING("[VT/TC]: Language command country code should not be more than 2 characters! It will be truncated.");
@@ -154,11 +226,14 @@ namespace isobus
 		{
 			country.push_back(' ');
 		}
+
+		LOCK_GUARD(Mutex, localizationMutex);
 		countryCode = country;
 	}
 
 	std::string LanguageCommandInterface::get_language_code() const
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		return languageCode;
 	}
 
@@ -177,127 +252,154 @@ namespace isobus
 		{
 			language.push_back(' ');
 		}
+
+		LOCK_GUARD(Mutex, localizationMutex);
 		languageCode = language;
 	}
 
 	std::uint32_t LanguageCommandInterface::get_language_command_timestamp() const
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		return languageCommandTimestamp_ms;
 	}
 
 	LanguageCommandInterface::DecimalSymbols LanguageCommandInterface::get_commanded_decimal_symbol() const
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		return decimalSymbol;
 	}
 
 	void LanguageCommandInterface::set_commanded_decimal_symbol(DecimalSymbols decimals)
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		decimalSymbol = decimals;
 	}
 
 	LanguageCommandInterface::TimeFormats LanguageCommandInterface::get_commanded_time_format() const
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		return timeFormat;
 	}
 
 	void LanguageCommandInterface::set_commanded_time_format(TimeFormats format)
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		timeFormat = format;
 	}
 
 	LanguageCommandInterface::DateFormats LanguageCommandInterface::get_commanded_date_format() const
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		return dateFormat;
 	}
 
 	void LanguageCommandInterface::set_commanded_date_format(DateFormats format)
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		dateFormat = format;
 	}
 
 	LanguageCommandInterface::DistanceUnits LanguageCommandInterface::get_commanded_distance_units() const
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		return distanceUnitSystem;
 	}
 
 	void LanguageCommandInterface::set_commanded_distance_units(DistanceUnits units)
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		distanceUnitSystem = units;
 	}
 
 	LanguageCommandInterface::AreaUnits LanguageCommandInterface::get_commanded_area_units() const
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		return areaUnitSystem;
 	}
 
 	void LanguageCommandInterface::set_commanded_area_units(AreaUnits units)
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		areaUnitSystem = units;
 	}
 
 	LanguageCommandInterface::VolumeUnits LanguageCommandInterface::get_commanded_volume_units() const
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		return volumeUnitSystem;
 	}
 
 	void LanguageCommandInterface::set_commanded_volume_units(VolumeUnits units)
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		volumeUnitSystem = units;
 	}
 
 	LanguageCommandInterface::MassUnits LanguageCommandInterface::get_commanded_mass_units() const
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		return massUnitSystem;
 	}
 
 	void LanguageCommandInterface::set_commanded_mass_units(MassUnits units)
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		massUnitSystem = units;
 	}
 
 	LanguageCommandInterface::TemperatureUnits LanguageCommandInterface::get_commanded_temperature_units() const
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		return temperatureUnitSystem;
 	}
 
 	void LanguageCommandInterface::set_commanded_temperature_units(TemperatureUnits units)
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		temperatureUnitSystem = units;
 	}
 
 	LanguageCommandInterface::PressureUnits LanguageCommandInterface::get_commanded_pressure_units() const
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		return pressureUnitSystem;
 	}
 
 	void LanguageCommandInterface::set_commanded_pressure_units(PressureUnits units)
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		pressureUnitSystem = units;
 	}
 
 	LanguageCommandInterface::ForceUnits LanguageCommandInterface::get_commanded_force_units() const
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		return forceUnitSystem;
 	}
 
 	void LanguageCommandInterface::set_commanded_force_units(ForceUnits units)
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		forceUnitSystem = units;
 	}
 
 	LanguageCommandInterface::UnitSystem LanguageCommandInterface::get_commanded_generic_units() const
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		return genericUnitSystem;
 	}
 
 	void LanguageCommandInterface::set_commanded_generic_units(UnitSystem units)
 	{
+		LOCK_GUARD(Mutex, localizationMutex);
 		genericUnitSystem = units;
 	}
 
 	std::array<std::uint8_t, 7> LanguageCommandInterface::get_localization_raw_data() const
 	{
 		std::array<std::uint8_t, 7> retVal = { 0 };
+
+		LOCK_GUARD(Mutex, localizationMutex);
 
 		if (languageCode.size() >= 2)
 		{
@@ -330,44 +432,63 @@ namespace isobus
 
 		if ((nullptr != parentInterface) &&
 		    (CAN_DATA_LENGTH <= message.get_data_length()) &&
-		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand) == message.get_identifier().get_parameter_group_number()) &&
-		    ((nullptr == parentInterface->myPartner) ||
-		     (message.get_source_control_function()->get_NAME() == parentInterface->myPartner->get_NAME())))
+		    (static_cast<std::uint32_t>(CANLibParameterGroupNumber::LanguageCommand) == message.get_identifier().get_parameter_group_number()))
 		{
 			const auto &data = message.get_data();
-			parentInterface->languageCommandTimestamp_ms = SystemTiming::get_timestamp_ms();
-			parentInterface->languageCode.clear();
-			parentInterface->languageCode.push_back(static_cast<char>(data.at(0)));
-			parentInterface->languageCode.push_back(static_cast<char>(data.at(1)));
-			parentInterface->timeFormat = static_cast<TimeFormats>((data.at(2) >> 4) & 0x03);
-			parentInterface->decimalSymbol = static_cast<DecimalSymbols>((data.at(2) >> 6) & 0x03);
-			parentInterface->dateFormat = static_cast<DateFormats>(data.at(3));
-			parentInterface->massUnitSystem = static_cast<MassUnits>(data.at(4) & 0x03);
-			parentInterface->volumeUnitSystem = static_cast<VolumeUnits>((data.at(4) >> 2) & 0x03);
-			parentInterface->areaUnitSystem = static_cast<AreaUnits>((data.at(4) >> 4) & 0x03);
-			parentInterface->distanceUnitSystem = static_cast<DistanceUnits>((data.at(4) >> 6) & 0x03);
-			parentInterface->genericUnitSystem = static_cast<UnitSystem>(data.at(5) & 0x03);
-			parentInterface->forceUnitSystem = static_cast<ForceUnits>((data.at(5) >> 2) & 0x03);
-			parentInterface->pressureUnitSystem = static_cast<PressureUnits>((data.at(5) >> 4) & 0x03);
-			parentInterface->temperatureUnitSystem = static_cast<TemperatureUnits>((data.at(5) >> 6) & 0x03);
-			parentInterface->countryCode.clear();
+			std::string receivedLanguageCode;
+			std::string receivedCountryCode;
+			receivedLanguageCode.push_back(static_cast<char>(data.at(0)));
+			receivedLanguageCode.push_back(static_cast<char>(data.at(1)));
 
 			if ((0xFF != data.at(6)) || (0xFF != data.at(7)))
 			{
-				parentInterface->countryCode.push_back(static_cast<char>(data.at(6)));
-				parentInterface->countryCode.push_back(static_cast<char>(data.at(7)));
+				receivedCountryCode.push_back(static_cast<char>(data.at(6)));
+				receivedCountryCode.push_back(static_cast<char>(data.at(7)));
 			}
 
-			LOG_DEBUG("[VT/TC]: Language and unit data received from control function " +
-			            isobus::to_string(static_cast<int>(message.get_identifier().get_source_address())) +
-			            " language is: " +
-			            parentInterface->languageCode.c_str(),
-			          " and country code is ",
-			          parentInterface->countryCode.empty() ? "unknown." : parentInterface->countryCode.c_str());
+			Mutex &localizationMutex = parentInterface->localizationMutex;
+			(void)localizationMutex; // Unused when threads are disabled
+			bool accepted = false;
+
+			{
+				LOCK_GUARD(Mutex, localizationMutex);
+				accepted = ((nullptr == parentInterface->myPartner) ||
+				            (message.get_source_control_function()->get_NAME() == parentInterface->myPartner->get_NAME()));
+
+				if (accepted)
+				{
+					parentInterface->languageCommandTimestamp_ms = SystemTiming::get_timestamp_ms();
+					parentInterface->languageCode = receivedLanguageCode;
+					parentInterface->timeFormat = static_cast<TimeFormats>((data.at(2) >> 4) & 0x03);
+					parentInterface->decimalSymbol = static_cast<DecimalSymbols>((data.at(2) >> 6) & 0x03);
+					parentInterface->dateFormat = static_cast<DateFormats>(data.at(3));
+					parentInterface->massUnitSystem = static_cast<MassUnits>(data.at(4) & 0x03);
+					parentInterface->volumeUnitSystem = static_cast<VolumeUnits>((data.at(4) >> 2) & 0x03);
+					parentInterface->areaUnitSystem = static_cast<AreaUnits>((data.at(4) >> 4) & 0x03);
+					parentInterface->distanceUnitSystem = static_cast<DistanceUnits>((data.at(4) >> 6) & 0x03);
+					parentInterface->genericUnitSystem = static_cast<UnitSystem>(data.at(5) & 0x03);
+					parentInterface->forceUnitSystem = static_cast<ForceUnits>((data.at(5) >> 2) & 0x03);
+					parentInterface->pressureUnitSystem = static_cast<PressureUnits>((data.at(5) >> 4) & 0x03);
+					parentInterface->temperatureUnitSystem = static_cast<TemperatureUnits>((data.at(5) >> 6) & 0x03);
+					parentInterface->countryCode = receivedCountryCode;
+				}
+			}
+
+			// Logged after the lock is released, because a log sink may call back into this interface
+			if (accepted)
+			{
+				LOG_DEBUG("[VT/TC]: Language and unit data received from control function " +
+				            isobus::to_string(static_cast<int>(message.get_identifier().get_source_address())) +
+				            " language is: " +
+				            receivedLanguageCode.c_str(),
+				          " and country code is ",
+				          receivedCountryCode.empty() ? "unknown." : receivedCountryCode.c_str());
+			}
 		}
 	}
 
 	bool LanguageCommandInterface::on_language_request(std::uint32_t parameterGroupNumber,
+	                                                   std::shared_ptr<ControlFunction>,
 	                                                   std::shared_ptr<ControlFunction>,
 	                                                   bool &acknowledge,
 	                                                   AcknowledgementType &acknowledgeType,

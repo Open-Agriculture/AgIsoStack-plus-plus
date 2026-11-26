@@ -747,15 +747,22 @@ namespace isobus
 
 	bool VirtualTerminalClient::send_execute_macro(std::uint16_t objectID)
 	{
-		const std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ExecuteMacroCommand),
-			                                         static_cast<std::uint8_t>(objectID & 0xFF),
-			                                         static_cast<std::uint8_t>(objectID >> 8),
-			                                         0xFF,
-			                                         0xFF,
-			                                         0xFF,
-			                                         0xFF,
-			                                         0xFF };
-		return queue_command(buffer);
+		bool retVal = false;
+
+		// F.48 has one byte for the Macro ID; a larger ID needs the Execute Extended Macro command
+		if (std::numeric_limits<std::uint8_t>::max() >= objectID)
+		{
+			const std::vector<std::uint8_t> buffer = { static_cast<std::uint8_t>(Function::ExecuteMacroCommand),
+				                                         static_cast<std::uint8_t>(objectID),
+				                                         0xFF,
+				                                         0xFF,
+				                                         0xFF,
+				                                         0xFF,
+				                                         0xFF,
+				                                         0xFF };
+			retVal = queue_command(buffer);
+		}
+		return retVal;
 	}
 
 	bool VirtualTerminalClient::send_change_object_label(std::uint16_t objectID, std::uint16_t labelStringObjectID, std::uint8_t fontType, std::uint16_t graphicalDesignatorObjectID)
@@ -1002,7 +1009,7 @@ namespace isobus
 		    (nullptr != listOfYOffsetsRelativeToCursor))
 
 		{
-			const std::uint16_t messageLength = (9 + (4 * numberOfPoints));
+			const std::uint16_t messageLength = (5 + (4 * numberOfPoints));
 			std::vector<std::uint8_t> buffer;
 			buffer.resize(messageLength);
 			buffer[0] = static_cast<std::uint8_t>(Function::GraphicsContextCommand);
@@ -1010,12 +1017,12 @@ namespace isobus
 			buffer[2] = static_cast<std::uint8_t>(objectID >> 8);
 			buffer[3] = static_cast<std::uint8_t>(GraphicsContextSubCommandID::DrawPolygon);
 			buffer[4] = numberOfPoints;
-			for (std::uint16_t i = 0; i < numberOfPoints; i += 4)
+			for (std::uint16_t i = 0; i < numberOfPoints; i++)
 			{
-				buffer[5 + i] = static_cast<std::uint8_t>(listOfXOffsetsRelativeToCursor[0] & 0xFF);
-				buffer[6 + i] = static_cast<std::uint8_t>((listOfXOffsetsRelativeToCursor[0] >> 8) & 0xFF);
-				buffer[7 + i] = static_cast<std::uint8_t>(listOfYOffsetsRelativeToCursor[0] & 0xFF);
-				buffer[8 + i] = static_cast<std::uint8_t>((listOfYOffsetsRelativeToCursor[0] >> 8) & 0xFF);
+				buffer[5 + (4 * i)] = static_cast<std::uint8_t>(listOfXOffsetsRelativeToCursor[i] & 0xFF);
+				buffer[6 + (4 * i)] = static_cast<std::uint8_t>((listOfXOffsetsRelativeToCursor[i] >> 8) & 0xFF);
+				buffer[7 + (4 * i)] = static_cast<std::uint8_t>(listOfYOffsetsRelativeToCursor[i] & 0xFF);
+				buffer[8 + (4 * i)] = static_cast<std::uint8_t>((listOfYOffsetsRelativeToCursor[i] >> 8) & 0xFF);
 			}
 			retVal = queue_command(buffer, true);
 		}
@@ -1210,6 +1217,12 @@ namespace isobus
 		switch (value)
 		{
 			case FontSize::Size6x8:
+			{
+				// 6x8 is the default font, so D.7 gives it no bit and every VT has it
+				retVal = true;
+			}
+			break;
+
 			case FontSize::Size8x8:
 			case FontSize::Size8x12:
 			case FontSize::Size12x16:
@@ -1218,7 +1231,7 @@ namespace isobus
 			case FontSize::Size24x32:
 			case FontSize::Size32x32:
 			{
-				retVal = (0 != (smallFontSizesBitfield & (1 << static_cast<std::uint8_t>(value))));
+				retVal = (0 != (smallFontSizesBitfield & (1 << (static_cast<std::uint8_t>(value) - static_cast<std::uint8_t>(FontSize::Size8x8)))));
 			}
 			break;
 
@@ -1661,16 +1674,31 @@ namespace isobus
 					         (uses_extended_versions(objectPools[0].versionLabel) ? send_extended_get_versions() : send_get_versions()))
 					{
 						set_state(StateMachineState::WaitForGetVersionsResponse);
+						LOG_INFO("[VT]: Sent %s (label length %zu).", uses_extended_versions(objectPools[0].versionLabel) ? "Extended Get Versions" : "Get Versions", objectPools[0].versionLabel.size());
 					}
 				}
 				break;
 
 				case StateMachineState::WaitForGetVersionsResponse:
 				{
-					if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+					if (SystemTiming::time_expired_ms(lastVTStatusTimestamp_ms, VT_STATUS_TIMEOUT_MS))
 					{
-						set_state(StateMachineState::Failed);
-						LOG_ERROR("[VT]: Get Versions Response Timeout");
+						set_state(StateMachineState::Disconnected);
+						LOG_ERROR("[VT]: Status Timeout");
+					}
+					else
+					{
+						const auto query = uses_extended_versions(objectPools[0].versionLabel) ? Function::ExtendedGetVersionsMessage : Function::GetVersionsMessage;
+						if (is_function_unsupported(query))
+						{
+							set_state(StateMachineState::UploadObjectPool);
+							LOG_WARNING("[VT]: Versions query unsupported. Uploading object pool.");
+						}
+						else if (SystemTiming::time_expired_ms(stateMachineTimestamp_ms, VT_STATUS_TIMEOUT_MS))
+						{
+							set_state(StateMachineState::UploadObjectPool);
+							LOG_WARNING("[VT]: Get Versions Response Timeout. Uploading object pool.");
+						}
 					}
 				}
 				break;
