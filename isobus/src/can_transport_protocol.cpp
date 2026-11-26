@@ -201,7 +201,7 @@ namespace isobus
 		{
 			// TODO: consider using maximum memory instead of maximum number of sessions
 			LOG_WARNING("[TP]: Replying with abort to Request To Send (RTS) for 0x%05X, configured maximum number of sessions reached.", parameterGroupNumber);
-			send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, parameterGroupNumber, ConnectionAbortReason::AlreadyInCMSession);
+			send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, parameterGroupNumber, ConnectionAbortReason::AlreadyInCMSession, ConnectionAbortSenderRole::Receiver);
 		}
 		else if ((totalMessageSize <= CAN_DATA_LENGTH) || (totalMessageSize > MAX_PROTOCOL_DATA_LENGTH))
 		{
@@ -209,7 +209,7 @@ namespace isobus
 			            parameterGroupNumber,
 			            totalMessageSize,
 			            MAX_PROTOCOL_DATA_LENGTH);
-			send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, parameterGroupNumber, ConnectionAbortReason::TotalMessageSizeTooBig);
+			send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, parameterGroupNumber, ConnectionAbortReason::TotalMessageSizeTooBig, ConnectionAbortSenderRole::Receiver);
 		}
 		else
 		{
@@ -281,7 +281,8 @@ namespace isobus
 			{
 				LOG_ERROR("[TP]: Received a Clear To Send (CTS) message for 0x%05X while a session already existed for this source and destination, sending abort for both...", parameterGroupNumber);
 				abort_session(session, ConnectionAbortReason::ClearToSendReceivedWhileTransferInProgress);
-				send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, parameterGroupNumber, ConnectionAbortReason::ClearToSendReceivedWhileTransferInProgress);
+				// The CTS was sent to us as the originator of a transfer of this PGN
+				send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, parameterGroupNumber, ConnectionAbortReason::ClearToSendReceivedWhileTransferInProgress, ConnectionAbortSenderRole::Originator);
 			}
 			else if (nextPacketNumber > session->get_total_number_of_packets())
 			{
@@ -342,12 +343,18 @@ namespace isobus
 	void TransportProtocolManager::process_abort(const std::shared_ptr<ControlFunction> source,
 	                                             const std::shared_ptr<ControlFunction> destination,
 	                                             std::uint32_t parameterGroupNumber,
-	                                             TransportProtocolManager::ConnectionAbortReason reason)
+	                                             TransportProtocolManager::ConnectionAbortReason reason,
+	                                             ConnectionAbortSenderRole role)
 	{
 		bool foundSession = false;
 
+		// ISO 11783-3:2026 5.9.4.5: the role tells which of two sessions of the same PGN in opposite directions to close.
+		// A role that is not specified, as from a device built to an earlier edition, closes both.
+		const bool closesSessionFromSource = (ConnectionAbortSenderRole::Receiver != role);
+		const bool closesSessionToSource = (ConnectionAbortSenderRole::Originator != role);
+
 		auto session = get_session(source, destination);
-		if ((nullptr != session) && (session->get_parameter_group_number() == parameterGroupNumber))
+		if (closesSessionFromSource && (nullptr != session) && (session->get_parameter_group_number() == parameterGroupNumber))
 		{
 			foundSession = true;
 			LOG_ERROR("[TP]: Received an abort (reason=%hu) for an rx session for parameterGroupNumber 0x%05X",
@@ -356,7 +363,7 @@ namespace isobus
 			close_session(session, false);
 		}
 		session = get_session(destination, source);
-		if ((nullptr != session) && (session->get_parameter_group_number() == parameterGroupNumber))
+		if (closesSessionToSource && (nullptr != session) && (session->get_parameter_group_number() == parameterGroupNumber))
 		{
 			foundSession = true;
 			LOG_ERROR("[TP]: Received an abort (reason=%hu) for a tx session for parameterGroupNumber 0x%05X",
@@ -467,10 +474,12 @@ namespace isobus
 				else
 				{
 					const auto reason = static_cast<ConnectionAbortReason>(message.get_uint8_at(1));
+					const auto role = static_cast<ConnectionAbortSenderRole>(message.get_uint8_at(2) & 0x03);
 					process_abort(message.get_source_control_function(),
 					              message.get_destination_control_function(),
 					              parameterGroupNumber,
-					              reason);
+					              reason,
+					              role);
 				}
 			}
 			break;
@@ -882,20 +891,23 @@ namespace isobus
 		bool retVal = false;
 		std::shared_ptr<InternalControlFunction> myControlFunction;
 		std::shared_ptr<ControlFunction> partnerControlFunction;
+		ConnectionAbortSenderRole role;
 		if (TransportProtocolSession::Direction::Transmit == session->get_direction())
 		{
 			myControlFunction = std::static_pointer_cast<InternalControlFunction>(session->get_source());
 			partnerControlFunction = session->get_destination();
+			role = ConnectionAbortSenderRole::Originator;
 		}
 		else
 		{
 			myControlFunction = std::static_pointer_cast<InternalControlFunction>(session->get_destination());
 			partnerControlFunction = session->get_source();
+			role = ConnectionAbortSenderRole::Receiver;
 		}
 
 		if ((nullptr != myControlFunction) && (nullptr != partnerControlFunction))
 		{
-			retVal = send_abort(myControlFunction, partnerControlFunction, session->get_parameter_group_number(), reason);
+			retVal = send_abort(myControlFunction, partnerControlFunction, session->get_parameter_group_number(), reason, role);
 		}
 		close_session(session, false);
 		return retVal;
@@ -904,12 +916,14 @@ namespace isobus
 	bool TransportProtocolManager::send_abort(std::shared_ptr<InternalControlFunction> sender,
 	                                          std::shared_ptr<ControlFunction> receiver,
 	                                          std::uint32_t parameterGroupNumber,
-	                                          ConnectionAbortReason reason) const
+	                                          ConnectionAbortReason reason,
+	                                          ConnectionAbortSenderRole role) const
 	{
+		// ISO 11783-3:2026 5.9.4.5: byte 3 holds the role in bits 1 to 2, and the reserved bits 3 to 8 are sent as 1
 		const std::array<std::uint8_t, CAN_DATA_LENGTH> buffer{
 			CONNECTION_ABORT_MULTIPLEXOR,
 			static_cast<std::uint8_t>(reason),
-			0xFF,
+			static_cast<std::uint8_t>(0xFC | static_cast<std::uint8_t>(role)),
 			0xFF,
 			0xFF,
 			static_cast<std::uint8_t>(parameterGroupNumber & 0xFF),

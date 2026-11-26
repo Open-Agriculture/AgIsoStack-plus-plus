@@ -63,6 +63,15 @@ namespace isobus
 			AnyOtherError = 250 ///< Any reason not defined in the standard
 		};
 
+		/// @brief The "Role of Sender" of a TP.Conn_Abort, byte 3 bits 1 to 2 (ISO 11783-3:2026 5.9.4.5)
+		enum class ConnectionAbortSenderRole : std::uint8_t
+		{
+			Originator = 0, ///< The abort is sent by the CF that sent the TP.CM_RTS
+			Receiver = 1, ///< The abort is sent by the CF that sent the TP.CM_CTS
+			Reserved = 2, ///< Reserved, handled like NotSpecified
+			NotSpecified = 3 ///< The role is not specified, as sent by devices built to earlier editions that send this byte as FF
+		};
+
 		/// @brief A storage object to keep track of session information internally
 		class TransportProtocolSession : public TransportProtocolSessionBase
 		{
@@ -227,11 +236,13 @@ namespace isobus
 		/// @param[in] receiver The receiver of the abort
 		/// @param[in] parameterGroupNumber The PGN of the TP "session" we're aborting
 		/// @param[in] reason The reason we're aborting the session
+		/// @param[in] role Our role in the session, Originator if we sent the RTS or Receiver if we sent the CTS
 		/// @returns true if the abort was send OK, false if not sent
 		bool send_abort(std::shared_ptr<InternalControlFunction> sender,
 		                std::shared_ptr<ControlFunction> receiver,
 		                std::uint32_t parameterGroupNumber,
-		                ConnectionAbortReason reason) const;
+		                ConnectionAbortReason reason,
+		                ConnectionAbortSenderRole role) const;
 
 		/// @brief Gracefully closes a session to prepare for a new session
 		/// @param[in] session The session to close
@@ -297,7 +308,12 @@ namespace isobus
 		/// @param[in] destination The shared pointer to the destination control function.
 		/// @param[in] parameterGroupNumber The PGN (Parameter Group Number) of the message.
 		/// @param[in] reason The reason for the connection abort.
-		void process_abort(const std::shared_ptr<ControlFunction> source, const std::shared_ptr<ControlFunction> destination, std::uint32_t parameterGroupNumber, TransportProtocolManager::ConnectionAbortReason reason);
+		/// @param[in] role The "Role of Sender" of the abort, which tells if it closes the session the source sends or the one it receives
+		void process_abort(const std::shared_ptr<ControlFunction> source,
+		                   const std::shared_ptr<ControlFunction> destination,
+		                   std::uint32_t parameterGroupNumber,
+		                   TransportProtocolManager::ConnectionAbortReason reason,
+		                   ConnectionAbortSenderRole role);
 
 		/// @brief Processes a connection management message.
 		/// @param[in] message The CAN message to be processed.
