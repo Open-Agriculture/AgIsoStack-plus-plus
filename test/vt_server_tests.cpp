@@ -1002,6 +1002,9 @@ TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsAnErrorWhenTh
 	server->onObjectPoolParseFinished = [&](std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet) {
 		order.push_back(describe_hook_call("parsed", workingSet));
 	};
+	server->onObjectPoolDeleted = [&](std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet) {
+		order.push_back(describe_hook_call("deleted", workingSet));
+	};
 	server->onSuspendWorkingSet = [&](std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet) {
 		order.push_back(describe_hook_call("suspended", workingSet));
 	};
@@ -1011,13 +1014,14 @@ TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsAnErrorWhenTh
 
 	ASSERT_TRUE(foundResponse);
 	EXPECT_EQ(0x01, responseFrame.data[1]); // Error in object pool
-	EXPECT_EQ(0x04, responseFrame.data[6]); // Any other error
+	EXPECT_EQ(0x0C, responseFrame.data[6]); // Any other error, and the pool was deleted
 	ASSERT_EQ(1U, server->parseResults.size());
 	EXPECT_FALSE(server->parseResults.front());
 	ASSERT_EQ(1U, server->suspensions.size());
 	EXPECT_EQ(0x01, server->suspensions.front().errorCodes);
-	EXPECT_EQ(0x04, server->suspensions.front().objectPoolErrorCodes);
-	EXPECT_EQ((std::vector<std::string>{ "parsed:81", "suspended:81" }), order);
+	EXPECT_EQ(0x0C, server->suspensions.front().objectPoolErrorCodes);
+	EXPECT_EQ((std::vector<std::string>{ "parsed:81", "deleted:81", "suspended:81" }), order);
+	EXPECT_FALSE(server->managedWorkingSetList.front()->get_any_object_pools());
 }
 
 TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsAnErrorWhenTheObjectPoolHasNoWorkingSetObject)
@@ -1035,8 +1039,9 @@ TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsAnErrorWhenTh
 
 	ASSERT_TRUE(foundResponse);
 	EXPECT_EQ(0x01, responseFrame.data[1]); // Error in object pool
-	EXPECT_EQ(0x04, responseFrame.data[6]); // Any other error
-	expect_single_suspension(0x01, NULL_OBJECT_ID, NULL_OBJECT_ID, 0x04);
+	EXPECT_EQ(0x0C, responseFrame.data[6]); // Any other error, and the pool was deleted
+	expect_single_suspension(0x01, NULL_OBJECT_ID, NULL_OBJECT_ID, 0x0C);
+	EXPECT_EQ(nullptr, server->managedWorkingSetList.front()->get_object_by_id(1));
 }
 
 TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsTheParentOfTheFaultyObject)
@@ -1054,7 +1059,8 @@ TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsTheParentOfTh
 	EXPECT_EQ(0x01, responseFrame.data[1]);
 	EXPECT_EQ(258, responseFrame.data[2] | (responseFrame.data[3] << 8));
 	EXPECT_EQ(1, responseFrame.data[4] | (responseFrame.data[5] << 8));
-	expect_single_suspension(0x01, 258, 1, 0x04);
+	EXPECT_EQ(0x0C, responseFrame.data[6]);
+	expect_single_suspension(0x01, 258, 1, 0x0C);
 }
 
 TEST_F(VirtualTerminalServerBusTest, EndOfObjectPoolResponseReportsNoParentWhenTheFaultyObjectHasNoID)
@@ -3534,8 +3540,43 @@ TEST_F(VirtualTerminalServerOpenInputTest, PoolUpdateCannotGiveTheWorkingSetIdTo
 	send_pool_update({ 0x1F, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::NumberVariable), 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::NumberVariable), 0x2A, 0x00, 0x00, 0x00 });
 
 	EXPECT_FALSE(pool_update_succeeded());
-	ASSERT_NE(nullptr, workingSet->get_working_set_object());
-	EXPECT_EQ(VirtualTerminalObjectType::WorkingSet, workingSet->get_working_set_object()->get_object_type());
+	// The failed update deleted the whole pool, so no object has the Working Set's ID
+	EXPECT_EQ(nullptr, workingSet->get_working_set_object());
+	EXPECT_EQ(nullptr, workingSet->get_object_by_id(0));
+}
+
+TEST_F(VirtualTerminalServerOpenInputTest, AFailedUpdateDeletesThePoolAndTheWorkingSetCanTransferItAgain)
+{
+	std::vector<std::string> order;
+	server->onObjectPoolDeleted = [&](std::shared_ptr<VirtualTerminalServerManagedWorkingSet> deleted) {
+		order.push_back(describe_hook_call("deleted", deleted));
+	};
+	server->onSuspendWorkingSet = [&](std::shared_ptr<VirtualTerminalServerManagedWorkingSet> suspended) {
+		order.push_back(describe_hook_call("suspended", suspended));
+	};
+
+	// Container 6 with child 7, then object 7 of an unknown type
+	send_pool_update({ 0x06, 0x00, static_cast<std::uint8_t>(VirtualTerminalObjectType::Container), 0x0A, 0x00, 0x0A, 0x00, 0x00, 0x01, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0x00, 0xFE, 0x00, 0x00, 0x00, 0x00, 0x00 });
+	CANMessageFrame response = {};
+	ASSERT_TRUE(poll_for_response(*server, testPlugin, 0x12, response));
+	EXPECT_EQ(0x01, response.data[1]); // Error in object pool
+	EXPECT_EQ(6, response.data[2] | (response.data[3] << 8)); // Parent of the faulting object
+	EXPECT_EQ(7, response.data[4] | (response.data[5] << 8)); // Faulting object
+	EXPECT_EQ(0x0C, response.data[6]); // Any other error, and the pool was deleted
+
+	// The pool from before the update is gone too, and the working set is no longer active (ISO 11783-6:2018 C.2.6)
+	EXPECT_EQ(nullptr, server->get_active_working_set());
+	EXPECT_FALSE(workingSet->get_any_object_pools());
+	EXPECT_EQ(nullptr, workingSet->get_object_by_id(20));
+	EXPECT_EQ((std::vector<std::string>{ describe_hook_call("deleted", workingSet), describe_hook_call("suspended", workingSet) }), order);
+
+	// The working set transfers its pool again from the start (C.2.2 c) 4))
+	receive_tp_from_client(internalECU, client, SELECTABLE_OBJECT_POOL);
+	receive_from_client(internalECU, client, { 0x12, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	testPlugin.clear_queue();
+	ASSERT_TRUE(poll_for_response(*server, testPlugin, 0x12, response));
+	EXPECT_EQ(0x00, response.data[1]);
+	EXPECT_NE(nullptr, workingSet->get_working_set_object());
 }
 
 TEST_F(VirtualTerminalServerOpenInputTest, DisablingTheOpenInputIsRefused)

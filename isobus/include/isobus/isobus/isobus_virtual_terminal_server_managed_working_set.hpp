@@ -63,8 +63,8 @@ namespace isobus
 		/// @details If the pool was parsed successfully, its objects are added to the current object tree here,
 		/// replacing objects with the same ID, and its transfers are marked as parsed.
 		/// If parsing failed, the faulting object and its parent are set here, and the object tree stays as it was.
-		/// The transfers of the failed run stay unparsed. ISO 11783-6 describes that a VT deletes the whole pool after
-		/// a failed update, which is up to the server.
+		/// The transfers of the failed run stay unparsed. VirtualTerminalServer::update() then deletes the whole pool,
+		/// so the faulting object and its parent are looked up here, before that.
 		void join_parsing_thread();
 
 		/// @brief Returns if any object pools are being managed for this working set master
