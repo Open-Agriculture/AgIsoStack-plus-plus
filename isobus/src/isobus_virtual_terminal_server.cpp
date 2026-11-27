@@ -684,10 +684,33 @@ namespace isobus
 
 	void VirtualTerminalServer::remove_object_pool(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet)
 	{
+		clear_object_pool(workingSet);
+		pendingObjectPoolDeletions.push_back({ workingSet, {} });
+	}
+
+	void VirtualTerminalServer::clear_object_pool(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet)
+	{
 		deactivate_working_set(workingSet);
 		managedWorkingSetIopLoadStateMap.erase(workingSet);
 		workingSet->clear_object_pool_data({});
-		pendingObjectPoolDeletions.push_back({ workingSet, {} });
+	}
+
+	void VirtualTerminalServer::delete_failed_object_pool(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet,
+	                                                      std::uint16_t parentIDOfFaultingObject,
+	                                                      std::uint16_t faultingObjectID,
+	                                                      EndOfObjectPoolFailure &failure)
+	{
+		// After an error the VT deletes the whole pool, also the pool from before an update, and the working set can transfer it again (ISO 11783-6:2018 C.2.2, C.2.5, C.2.6).
+		// The faulting object and its parent are looked up before, as the pool is gone after this
+		LOG_ERROR("[VT Server]: Client %u object pool is deleted, because its End of Object Pool failed", workingSet->get_control_function()->get_address());
+		clear_object_pool(workingSet);
+		send_end_of_object_pool_response(false,
+		                                 parentIDOfFaultingObject,
+		                                 faultingObjectID,
+		                                 get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::AnyOtherError)) | get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::ObjectPoolWasDeletedFromVolatileMemory)),
+		                                 workingSet->get_control_function(),
+		                                 false,
+		                                 &failure);
 	}
 
 	void VirtualTerminalServer::report_shut_down_working_sets()
@@ -4077,6 +4100,7 @@ namespace isobus
 			std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet;
 			bool success;
 			EndOfObjectPoolFailure failure;
+			bool deleted; ///< The pool failed and was deleted from volatile memory
 		};
 		std::vector<ParsedWorkingSet> parsedWorkingSets;
 		std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> selectableWorkingSets;
@@ -4093,6 +4117,7 @@ namespace isobus
 			{
 				ws->join_parsing_thread();
 				bool success = false;
+				bool deleted = false;
 
 				auto workingSetObject = ws->get_working_set_object();
 
@@ -4105,8 +4130,8 @@ namespace isobus
 					}
 					else
 					{
-						send_end_of_object_pool_response(false, NULL_OBJECT_ID, NULL_OBJECT_ID, get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::AnyOtherError)), ws->get_control_function(), false, &failure);
-						LOG_ERROR("[VT Server]: The object pool was parsed but contains no working set object. Rejecting the pool.");
+						LOG_ERROR("[VT Server]: The object pool was parsed but contains no working set object. Rejecting and deleting the pool.");
+						deleted = true;
 					}
 				}
 				else
@@ -4133,20 +4158,26 @@ namespace isobus
 						selectableWorkingSets.push_back(ws);
 					}
 				}
-				parsedWorkingSets.push_back({ ws, success, failure });
+				if (deleted)
+				{
+					delete_failed_object_pool(ws, NULL_OBJECT_ID, NULL_OBJECT_ID, failure);
+				}
+				parsedWorkingSets.push_back({ ws, success, failure, deleted });
 			}
 			else if ((!deletionPending) && (VirtualTerminalServerManagedWorkingSet::ObjectPoolProcessingThreadState::Fail == processingState))
 			{
 				ws->join_parsing_thread();
+				bool deleted = false;
 				if (ws->get_was_object_pool_loaded_from_non_volatile_memory())
 				{
 					send_restored_object_pool_response(*ws, get_load_version_parse_error_bitfield());
 				}
 				else
 				{
-					send_end_of_object_pool_response(false, ws->get_object_pool_faulting_parent_object_id(), ws->get_object_pool_faulting_object_id(), get_bit(static_cast<std::uint8_t>(ObjectPoolErrorBit::AnyOtherError)), ws->get_control_function(), false, &failure);
+					delete_failed_object_pool(ws, ws->get_object_pool_faulting_parent_object_id(), ws->get_object_pool_faulting_object_id(), failure);
+					deleted = true;
 				}
-				parsedWorkingSets.push_back({ ws, false, failure });
+				parsedWorkingSets.push_back({ ws, false, failure, deleted });
 			}
 		}
 
@@ -4165,6 +4196,10 @@ namespace isobus
 				notify_focus_lost_if_removed(parsed.workingSet, true);
 			}
 			object_pool_parse_finished(parsed.workingSet, parsed.success);
+			if (parsed.deleted)
+			{
+				object_pool_deleted(parsed.workingSet);
+			}
 			report_suspension(parsed.workingSet, parsed.failure);
 		}
 	}

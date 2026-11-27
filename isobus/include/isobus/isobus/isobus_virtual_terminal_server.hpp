@@ -391,6 +391,7 @@ namespace isobus
 		/// @brief This function is called from update() once a transferred or restored object pool has been parsed and answered
 		/// @details If no working set was active and this one is selectable, select_working_set() has already been called for it.
 		/// @param[in] workingSet The working set whose object pool was parsed
+		/// @details When a transferred pool failed, the server has already deleted it, and object_pool_deleted() follows. A failed Load Version doesn't delete the pool.
 		/// @param[in] success True if the object pool was accepted, false if the response reported an error
 		virtual void object_pool_parse_finished(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet, bool success);
 
@@ -401,8 +402,9 @@ namespace isobus
 		/// @param[in] workingSet The working set that can become active
 		virtual void select_working_set(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
 
-		/// @brief This function is called from update() after the server deleted an object pool, because delete_object_pool() returned true
-		/// or because an Object Pool Transfer of it was dropped (see set_max_rx_queue_size())
+		/// @brief This function is called from update() after the server deleted an object pool, because delete_object_pool() returned true,
+		/// because an Object Pool Transfer of it was dropped (see set_max_rx_queue_size()), or because its End of Object Pool failed.
+		/// A failed End of Object Pool deletes the whole pool, also the pool from before an update (ISO 11783-6:2018 C.2.5, C.2.6).
 		/// @details This is the place to stop presenting the working set. For a Delete Object Pool command, delete_object_pool() is called before the pool is deleted.
 		/// The active working set is already cleared, and a new object pool from the same client is only answered after this call.
 		/// @param[in] workingSet The working set whose object pool was deleted
@@ -775,6 +777,10 @@ namespace isobus
 		/// @brief Deletes a working set's object pool from volatile memory. update() then reports it with object_pool_deleted().
 		/// @param[in] workingSet The working set whose object pool is deleted
 		void remove_object_pool(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> workingSet);
+
+		/// @brief Deactivates a working set and deletes its object pool from volatile memory, without reporting it to the application
+		/// @param[in] workingSet The working set whose object pool is deleted
+		void clear_object_pool(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet);
 
 		/// @brief Sends a message using the acknowledgement PGN
 		/// @param[in] type The type of acknowledgement to send (Ack, vs Nack, etc)
@@ -1194,6 +1200,17 @@ namespace isobus
 		/// @brief Passes each shut down working set whose object pool parsing has finished to handle_unexpected_working_set_shutdown()
 		/// @details Waiting here instead of joining the parsing thread right away keeps a long parse from blocking update()
 		void report_shut_down_working_sets();
+
+		/// @brief Deletes an object pool whose End of Object Pool failed, and answers it with the error and Object Pool Was Deleted
+		/// @details update() then reports it with object_pool_parse_finished(), object_pool_deleted() and suspend_working_set()
+		/// @param[in] workingSet The working set whose object pool failed
+		/// @param[in] parentIDOfFaultingObject The parent of the faulting object, or NULL_OBJECT_ID
+		/// @param[in] faultingObjectID The faulting object, or NULL_OBJECT_ID
+		/// @param[out] failure The response that was sent
+		void delete_failed_object_pool(const std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet,
+		                               std::uint16_t parentIDOfFaultingObject,
+		                               std::uint16_t faultingObjectID,
+		                               EndOfObjectPoolFailure &failure);
 
 		/// @brief Passes a failed End of Object Pool response to suspend_working_set(), when there was one
 		/// @param[in] workingSet The working set that the response was sent to
